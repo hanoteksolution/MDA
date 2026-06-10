@@ -1,0 +1,22 @@
+from django.urls import include, path
+
+urlpatterns = [
+    path("auth/", include("api.v1.auth.urls")),
+    path("users/", include("api.v1.users.urls")),
+    path("roles/", include("api.v1.roles.urls")),
+    path("settings/", include("api.v1.settings.urls")),
+    path("dashboard/", include("api.v1.dashboard.urls")),
+    path("products/", include("api.v1.products.urls")),
+    path("inventory/", include("api.v1.inventory.urls")),
+    path("categories/", include("api.v1.categories.urls")),
+    path("brands/", include("api.v1.brands.urls")),
+    path("units/", include("api.v1.units.urls")),
+    path("warehouses/", include("api.v1.warehouses.urls")),
+    path("customers/", include("api.v1.customers.urls")),
+    path("suppliers/", include("api.v1.suppliers.urls")),
+    path("purchases/", include("api.v1.purchases.urls")),
+    path("sales/", include("api.v1.sales.urls")),
+    path("pos/", include("api.v1.pos.urls")),
+    path("finance/", include("api.v1.finance.urls")),
+    path("reports/", include("api.v1.reports.urls")),
+]

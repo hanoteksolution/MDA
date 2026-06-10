@@ -1,0 +1,29 @@
+# Backups (sync to Google Drive separately)
+backups/
+*.dump
+
+# Environment
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Django
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+
+# Desktop build
+desktop/src-tauri/target/
+
+# OS
+.DS_Store
+Thumbs.db

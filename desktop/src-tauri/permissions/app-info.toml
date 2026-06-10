@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-app-info"
+description = "Allows reading desktop app metadata."
+commands.allow = ["get_app_info"]

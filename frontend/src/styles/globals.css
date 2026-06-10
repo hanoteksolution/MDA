@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 160 84% 95%;
+    --accent-foreground: 160 84% 25%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 160 84% 39%;
+    --radius: 0.75rem;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 215 16% 47%;
+    --sidebar-accent: 160 84% 95%;
+    --sidebar-border: 214 32% 91%;
+    --chart-1: 160 84% 39%;
+    --chart-2: 199 89% 48%;
+    --chart-3: 262 83% 58%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 84% 60%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 160 50% 12%;
+    --accent-foreground: 160 84% 70%;
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --sidebar: 222 47% 8%;
+    --sidebar-foreground: 215 20% 65%;
+    --sidebar-accent: 160 50% 12%;
+    --sidebar-border: 217 33% 18%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer components {
+  .ds-page {
+    @apply space-y-6;
+  }
+
+  .ds-card {
+    @apply rounded-2xl border border-border bg-card text-card-foreground shadow-sm;
+  }
+
+  .ds-card-premium {
+    @apply relative rounded-2xl border border-border/70 bg-card text-card-foreground shadow-sm;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--card)) 55%,
+      hsl(var(--muted) / 0.35) 100%
+    );
+  }
+
+  .ds-card-header {
+    @apply flex items-center justify-between border-b border-border px-6 py-4;
+  }
+
+  .ds-card-body {
+    @apply p-6;
+  }
+
+  .ds-surface {
+    @apply rounded-xl border border-border bg-muted/40;
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-border shadow-lg;
+  }
+
+  .pos-shell {
+    @apply relative overflow-hidden;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--primary) / 0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, hsl(var(--primary) / 0.05), transparent),
+      hsl(var(--background));
+  }
+
+  .pos-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: linear-gradient(to bottom, black 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .pos-glass {
+    @apply border border-border/60 bg-card/75 shadow-sm backdrop-blur-xl;
+  }
+
+  .pos-category-active {
+    @apply bg-gradient-to-r from-primary to-emerald-600 text-primary-foreground shadow-lg shadow-primary/30 ring-2 ring-primary/20;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-emerald-500 to-emerald-600 bg-clip-text text-transparent;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}

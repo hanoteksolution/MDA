@@ -1,0 +1,9 @@
+export { SettingsPage } from "@/modules/settings/pages/SettingsPage";
+export { AdminPage } from "@/modules/admin/pages/AdminPage";
+export { PosPage } from "@/modules/pos/pages/PosPage";
+export { PurchasesPage } from "@/modules/purchases/pages/PurchasesPage";
+export { SalesPage } from "@/modules/sales/pages/SalesPage";
+export { CustomersPage } from "@/modules/customers/pages/CustomersPage";
+export { SuppliersPage } from "@/modules/suppliers/pages/SuppliersPage";
+export { FinancePage } from "@/modules/finance/pages/FinancePage";
+export { ReportsPage } from "@/modules/reports/pages/ReportsPage";
