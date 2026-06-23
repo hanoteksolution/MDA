@@ -1,14 +1,18 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { animation } from "@/design-system";
+import { Button } from "@/components/ui/button";
 
 interface PageHeaderProps {
   title: string;
   description?: string;
   breadcrumbs?: string[];
   actions?: ReactNode;
+  backTo?: string;
+  backLabel?: string;
   className?: string;
 }
 
@@ -17,6 +21,8 @@ export function PageHeader({
   description,
   breadcrumbs = [],
   actions,
+  backTo,
+  backLabel = "Back",
   className,
 }: PageHeaderProps) {
   return (
@@ -25,6 +31,14 @@ export function PageHeader({
       className={cn("flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between", className)}
     >
       <div className="space-y-1">
+        {backTo && (
+          <Button variant="ghost" size="sm" asChild className="-ml-2 mb-1 h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground">
+            <Link to={backTo}>
+              <ArrowLeft className="h-4 w-4" />
+              {backLabel}
+            </Link>
+          </Button>
+        )}
         {breadcrumbs.length > 0 && (
           <nav className="flex items-center gap-1 text-xs text-muted-foreground">
             {breadcrumbs.map((crumb, i) => (

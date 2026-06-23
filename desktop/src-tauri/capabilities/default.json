@@ -6,7 +6,31 @@
   "permissions": [
     "core:default",
     "shell:allow-open",
+    "shell:allow-kill",
     "log:default",
-    "allow-app-info"
+    "allow-app-info",
+    "allow-save-pdf",
+    "allow-connection-config",
+    "dialog:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "mda-api",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "mda-api",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
   ]
 }

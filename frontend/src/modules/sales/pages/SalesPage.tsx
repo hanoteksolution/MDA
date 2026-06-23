@@ -1,7 +1,21 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { Receipt, FileText, TrendingUp, DollarSign, Plus, Download, Pencil } from "lucide-react";
+import {
+  Receipt,
+  FileText,
+  TrendingUp,
+  DollarSign,
+  Plus,
+  Download,
+  Pencil,
+  Printer,
+  Eye,
+  Loader2,
+  FileOutput,
+  FileDown,
+  Truck,
+} from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -12,6 +26,8 @@ import { Button } from "@/components/ui/button";
 import { salesApi } from "@/services/api/sales";
 import { formatCurrency } from "@/utils/cn";
 import type { Invoice, Quotation, SalesSummary } from "@/services/api/sales";
+import { SalesReceiptDialog } from "../components/SalesReceiptDialog";
+import { useSalesReceipt } from "../hooks/useSalesReceipt";
 
 const INVOICE_STATUS: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary", sent: "warning", paid: "success", overdue: "destructive", cancelled: "destructive",
@@ -29,6 +45,20 @@ export function SalesPage() {
   const activeList = tab === "invoices" ? invoiceList : quotationList;
   const docs = activeList.data;
   const loading = activeList.loading;
+  const {
+    loadingId: receiptLoadingId,
+    documentPreview,
+    printReceipt,
+    printInvoice,
+    printDeliveryNote,
+    printQuotation,
+    downloadReceipt,
+    downloadDeliveryNote,
+    downloadQuotation,
+    viewInvoice,
+    viewThermalReceipt,
+    closePreview,
+  } = useSalesReceipt();
 
   useEffect(() => {
     salesApi.summary()
@@ -53,15 +83,125 @@ export function SalesPage() {
     {
       key: "actions",
       header: "",
-      cell: (r) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(tab === "invoices" ? `/sales/invoices/${r.id}/edit` : `/sales/quotations/${r.id}/edit`)}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      ),
+      exportable: false,
+      cell: (r) => {
+        const busy = receiptLoadingId === r.id;
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            {tab === "invoices" ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Preview tax invoice (A4)"
+                  disabled={busy}
+                  onClick={() => viewInvoice(r.id)}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Preview thermal receipt"
+                  disabled={busy}
+                  onClick={() => viewThermalReceipt(r.id)}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Print thermal receipt (80mm)"
+                  disabled={busy}
+                  onClick={() => printReceipt(r.id)}
+                >
+                  <Printer className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2 text-primary"
+                  title="Print Tax Invoice (A4) — premium layout"
+                  disabled={busy}
+                  onClick={() => printInvoice(r.id)}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+                  <span className="hidden text-xs font-semibold lg:inline">Invoice</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2 text-primary"
+                  title="Print Delivery Note (A4) — premium layout"
+                  disabled={busy}
+                  onClick={() => void printDeliveryNote(r.id)}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                  <span className="hidden text-xs font-semibold lg:inline">DN</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Download Delivery Note PDF"
+                  disabled={busy}
+                  onClick={() => void downloadDeliveryNote(r.id)}
+                >
+                  <FileDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Download tax invoice PDF"
+                  disabled={busy}
+                  onClick={() => downloadReceipt(r.id)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2 text-primary"
+                  title="Print Quotation (A4) — premium layout"
+                  disabled={busy}
+                  onClick={() => printQuotation(r.id)}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+                  <span className="hidden text-xs font-semibold lg:inline">Quote</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="Download quotation PDF"
+                  disabled={busy}
+                  onClick={() => downloadQuotation(r.id)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Edit"
+              onClick={() =>
+                navigate(tab === "invoices" ? `/sales/invoices/${r.id}/edit` : `/sales/quotations/${r.id}/edit`)
+              }
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -111,6 +251,8 @@ export function SalesPage() {
         <DataTable
           embedded
           exportTitle={tab === "invoices" ? "Invoices" : "Quotations"}
+          listPrint={false}
+          listPdf={false}
           columns={columns}
           data={docs}
           loading={loading}
@@ -130,6 +272,8 @@ export function SalesPage() {
           }
         />
       </ContentSection>
+
+      <SalesReceiptDialog preview={documentPreview} onClose={closePreview} />
     </PageLayout>
   );
 }

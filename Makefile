@@ -22,25 +22,28 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-backend install-frontend install-desktop setup env migrate seed \
-        run-backend run-frontend dev dev-desktop build build-desktop check-rust test clean shell \
+.PHONY: help install install-backend install-frontend install-desktop setup env migrate bootstrap seed seed-demo reset-data \
+        run-backend run-frontend dev dev-desktop build build-desktop bundle-desktop-api check-rust test clean shell \
         createsuperuser backup restore restore-list
 
 ## help — Show available commands
 help:
 	@echo MDA Retail ERP — Makefile commands
 	@echo.
-	@echo   make setup            First-time setup (install, env, migrate, seed)
+	@echo   make setup            First-time setup (install, env, migrate, bootstrap)
 	@echo   make install          Install backend + frontend dependencies
 	@echo   make env              Copy backend/.env.example to backend/.env
 	@echo   make migrate          Run Django migrations
-	@echo   make seed             Load default roles, admin user, sample data
+	@echo   make bootstrap        Bootstrap roles and permissions only
+	@echo   make seed-demo        Dev demo data + admin user (admin / admin12345)
+	@echo   make reset-data       Wipe local DB — fresh setup wizard on next launch
 	@echo   make run-backend      Start Django API on http://127.0.0.1:8000
 	@echo   make run-frontend     Start Vite dev server on http://localhost:5173
 	@echo   make dev              Start backend and frontend (parallel)
-	@echo   make dev-desktop      Start Tauri desktop app (dev)
+	@echo   make dev-desktop      Desktop app (dev — uses local Python API)
 	@echo   make build            Build frontend for production
-	@echo   make build-desktop    Build Windows desktop installer
+	@echo   make bundle-desktop-api  Build portable mda-api.exe (no Python on target PC)
+	@echo   make build-desktop    Build Windows installer (portable, no Python required)
 	@echo   make install-desktop  Install Tauri CLI dependencies
 	@echo   make test             Run backend tests (pytest)
 	@echo   make shell            Django shell
@@ -50,7 +53,7 @@ help:
 	@echo   make restore-list     List available backups
 	@echo   make restore          Restore latest backup
 	@echo.
-	@echo   Default login after seed: admin / admin12345
+	@echo   First launch opens the setup wizard to create your admin account.
 
 ## install — Install all dependencies
 install: install-backend install-frontend
@@ -71,8 +74,8 @@ install-frontend:
 	cd $(FRONTEND_DIR) && $(NPM) install
 
 ## setup — Full first-time project setup
-setup: install env migrate seed
-	@echo Setup complete. Run: make dev
+setup: install env migrate bootstrap
+	@echo Setup complete. Run: make dev — then complete the setup wizard in the browser.
 
 ## env — Create backend/.env from .env.example if missing
 env:
@@ -83,9 +86,17 @@ env:
 migrate:
 	$(MANAGE) migrate
 
-## seed — Seed roles, permissions, company, admin, sample data
-seed:
-	$(MANAGE) seed_data
+## bootstrap — Roles and permissions only (no users or demo data)
+bootstrap:
+	$(MANAGE) bootstrap_system
+
+## seed-demo — Dev admin user + sample catalog/sales data
+seed-demo:
+	$(MANAGE) seed_data --with-admin --demo
+
+## reset-data — Remove dev + desktop SQLite (shows setup wizard again)
+reset-data:
+	$(PYTHON) $(BACKEND_DIR)/scripts/reset_local_data.py
 
 ## run-backend — Django development server
 run-backend:
@@ -125,7 +136,7 @@ check-rust:
 	)
 endif
 
-## dev-desktop — Tauri desktop development mode
+## dev-desktop — Tauri desktop development (uses system Python for API)
 dev-desktop: check-rust
 	cd $(DESKTOP_DIR) && $(NPM) run dev
 
@@ -133,8 +144,13 @@ dev-desktop: check-rust
 build:
 	cd $(FRONTEND_DIR) && $(NPM) run build
 
-## build-desktop — Build Tauri Windows installer (requires Rust)
-build-desktop: check-rust
+## bundle-desktop-api — PyInstaller standalone API (bundled into installer)
+bundle-desktop-api:
+	$(PIP) install -r $(BACKEND_DIR)/requirements/bundle.txt
+	$(PYTHON) $(BACKEND_DIR)/scripts/build_desktop_api.py
+
+## build-desktop — Portable Windows installer (no Python required on target PCs)
+build-desktop: check-rust bundle-desktop-api
 	cd $(DESKTOP_DIR) && $(NPM) run build
 
 ## test — Backend test suite

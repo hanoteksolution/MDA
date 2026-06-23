@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from apps.customers.models import Customer
 from apps.customers.serializers.customer_serializers import serialize_customer
 from apps.customers.services.customer_service import CustomerService
+from core.services.analytics_service import AnalyticsService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
 from permissions.base import HasPermission
@@ -84,3 +85,17 @@ class CustomerSummaryView(APIView):
                 "credit_outstanding": float(qs.aggregate(t=Sum("outstanding_balance"))["t"] or 0),
             }
         )
+
+
+class CustomerPrintReportView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("customers.view")]
+
+    def get(self, request):
+        branch_id = getattr(request.user.branch, "id", None)
+        data = AnalyticsService.get_customers_report_print(
+            branch_id=branch_id,
+            search=request.query_params.get("search"),
+            customer_type=request.query_params.get("customer_type"),
+            user=request.user,
+        )
+        return success_response(data=data)

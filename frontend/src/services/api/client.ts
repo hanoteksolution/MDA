@@ -1,11 +1,33 @@
 import type { ApiResponse, AuthTokens, DashboardKPIs, User } from "@/types/models";
 import { apiRequest } from "./http";
 
+export interface DesktopUserStatus {
+  exists: boolean;
+  provisioned: boolean;
+}
+
 class ApiClient {
   async login(username: string, password: string) {
     return apiRequest<ApiResponse<AuthTokens & { user: User }>>("/auth/login/", {
       method: "POST",
       body: JSON.stringify({ username, password }),
+    });
+  }
+
+  async desktopUserStatus(username: string) {
+    return apiRequest<ApiResponse<DesktopUserStatus>>(
+      `/auth/desktop-status/?username=${encodeURIComponent(username)}`
+    );
+  }
+
+  async desktopProvision(username: string, password: string, cloudAccessToken: string) {
+    return apiRequest<ApiResponse<AuthTokens & { user: User }>>("/auth/desktop-provision/", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        password,
+        cloud_access_token: cloudAccessToken,
+      }),
     });
   }
 

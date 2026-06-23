@@ -22,18 +22,34 @@ class UserSerializer(serializers.ModelSerializer):
     role_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     branch_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     permissions = serializers.SerializerMethodField()
+    shop_slug = serializers.SerializerMethodField()
+    managed_shop_group = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
-            "is_active", "permissions", "last_login", "date_joined",
+            "is_active", "is_platform_admin", "permissions", "shop_slug",
+            "managed_shop_group", "last_login", "date_joined",
         ]
         read_only_fields = ["id", "last_login", "date_joined"]
 
     def get_permissions(self, obj):
         return obj.get_permissions()
+
+    def get_shop_slug(self, obj):
+        if obj.tenant_id:
+            return obj.tenant.slug
+        if obj.branch_id and getattr(obj.branch, "company", None) and obj.branch.company.tenant_id:
+            return obj.branch.company.tenant.slug
+        return None
+
+    def get_managed_shop_group(self, obj):
+        if not obj.managed_shop_group_id:
+            return None
+        g = obj.managed_shop_group
+        return {"id": str(g.id), "name": g.name, "slug": g.slug}
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

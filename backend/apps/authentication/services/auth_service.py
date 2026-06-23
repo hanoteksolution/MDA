@@ -10,6 +10,16 @@ class AuthService:
     @staticmethod
     def login(*, username, password, request=None):
         user = authenticate(username=username, password=password)
+        if not user:
+            user = User.objects.filter(
+                username__iexact=username.strip(),
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+            if user and user.check_password(password):
+                pass
+            else:
+                user = None
         if not user or not user.is_active or user.is_deleted:
             return None, "Invalid credentials."
 
@@ -43,22 +53,30 @@ class UserService:
     @transaction.atomic
     def create_user(*, data, created_by=None):
         password = data.pop("password")
+        role_id = data.pop("role_id", None)
+        branch_id = data.pop("branch_id", None)
         user = User.objects.create_user(**data, password=password)
-        if created_by:
-            user.created_by = created_by
-            user.save(update_fields=["created_by"])
+        if role_id:
+            user.role_id = role_id
+        if branch_id:
+            user.branch_id = branch_id
+        user.save()
         return user
 
     @staticmethod
     @transaction.atomic
     def update_user(*, user, data, updated_by=None):
         password = data.pop("password", None)
+        role_id = data.pop("role_id", None)
+        branch_id = data.pop("branch_id", None)
         for key, value in data.items():
             setattr(user, key, value)
+        if role_id is not None:
+            user.role_id = role_id
+        if branch_id is not None:
+            user.branch_id = branch_id
         if password:
             user.set_password(password)
-        if updated_by:
-            user.updated_by = updated_by
         user.save()
         return user
 

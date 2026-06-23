@@ -2,6 +2,7 @@ import type { ApiResponse } from "@/types/models";
 import type {
   ApiListResponse,
   Customer,
+  CustomerReportPrintData,
   CustomerSummary,
   PurchaseOrder,
   PurchaseSummary,
@@ -17,6 +18,9 @@ export const customersApi = {
   get: (id: string) => apiRequest<ApiResponse<Customer>>(`/customers/${id}/`),
 
   summary: () => apiRequest<ApiResponse<CustomerSummary>>("/customers/summary/"),
+
+  printReport: (params: Record<string, string | undefined> = {}) =>
+    apiRequest<ApiResponse<CustomerReportPrintData>>(`/customers/print-report/${qs(params)}`),
 
   create: (data: Record<string, unknown>) =>
     apiRequest<ApiResponse<Customer>>("/customers/", { method: "POST", body: JSON.stringify(data) }),

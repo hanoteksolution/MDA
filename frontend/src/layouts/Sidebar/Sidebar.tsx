@@ -14,6 +14,10 @@ import {
   PanelLeftClose,
   PanelLeft,
   Shield,
+  UserCheck,
+  Globe2,
+  CreditCard,
+  Goal,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -52,10 +56,24 @@ const navSections: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: "Venue",
+    items: [
+      { to: "/futsal", label: "Futsal", icon: Goal, permission: "futsal.view" },
+    ],
+  },
+  {
     label: "Finance & Reports",
     items: [
       { to: "/finance", label: "Finance", icon: Wallet, permission: "finance.view" },
       { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view" },
+      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view" },
+    ],
+  },
+  {
+    label: "Platform",
+    items: [
+      { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view" },
+      { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
     ],
   },
   {

@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { settingsApi } from "@/services/api/admin";
 import { PosProfileSettings } from "@/modules/settings/components/PosProfileSettings";
+import { ConnectionSettings } from "@/modules/settings/components/ConnectionSettings";
+import { clearBrandingCache } from "@/documents/branding";
 import type { BranchDetail, Company } from "@/types/models/admin";
 
 export function SettingsPage() {
@@ -20,6 +22,7 @@ export function SettingsPage() {
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -37,9 +40,12 @@ export function SettingsPage() {
   const saveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setSaved(false);
     try {
       const res = await settingsApi.updateCompany(company);
       setCompany(res.data);
+      clearBrandingCache();
+      setSaved(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -99,6 +105,7 @@ export function SettingsPage() {
           { id: "company", label: "Company Profile" },
           { id: "branches", label: "Branches", count: branches.length },
           { id: "pos", label: "POS Profile" },
+          { id: "connection", label: "Connection" },
         ]}
         active={tab}
         onChange={setTab}
@@ -147,7 +154,10 @@ export function SettingsPage() {
                 />
               </FormField>
             </FormGrid>
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex items-center justify-end gap-3">
+              {saved && (
+                <span className="text-sm text-emerald-600">Company profile saved.</span>
+              )}
               <Button type="submit" loading={saving}>
                 <Save className="h-4 w-4" />
                 Save Company Profile
@@ -158,6 +168,8 @@ export function SettingsPage() {
       )}
 
       {tab === "pos" && <PosProfileSettings />}
+
+      {tab === "connection" && <ConnectionSettings />}
 
       {tab === "branches" && (
         <ContentSection

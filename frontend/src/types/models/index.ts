@@ -19,6 +19,8 @@ export interface User {
   role: Role | null;
   branch: Branch | null;
   permissions: string[];
+  is_platform_admin?: boolean;
+  managed_shop_group?: { id: string; name: string; slug: string } | null;
 }
 
 export interface AuthTokens {

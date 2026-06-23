@@ -37,6 +37,9 @@ export interface PosReceipt {
   cashier: string;
   terminal: string;
   customer_name: string;
+  customer_address?: string;
+  customer_phone?: string;
+  customer_email?: string;
   company: {
     name: string;
     legal_name: string;

@@ -1,6 +1,10 @@
 from django.urls import include, path
 
 urlpatterns = [
+    path("health/", include("api.v1.health.urls")),
+    path("sync/", include("api.v1.sync.urls")),
+    path("setup/", include("api.v1.setup.urls")),
+    path("platform/", include("api.v1.platform.urls")),
     path("auth/", include("api.v1.auth.urls")),
     path("users/", include("api.v1.users.urls")),
     path("roles/", include("api.v1.roles.urls")),
@@ -19,4 +23,5 @@ urlpatterns = [
     path("pos/", include("api.v1.pos.urls")),
     path("finance/", include("api.v1.finance.urls")),
     path("reports/", include("api.v1.reports.urls")),
+    path("futsal/", include("api.v1.futsal.urls")),
 ]

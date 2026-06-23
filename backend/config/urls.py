@@ -8,5 +8,5 @@ urlpatterns = [
     path("api/v1/", include("api.v1.urls")),
 ]
 
-if settings.DEBUG:
+if settings.DEBUG or getattr(settings, "DESKTOP_MODE", False):
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

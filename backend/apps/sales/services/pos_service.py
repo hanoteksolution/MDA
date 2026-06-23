@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from django.db import transaction
@@ -21,7 +22,26 @@ PAYMENT_LABELS = {
     "mobile": "Mobile Money",
     "bank": "Bank Transfer",
     "split": "Split Payment",
+    "invoice": "Invoice",
 }
+
+
+def _parse_payment_from_notes(notes: str) -> tuple[str, str]:
+    """Return (payment_method, payment_reference) parsed from invoice notes."""
+    payment_method = "cash"
+    payment_reference = ""
+    if not notes:
+        return payment_method, payment_reference
+
+    method_match = re.search(r"Payment:\s*([a-z_]+)", notes, re.IGNORECASE)
+    if method_match:
+        payment_method = method_match.group(1).lower()
+
+    ref_match = re.search(r"Ref:\s*([^|]+)", notes, re.IGNORECASE)
+    if ref_match:
+        payment_reference = ref_match.group(1).strip()
+
+    return payment_method, payment_reference
 
 
 def _pos_profile_key(user_id) -> str:
@@ -192,6 +212,9 @@ class PosService:
             "cashier": user.get_full_name() or user.username,
             "terminal": "POS-001",
             "customer_name": invoice.customer.full_name,
+            "customer_address": invoice.customer.address or "",
+            "customer_phone": invoice.customer.phone or "",
+            "customer_email": invoice.customer.email or "",
             "company": {
                 "name": company.name if company else branch.name,
                 "legal_name": company.legal_name if company else "",
@@ -236,4 +259,95 @@ class PosService:
             "verification_path": f"/receipt/verify/{invoice.id}",
             "loyalty_points_earned": loyalty_earned,
             "loyalty_points_total": loyalty_total,
+        }
+
+    @staticmethod
+    def receipt_from_invoice(*, invoice, user):
+        """Build a printable receipt payload for an existing sales invoice."""
+        branch = invoice.branch
+        company = Company.active_objects().first()
+        profile = get_pos_profile(user=user)
+        payment_method, payment_reference = _parse_payment_from_notes(invoice.notes or "")
+        if invoice.status != "paid" and payment_method == "cash":
+            payment_method = "invoice"
+
+        cashier = user
+        if getattr(invoice, "created_by_user", None):
+            cashier = invoice.created_by_user
+
+        after_discount = invoice.subtotal - invoice.discount_amount
+        tax_rate = Decimal("0")
+        if after_discount > 0 and invoice.tax_amount > 0:
+            tax_rate = invoice.tax_amount / after_discount
+
+        receipt = PosService.build_receipt(
+            invoice=invoice,
+            company=company,
+            branch=branch,
+            user=cashier,
+            payment_method=payment_method,
+            merchant=None,
+            profile=profile,
+            payment_reference=payment_reference,
+            tax_rate=tax_rate,
+        )
+
+        created = timezone.localtime(invoice.created_at)
+        receipt["date"] = invoice.issue_date.isoformat()
+        receipt["time"] = created.strftime("%H:%M")
+        receipt["datetime_display"] = created.strftime("%b %d, %Y · %I:%M %p")
+        receipt["terminal"] = "SALES"
+        return receipt
+
+    @staticmethod
+    def delivery_note_from_invoice(*, invoice, user):
+        """Build a printable delivery note payload for a sales invoice."""
+        branch = invoice.branch
+        company = Company.active_objects().first()
+        cashier = user
+        if getattr(invoice, "created_by_user", None):
+            cashier = invoice.created_by_user
+
+        suffix = invoice.invoice_number.split("-")[-1]
+        date_part = invoice.issue_date.strftime("%d%m%Y")
+        vehicle_no = ""
+        for part in (invoice.notes or "").split("|"):
+            part = part.strip()
+            if part.lower().startswith("vehicle:"):
+                vehicle_no = part.split(":", 1)[-1].strip()
+                break
+
+        return {
+            "delivery_number": f"DN-{date_part}-{suffix}",
+            "order_number": f"ORD-{date_part}-{suffix}",
+            "invoice_number": invoice.invoice_number,
+            "invoice_id": str(invoice.id),
+            "delivery_date": invoice.issue_date.isoformat(),
+            "sales_person": cashier.get_full_name() or cashier.username,
+            "vehicle_no": vehicle_no or "—",
+            "customer_name": invoice.customer.full_name,
+            "customer_address": invoice.customer.address or "",
+            "customer_phone": invoice.customer.phone or "",
+            "company": {
+                "name": company.name if company else branch.name,
+                "phone": company.phone if company else branch.phone,
+                "email": company.email if company else "",
+                "website": "www.mdaretail.com",
+                "address": company.address if company else branch.address,
+            },
+            "branch": {
+                "name": branch.name,
+                "code": branch.code,
+                "address": branch.address,
+            },
+            "items": [
+                {
+                    "name": i.product.name,
+                    "sku": i.product.sku,
+                    "quantity_ordered": float(i.quantity),
+                    "quantity_delivered": float(i.quantity),
+                    "unit": i.product.unit.name if getattr(i.product, "unit", None) else "Pcs",
+                }
+                for i in invoice.items.select_related("product", "product__unit")
+            ],
         }

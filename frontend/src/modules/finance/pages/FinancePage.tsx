@@ -72,6 +72,8 @@ export function FinancePage() {
       title="Finance"
       description="Accounts, journal entries, expenses, and profit analysis."
       breadcrumbs={["Home", "Finance"]}
+      backTo="/dashboard"
+      backLabel="Dashboard"
       actions={
         <Button asChild>
           <Link to="/purchases/new">

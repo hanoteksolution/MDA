@@ -1,10 +1,9 @@
 import type { PosReceipt } from "@/services/api/pos";
+import { THERMAL_RECEIPT_PRINT_CSS } from "@/documents/styles/thermalReceipt";
+import { printThermalDocument } from "@/utils/printThermal";
 import { generateBarcodeDataUrl, generateQrDataUrl } from "./receiptAssets";
-import { buildThermalReceiptHtml, getThermalPrintStyles } from "./thermalReceiptHtml";
+import { buildThermalReceiptHtml } from "./thermalReceiptHtml";
 import { getVerificationUrl, type ThermalWidth } from "./receiptFormat";
-
-const RECEIPT_PRINT_ID = "pos-receipt-print-root";
-const RECEIPT_PRINT_STYLE_ID = "pos-receipt-print-style";
 
 export interface PrintReceiptOptions {
   width?: ThermalWidth;
@@ -22,31 +21,16 @@ export async function printPosReceipt(
   ]);
   const barcodeDataUrl = generateBarcodeDataUrl(receipt.invoice_number, width === "58mm" ? 1 : 1.4);
 
-  const existing = document.getElementById(RECEIPT_PRINT_ID);
-  if (existing) existing.remove();
-  const existingStyle = document.getElementById(RECEIPT_PRINT_STYLE_ID);
-  if (existingStyle) existingStyle.remove();
-
-  const container = document.createElement("div");
-  container.id = RECEIPT_PRINT_ID;
-  container.innerHTML = buildThermalReceiptHtml(
+  const body = buildThermalReceiptHtml(
     receipt,
     { qrDataUrl, barcodeDataUrl },
     width
   );
-  document.body.appendChild(container);
 
-  const style = document.createElement("style");
-  style.id = RECEIPT_PRINT_STYLE_ID;
-  style.textContent = getThermalPrintStyles(width);
-  document.head.appendChild(style);
-
-  window.print();
-
-  setTimeout(() => {
-    container.remove();
-    style.remove();
-  }, 600);
+  await printThermalDocument(body, {
+    width,
+    css: THERMAL_RECEIPT_PRINT_CSS,
+  });
 }
 
 export function printThermalReceipt58(receipt: PosReceipt) {

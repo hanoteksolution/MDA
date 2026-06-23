@@ -8,6 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
 import { useAuthStore } from "@/store/authStore";
+import { setupApi } from "@/services/api/setup";
+import { ensureConnectionLoaded, isLocalApiBase } from "@/config/connection";
+import { getApiBase } from "@/config/api";
+import { isTauri } from "@/utils/platform";
 import { cn } from "@/utils/cn";
 
 const REMEMBER_KEY = "mda_remember_username";
@@ -30,6 +34,8 @@ const formItem = {
 };
 
 export function LoginPage() {
+  const [apiTarget, setApiTarget] = useState("");
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -38,6 +44,39 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionExpired = searchParams.get("expired") === "1";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkSetup = async (attempt = 0) => {
+      try {
+        await ensureConnectionLoaded();
+        setApiTarget(getApiBase());
+        const res = await setupApi.status();
+        if (cancelled) return;
+        if (res.data.needs_setup) {
+          navigate("/setup", { replace: true });
+          return;
+        }
+        setCheckingSetup(false);
+      } catch {
+        if (cancelled) return;
+        if (attempt < 8) {
+          window.setTimeout(() => {
+            void checkSetup(attempt + 1);
+          }, 500);
+          return;
+        }
+        setApiTarget(getApiBase());
+        setCheckingSetup(false);
+      }
+    };
+
+    void checkSetup();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   useEffect(() => {
     const saved = localStorage.getItem(REMEMBER_KEY);
@@ -65,9 +104,24 @@ export function LoginPage() {
       await login(username, password);
       navigate("/dashboard", { replace: true });
     } catch {
-      // error handled in store
+      try {
+        const res = await setupApi.status();
+        if (res.data.needs_setup) {
+          navigate("/setup", { replace: true });
+        }
+      } catch {
+        // stay on login with store error
+      }
     }
   };
+
+  if (checkingSetup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
@@ -115,6 +169,27 @@ export function LoginPage() {
             >
               Sign in to access your enterprise dashboard
             </motion.p>
+            {isTauri() && apiTarget && (
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 }}
+                className="mt-3 text-xs text-muted-foreground"
+              >
+                Server:{" "}
+                <span className="font-mono text-foreground">{apiTarget}</span>
+                {" · "}
+                <Link to="/connection" className="text-primary hover:underline">
+                  Change
+                </Link>
+                {isLocalApiBase(apiTarget) && (
+                  <span className="block mt-1 text-amber-600">
+                    First shop sign-in verifies your account on the live server, copies your role and
+                    permissions locally, then downloads shop data. Later sign-ins use this PC only.
+                  </span>
+                )}
+              </motion.p>
+            )}
           </div>
 
           {/* Glass card form */}
@@ -267,7 +342,7 @@ export function LoginPage() {
               </div>
               {import.meta.env.DEV && (
                 <p className="text-[11px] text-muted-foreground/70">
-                  Dev login: admin / admin12345
+                  Dev demo: run <code className="text-[10px]">make seed-demo</code>
                 </p>
               )}
             </div>

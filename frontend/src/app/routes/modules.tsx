@@ -7,3 +7,7 @@ export { CustomersPage } from "@/modules/customers/pages/CustomersPage";
 export { SuppliersPage } from "@/modules/suppliers/pages/SuppliersPage";
 export { FinancePage } from "@/modules/finance/pages/FinancePage";
 export { ReportsPage } from "@/modules/reports/pages/ReportsPage";
+export { StaffPerformancePage } from "@/modules/platform/pages/StaffPerformancePage";
+export { PlatformShopsPage } from "@/modules/platform/pages/PlatformShopsPage";
+export { PlatformSubscriptionsPage } from "@/modules/platform/pages/PlatformSubscriptionsPage";
+export { FutsalPage } from "@/modules/futsal/pages/FutsalPage";

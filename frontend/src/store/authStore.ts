@@ -1,7 +1,63 @@
 import { create } from "zustand";
 import { api } from "@/services/api/client";
 import { clearAuthTokens, forceLogout, isJwtExpired } from "@/services/api/http";
+import { clearCloudSession, cloudLogin } from "@/services/api/cloudHttp";
+import { ensureConnectionLoaded, getCloudApiBase, getHybridConfig } from "@/config/connection";
+import { syncApi } from "@/services/api/sync";
+import { requestCloudSync } from "@/components/desktop/syncEvents";
+import { isTauri } from "@/utils/platform";
 import type { User } from "@/types/models";
+
+function isPlatformUser(user: User): boolean {
+  return Boolean(
+    user.is_platform_admin ||
+      user.permissions?.includes("platform.view") ||
+      user.permissions?.includes("platform.manage")
+  );
+}
+
+async function tryAutoCloudLogin(username: string, password: string, user: User): Promise<void> {
+  if (!isTauri() || !isPlatformUser(user)) return;
+  await ensureConnectionLoaded();
+  if (!getCloudApiBase()) return;
+  try {
+    await cloudLogin(username, password);
+  } catch {
+    // Cloud optional — local session remains valid
+  }
+}
+
+function shopConnectionReady(): boolean {
+  const cfg = getHybridConfig();
+  return Boolean(cfg?.cloud_api_base && cfg.tenant_slug && cfg.sync_secret);
+}
+
+async function tryCloudShopProvision(username: string, password: string): Promise<{
+  access: string;
+  refresh: string;
+  user: User;
+}> {
+  await cloudLogin(username, password);
+  const cloudToken = localStorage.getItem("cloud_access_token");
+  if (!cloudToken) {
+    throw new Error("Cloud sign-in failed.");
+  }
+
+  try {
+    const provision = await api.desktopProvision(username, password, cloudToken);
+    clearCloudSession();
+    try {
+      await syncApi.run();
+      requestCloudSync();
+    } catch {
+      // Provisioning succeeded; initial sync can retry in background
+    }
+    return provision.data;
+  } catch (err) {
+    clearCloudSession();
+    throw err;
+  }
+}
 
 interface AuthState {
   user: User | null;
@@ -29,11 +85,41 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (username, password) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.login(username, password);
-      localStorage.setItem("access_token", response.data.access);
-      localStorage.setItem("refresh_token", response.data.refresh);
+      await ensureConnectionLoaded();
+
+      const statusRes = await api.desktopUserStatus(username).catch(() => null);
+      const localExists = Boolean(statusRes?.data.exists);
+      const provisioned = Boolean(statusRes?.data.provisioned);
+      const canCloudProvision = isTauri() && shopConnectionReady() && !provisioned;
+
+      let session: { access: string; refresh: string; user: User } | null = null;
+
+      if (localExists) {
+        try {
+          const local = await api.login(username, password);
+          session = local.data;
+        } catch {
+          if (!canCloudProvision) throw new Error("Invalid credentials.");
+        }
+      }
+
+      if (!session && canCloudProvision) {
+        session = await tryCloudShopProvision(username, password);
+      }
+
+      if (!session) {
+        throw new Error(
+          canCloudProvision
+            ? "Could not sign in. Use the username and password from your platform admin."
+            : "Invalid credentials."
+        );
+      }
+
+      localStorage.setItem("access_token", session.access);
+      localStorage.setItem("refresh_token", session.refresh);
+      await tryAutoCloudLogin(username, password, session.user);
       set({
-        user: response.data.user,
+        user: session.user,
         isAuthenticated: true,
         isLoading: false,
       });
@@ -54,6 +140,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Ignore logout API errors — clear local session regardless
     } finally {
       clearAuthTokens();
+      clearCloudSession();
       set({ user: null, isAuthenticated: false });
     }
   },

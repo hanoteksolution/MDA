@@ -4,6 +4,13 @@ from core.models.base import BaseModel
 
 
 class Company(BaseModel):
+    tenant = models.ForeignKey(
+        "platform.Tenant",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="companies",
+    )
     name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True)
     tax_id = models.CharField(max_length=100, blank=True)

@@ -1,0 +1,2 @@
+# Desktop / offline API (SQLite — no PostgreSQL required)
+-r base.txt

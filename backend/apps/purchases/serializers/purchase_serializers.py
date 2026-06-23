@@ -15,13 +15,20 @@ def serialize_po_item(item: PurchaseOrderItem) -> dict:
 
 
 def serialize_purchase_order(po: PurchaseOrder, *, include_items=False) -> dict:
+    supplier = po.supplier
+    branch = po.branch
     data = {
         "id": str(po.id),
         "order_number": po.order_number,
         "supplier_id": str(po.supplier_id),
-        "supplier_name": po.supplier.company_name,
+        "supplier_name": supplier.company_name,
+        "supplier_address": supplier.address or "",
+        "supplier_phone": supplier.phone or "",
+        "supplier_email": supplier.email or "",
+        "supplier_payment_terms": supplier.payment_terms,
         "branch_id": str(po.branch_id),
-        "branch_name": po.branch.name,
+        "branch_name": branch.name,
+        "branch_address": branch.address or "",
         "status": po.status,
         "order_date": po.order_date.isoformat(),
         "expected_date": po.expected_date.isoformat() if po.expected_date else None,

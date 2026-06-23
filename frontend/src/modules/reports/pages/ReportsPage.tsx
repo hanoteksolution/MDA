@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   BarChart3, FileSpreadsheet, Package, Users, DollarSign,
-  TrendingUp, Download, Calendar, Filter, Loader2,
+  TrendingUp, Download, Calendar, Filter, Loader2, FileOutput, Printer, FileDown,
 } from "lucide-react";
+import { useSalesReportPrint } from "../hooks/useSalesReportPrint";
+import { useReportPrint } from "../hooks/useReportPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { ContentSection } from "@/components/layout/ContentSection";
 import { ChartCard } from "@/components/data/ChartCard";
@@ -66,6 +68,19 @@ export function ReportsPage() {
   const [reportData, setReportData] = useState<ReportResult | null>(null);
   const [chartData, setChartData] = useState<{ month: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const { printing: salesPrintBusy, printSalesReport, downloadSalesReport } = useSalesReportPrint(
+    dateFrom,
+    dateTo
+  );
+  const {
+    printing: reportPrintBusy,
+    printReportData,
+    downloadReportData,
+    printReport,
+    downloadReport,
+  } = useReportPrint(dateFrom, dateTo);
+  const printBusy = salesPrintBusy || reportPrintBusy;
 
   const category = REPORT_CATEGORIES.find((c) => c.id === selected);
 
@@ -137,6 +152,8 @@ export function ReportsPage() {
       title="Reports"
       description="Analytics, exports, and business intelligence."
       breadcrumbs={["Home", "Reports"]}
+      backTo="/dashboard"
+      backLabel="Dashboard"
     >
       <div className="ds-card flex flex-wrap items-center gap-4 px-5 py-4">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -155,6 +172,54 @@ export function ReportsPage() {
           <Filter className="h-4 w-4" />
           Apply
         </Button>
+        {selected !== "custom" && activeReport && (
+          <>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={printBusy}
+              onClick={() =>
+                reportData && void printReportData(reportData, activeReport)
+              }
+            >
+              {printBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              Print
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={printBusy}
+              onClick={() =>
+                reportData && void downloadReportData(reportData, activeReport)
+              }
+            >
+              {printBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              PDF
+            </Button>
+          </>
+        )}
+        {selected === "sales" && (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={printBusy}
+              onClick={() => void printSalesReport()}
+            >
+              {printBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+              Analytics Report
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={printBusy}
+              onClick={() => void downloadSalesReport()}
+              title="Download full sales analytics PDF"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -207,19 +272,34 @@ export function ReportsPage() {
                       )}
                     >
                       <span className="text-sm font-medium">{report}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          loadReport(report);
-                          setTimeout(exportCsv, 500);
-                        }}
-                        disabled={selected === "custom"}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          title="Print report"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void printReport(selected, report);
+                          }}
+                          disabled={selected === "custom" || printBusy}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          title="Download PDF"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void downloadReport(selected, report);
+                          }}
+                          disabled={selected === "custom" || printBusy}
+                        >
+                          <FileDown className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -237,6 +317,42 @@ export function ReportsPage() {
                     title={activeReport ?? "Report Data"}
                     description={`${reportData?.rows.length ?? 0} records`}
                     noPadding
+                    action={
+                      activeReport ? (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={printBusy || !reportData?.rows.length}
+                            onClick={() => void exportCsv()}
+                          >
+                            <Download className="h-4 w-4" />
+                            CSV
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={printBusy}
+                            onClick={() =>
+                              reportData && void printReportData(reportData, activeReport)
+                            }
+                          >
+                            {printBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                            Print
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={printBusy}
+                            onClick={() =>
+                              reportData && void downloadReportData(reportData, activeReport)
+                            }
+                          >
+                            {printBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                            PDF
+                          </Button>
+                        </div>
+                      ) : undefined
+                    }
                   >
                     {loading ? (
                       <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
@@ -247,6 +363,8 @@ export function ReportsPage() {
                       <DataTable
                         embedded
                         exportTitle={activeReport ?? "Report"}
+                        listPrint={false}
+                        listPdf={false}
                         columns={columns}
                         data={reportData?.rows ?? []}
                         emptyMessage="No data for this report in the selected period."

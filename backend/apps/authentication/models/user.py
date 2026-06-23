@@ -8,6 +8,7 @@ from core.models.base import BaseModel
 
 class Role(BaseModel):
     SYSTEM_ROLES = [
+        ("platform_admin", "Platform Admin"),
         ("super_admin", "Super Admin"),
         ("admin", "Admin"),
         ("branch_manager", "Branch Manager"),
@@ -16,6 +17,10 @@ class Role(BaseModel):
         ("cashier", "Cashier"),
         ("sales_staff", "Sales Staff"),
         ("read_only", "Read Only User"),
+        ("futsal_staff", "Futsal Staff"),
+        ("futsal_manager", "Futsal Manager"),
+        ("cafeteria_cashier", "Cafeteria Cashier"),
+        ("shop_group_manager", "Multi-Shop Manager"),
     ]
 
     name = models.CharField(max_length=100, unique=True)
@@ -79,6 +84,21 @@ class User(AbstractUser):
         blank=True,
         related_name="users",
     )
+    tenant = models.ForeignKey(
+        "platform.Tenant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+    )
+    managed_shop_group = models.ForeignKey(
+        "platform.ShopGroup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managers",
+    )
+    is_platform_admin = models.BooleanField(default=False)
     phone = models.CharField(max_length=50, blank=True)
     avatar = models.CharField(max_length=500, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -111,7 +131,7 @@ class User(AbstractUser):
         )
 
     def has_permission(self, codename):
-        if self.is_superuser or (self.role and self.role.slug == "super_admin"):
+        if self.is_platform_admin or self.is_superuser or (self.role and self.role.slug == "super_admin"):
             return True
         return codename in self.get_permissions()
 

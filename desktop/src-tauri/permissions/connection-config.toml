@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-connection-config"
+description = "Allows reading and saving desktop API connection settings."
+commands.allow = ["get_connection_config", "save_connection_config"]

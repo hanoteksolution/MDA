@@ -112,7 +112,13 @@ export function StockPage() {
   ];
 
   return (
-    <PageLayout title="Stock Levels" description="Current inventory across all warehouses." breadcrumbs={["Home", "Inventory", "Stock"]}>
+    <PageLayout
+      title="Stock Levels"
+      description="Current inventory across all warehouses."
+      breadcrumbs={["Home", "Inventory", "Stock"]}
+      backTo="/inventory"
+      backLabel="Inventory"
+    >
       <DataTable
         exportTitle="Stock Levels"
         columns={columns}

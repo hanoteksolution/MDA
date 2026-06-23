@@ -1,12 +1,13 @@
 import { getApiBase } from "@/config/api";
+import { isTauri } from "@/utils/platform";
 
 function apiUrl(endpoint: string): string {
   const base = getApiBase();
   return `${base}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 }
 
-const PUBLIC_ENDPOINTS = ["/auth/login/", "/auth/refresh/"];
-const AUTH_ROUTES = ["/login", "/forgot-password"];
+const PUBLIC_ENDPOINTS = ["/auth/login/", "/auth/refresh/", "/setup/"];
+const AUTH_ROUTES = ["/login", "/forgot-password", "/setup"];
 
 let logoutInProgress = false;
 let refreshPromise: Promise<string | null> | null = null;
@@ -39,7 +40,11 @@ export function forceLogout(redirect = true) {
     const path = window.location.pathname;
     const onAuthPage = AUTH_ROUTES.some((r) => path.startsWith(r));
     if (!onAuthPage) {
-      window.location.replace("/login?expired=1");
+      if (isTauri()) {
+        window.location.hash = "#/login?expired=1";
+      } else {
+        window.location.replace("/login?expired=1");
+      }
     }
   }
 
@@ -145,10 +150,13 @@ export async function apiRequest<T>(
     if (isPublic && response.status === 401) {
       throw new Error("Invalid username or password.");
     }
+    if (response.status >= 500) {
+      throw new Error(`Server error (${response.status}). Check API logs or try again.`);
+    }
     throw new Error(
       response.ok
         ? "Unexpected server response."
-        : "Cannot reach the API server. Start it with: make run-backend"
+        : `Request failed (${response.status}). The API may be unavailable.`
     );
   }
 

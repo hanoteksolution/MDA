@@ -2,7 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 
+const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
+
 export default defineConfig({
+  // Relative asset paths are required for the Tauri production webview.
+  base: isTauriBuild ? "./" : "/",
   plugins: [react()],
   resolve: {
     alias: {

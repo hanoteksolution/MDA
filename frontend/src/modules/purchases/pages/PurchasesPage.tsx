@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { ClipboardList, Truck, Clock, DollarSign, Plus, Pencil, Trash2 } from "lucide-react";
+import { ClipboardList, Truck, Clock, DollarSign, Plus, Pencil, Trash2, Printer, Download, Loader2, FileOutput } from "lucide-react";
+import { usePurchaseOrderPrint } from "../hooks/usePurchaseOrderPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
@@ -39,6 +40,7 @@ export function PurchasesPage() {
     purchasesApi.list,
     { search, status: statusFilter }
   );
+  const { loadingId, printPurchaseOrder, downloadPurchaseOrder } = usePurchaseOrderPrint();
 
   useEffect(() => {
     purchasesApi.summary()
@@ -62,11 +64,48 @@ export function PurchasesPage() {
     {
       key: "actions",
       header: "",
-      cell: (r) => (
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/purchases/${r.id}/edit`)}>
-          <Pencil className="h-4 w-4" />
-        </Button>
-      ),
+      exportable: false,
+      cell: (r) => {
+        const busy = loadingId === r.id;
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2 text-primary"
+              title="Print Purchase Order (A4)"
+              disabled={busy}
+              onClick={() => void printPurchaseOrder(r.id)}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+              <span className="hidden text-xs font-semibold lg:inline">PO</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Print Purchase Order"
+              disabled={busy}
+              onClick={() => void printPurchaseOrder(r.id)}
+            >
+              <Printer className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Download Purchase Order PDF"
+              disabled={busy}
+              onClick={() => void downloadPurchaseOrder(r.id, r.order_number)}
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(`/purchases/${r.id}/edit`)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -100,6 +139,8 @@ export function PurchasesPage() {
       <ContentSection title="Purchase Orders" noPadding>
         <DataTable
           embedded
+          listPrint={false}
+          listPdf={false}
           exportTitle="Purchase Orders"
           columns={columns}
           data={orders}

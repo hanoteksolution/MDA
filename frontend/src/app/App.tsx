@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppRouter } from "@/app/router";
+import { DesktopBootGate } from "@/components/desktop/DesktopBootGate";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { startSessionMonitor } from "@/services/api/http";
@@ -20,5 +21,9 @@ export function App() {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  return <AppRouter />;
+  return (
+    <DesktopBootGate>
+      <AppRouter />
+    </DesktopBootGate>
+  );
 }

@@ -89,6 +89,8 @@ export function SuppliersPage() {
       title="Suppliers"
       description="Supplier records, balances, and payment tracking."
       breadcrumbs={["Home", "Suppliers"]}
+      backTo="/dashboard"
+      backLabel="Dashboard"
       actions={
         <Button asChild>
           <Link to="/suppliers/new"><Plus className="h-4 w-4" /> Add Supplier</Link>

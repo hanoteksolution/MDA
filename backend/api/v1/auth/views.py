@@ -12,6 +12,7 @@ from apps.authentication.serializers.auth_serializers import (
     UserSerializer,
 )
 from apps.authentication.services.auth_service import AuthService, RoleService, UserService
+from apps.platform.services.desktop_provision import DesktopProvisionService
 from core.responses.api_response import error_response, success_response
 from permissions.base import HasPermission
 
@@ -49,6 +50,49 @@ class LogoutView(APIView):
 class MeView(APIView):
     def get(self, request):
         return success_response(data=UserSerializer(request.user).data)
+
+
+class DesktopUserStatusView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        username = (request.query_params.get("username") or "").strip()
+        if not username:
+            return error_response(message="Username is required.", status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=DesktopProvisionService.user_status(username=username))
+
+
+class DesktopProvisionView(APIView):
+    """First-time shop login: verify cloud account, create local user with cloud role/permissions."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        password = request.data.get("password") or ""
+        cloud_access = (request.data.get("cloud_access_token") or "").strip()
+        if not username or not password or not cloud_access:
+            return error_response(
+                message="Username, password, and cloud access token are required.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user, tokens = DesktopProvisionService.provision_from_cloud(
+                username=username,
+                password=password,
+                cloud_access_token=cloud_access,
+                request=request,
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data={
+                **tokens,
+                "user": UserSerializer(user).data,
+            },
+            message="Shop account provisioned. Sign in locally from now on.",
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class UserListCreateView(APIView):

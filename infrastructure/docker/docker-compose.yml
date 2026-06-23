@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ../../backend/.env.cloud
+    environment:
+      POSTGRES_DB: ${DB_NAME:-mda_erp}
+      POSTGRES_USER: ${DB_USER:-mda}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - mda_pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../backend/.env.cloud
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+    depends_on:
+      - db
+    volumes:
+      - mda_media:/app/media
+
+volumes:
+  mda_pgdata:
+  mda_media:

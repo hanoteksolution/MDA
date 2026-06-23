@@ -1,7 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { isTauri } from "@/utils/platform";
 import { AppShell } from "@/layouts/AppShell/AppShell";
 import { AuthLayout, ProtectedRoute } from "@/layouts/AuthLayout/AuthLayout";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { SetupPage } from "@/pages/auth/SetupPage";
+import { ConnectionPage } from "@/pages/auth/ConnectionPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
@@ -24,6 +27,10 @@ import {
   SuppliersPage,
   FinancePage,
   ReportsPage,
+  StaffPerformancePage,
+  PlatformShopsPage,
+  PlatformSubscriptionsPage,
+  FutsalPage,
 } from "@/app/routes/modules";
 import {
   CustomerFormPage,
@@ -46,11 +53,15 @@ import {
   QuotationEditPage,
 } from "@/app/routes/sales";
 
+const Router = isTauri() ? HashRouter : BrowserRouter;
+
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
         <Route element={<AuthLayout />}>
+          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/connection" element={<ConnectionPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         </Route>
@@ -255,10 +266,42 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/futsal"
+            element={
+              <PermissionGuard permission="futsal.view">
+                <FutsalPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
             path="/reports"
             element={
               <PermissionGuard permission="reports.view">
                 <ReportsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/staff-performance"
+            element={
+              <PermissionGuard permission="staff.performance.view">
+                <StaffPerformancePage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform"
+            element={
+              <PermissionGuard permission="platform.view">
+                <PlatformShopsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/subscriptions"
+            element={
+              <PermissionGuard permission="subscriptions.manage">
+                <PlatformSubscriptionsPage />
               </PermissionGuard>
             }
           />
@@ -333,6 +376,6 @@ export function AppRouter() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }

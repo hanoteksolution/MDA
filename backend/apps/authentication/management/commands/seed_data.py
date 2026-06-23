@@ -1,121 +1,28 @@
 from django.core.management.base import BaseCommand
 
-from apps.authentication.models import Permission, Role, RolePermission, User
+from apps.authentication.bootstrap import bootstrap_roles_and_permissions
+from apps.authentication.models import Role, User
 from apps.settings_app.models import Branch, Company
-
-PERMISSIONS = [
-    ("dashboard.view", "View Dashboard", "dashboard"),
-    ("pos.access", "Access POS", "pos"),
-    ("products.view", "View Products", "products"),
-    ("products.create", "Create Products", "products"),
-    ("products.update", "Update Products", "products"),
-    ("products.delete", "Delete Products", "products"),
-    ("inventory.view", "View Inventory", "inventory"),
-    ("inventory.adjust", "Adjust Inventory", "inventory"),
-    ("inventory.transfer", "Transfer Inventory", "inventory"),
-    ("purchases.view", "View Purchases", "purchases"),
-    ("purchases.create", "Create Purchases", "purchases"),
-    ("sales.view", "View Sales", "sales"),
-    ("sales.create", "Create Sales", "sales"),
-    ("customers.view", "View Customers", "customers"),
-    ("customers.create", "Create Customers", "customers"),
-    ("customers.update", "Update Customers", "customers"),
-    ("suppliers.view", "View Suppliers", "suppliers"),
-    ("suppliers.create", "Create Suppliers", "suppliers"),
-    ("suppliers.update", "Update Suppliers", "suppliers"),
-    ("purchases.update", "Update Purchases", "purchases"),
-    ("finance.view", "View Finance", "finance"),
-    ("finance.create", "Create Finance Entries", "finance"),
-    ("reports.view", "View Reports", "reports"),
-    ("reports.export", "Export Reports", "reports"),
-    ("users.view", "View Users", "users"),
-    ("users.create", "Create Users", "users"),
-    ("users.update", "Update Users", "users"),
-    ("users.delete", "Delete Users", "users"),
-    ("roles.view", "View Roles", "roles"),
-    ("roles.create", "Create Roles", "roles"),
-    ("roles.update", "Update Roles", "roles"),
-    ("roles.delete", "Delete Roles", "roles"),
-    ("branches.view", "View Branches", "branches"),
-    ("branches.create", "Create Branches", "branches"),
-    ("branches.update", "Update Branches", "branches"),
-    ("branches.delete", "Delete Branches", "branches"),
-    ("settings.view", "View Settings", "settings"),
-    ("settings.update", "Update Settings", "settings"),
-    ("settings.backup", "Manage Backups", "settings"),
-    ("audit.view", "View Audit Logs", "audit"),
-]
-
-ROLE_PERMISSIONS = {
-    "super_admin": "*",
-    "admin": [
-        "dashboard.view", "pos.access", "products.view", "products.create",
-        "products.update", "products.delete", "inventory.view", "inventory.adjust",
-        "inventory.transfer", "purchases.view", "purchases.create", "sales.view",
-        "sales.create", "customers.view", "customers.create", "customers.update",
-        "suppliers.view", "suppliers.create", "suppliers.update", "finance.view", "finance.create", "reports.view",
-        "reports.export", "users.view", "users.create", "users.update",
-        "roles.view", "branches.view", "branches.create", "branches.update",
-        "settings.view", "settings.update", "audit.view",
-    ],
-    "branch_manager": [
-        "dashboard.view", "pos.access", "products.view", "products.create",
-        "products.update", "inventory.view", "inventory.adjust", "inventory.transfer",
-        "purchases.view", "purchases.create", "purchases.update", "sales.view", "sales.create",
-        "customers.view", "customers.create", "suppliers.view", "reports.view",
-        "users.view", "branches.view", "settings.view",
-    ],
-    "accountant": [
-        "dashboard.view", "finance.view", "finance.create", "reports.view",
-        "reports.export", "sales.view", "purchases.view",
-    ],
-    "inventory_manager": [
-        "dashboard.view", "products.view", "products.create", "products.update",
-        "inventory.view", "inventory.adjust", "inventory.transfer",
-        "purchases.view", "purchases.create", "suppliers.view", "reports.view",
-    ],
-    "cashier": ["pos.access"],
-    "sales_staff": [
-        "dashboard.view", "pos.access", "sales.view", "sales.create",
-        "customers.view", "customers.create", "products.view",
-    ],
-    "read_only": [
-        "dashboard.view", "products.view", "inventory.view", "sales.view",
-        "customers.view", "suppliers.view", "finance.view", "reports.view",
-    ],
-}
 
 
 class Command(BaseCommand):
-    help = "Seed default roles, permissions, company, branch, and admin user"
+    help = "Seed demo data for development (optional admin user and sample catalog)"
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--demo",
+            action="store_true",
+            help="Load sample products, customers, suppliers, and sales data",
+        )
+        parser.add_argument(
+            "--with-admin",
+            action="store_true",
+            help="Create dev admin user (admin / admin12345)",
+        )
 
     def handle(self, *args, **options):
-        self.stdout.write("Seeding permissions...")
-        perm_map = {}
-        for codename, name, module in PERMISSIONS:
-            perm, _ = Permission.objects.get_or_create(
-                codename=codename,
-                defaults={"name": name, "module": module},
-            )
-            perm_map[codename] = perm
+        bootstrap_roles_and_permissions(stdout=self.stdout)
 
-        self.stdout.write("Seeding roles...")
-        for slug, name in Role.SYSTEM_ROLES:
-            role, _ = Role.objects.get_or_create(
-                slug=slug,
-                defaults={"name": name, "is_system": True},
-            )
-            RolePermission.objects.filter(role=role).delete()
-            codes = ROLE_PERMISSIONS.get(slug, [])
-            if codes == "*":
-                codes = list(perm_map.keys())
-            for code in codes:
-                if code in perm_map:
-                    RolePermission.objects.get_or_create(
-                        role=role, permission=perm_map[code]
-                    )
-
-        self.stdout.write("Seeding company and branch...")
         company, _ = Company.objects.get_or_create(
             name="MDA Retail",
             defaults={"legal_name": "MDA Retail Ltd", "email": "info@mda.com"},
@@ -126,28 +33,38 @@ class Command(BaseCommand):
             defaults={"name": "Main Branch", "is_default": True, "is_active": True},
         )
 
-        self.stdout.write("Seeding admin user...")
-        admin_role = Role.objects.get(slug="super_admin")
-        user, created = User.objects.get_or_create(
-            username="admin",
-            defaults={
-                "email": "admin@mda.com",
-                "role": admin_role,
-                "branch": branch,
-                "is_staff": True,
-                "is_superuser": True,
-            },
-        )
-        if created:
-            user.set_password("admin12345")
-            user.save()
-            self.stdout.write(self.style.SUCCESS("Admin user created: admin / admin12345"))
+        user = None
+        if options["with_admin"]:
+            self.stdout.write("Creating dev admin user...")
+            admin_role = Role.objects.get(slug="super_admin")
+            user, created = User.objects.get_or_create(
+                username="admin",
+                defaults={
+                    "email": "admin@mda.com",
+                    "role": admin_role,
+                    "branch": branch,
+                    "is_staff": True,
+                    "is_superuser": True,
+                },
+            )
+            if created:
+                user.set_password("admin12345")
+                user.save()
+                self.stdout.write(self.style.SUCCESS("Dev admin created: admin / admin12345"))
+            else:
+                self.stdout.write("Dev admin already exists.")
         else:
-            self.stdout.write("Admin user already exists.")
+            user = User.objects.filter(username="admin").first()
 
-        self._seed_phase2(branch, user)
-        self._seed_phase3(branch, user)
-        self._seed_phase4(branch, user)
+        if options["demo"]:
+            if not user:
+                self.stdout.write(
+                    self.style.ERROR("Demo data requires a user. Re-run with --with-admin.")
+                )
+                return
+            self._seed_phase2(branch, user)
+            self._seed_phase3(branch, user)
+            self._seed_phase4(branch, user)
 
         self.stdout.write(self.style.SUCCESS("Seed completed."))
 
@@ -447,11 +364,9 @@ class Command(BaseCommand):
                 user=user,
             )
 
-        # Mark one invoice as paid with amount
         paid = Invoice.active_objects().filter(status=Invoice.STATUS_PAID).first()
         if paid:
             paid.amount_paid = paid.total_amount
             paid.save(update_fields=["amount_paid", "updated_at"])
 
         self.stdout.write(self.style.SUCCESS("Phase 4 sales data seeded."))
-

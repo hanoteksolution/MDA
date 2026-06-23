@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Package, TrendingUp, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, TrendingUp, Info, FileOutput, Download, Loader2 } from "lucide-react";
+import { useProductListPrint } from "../hooks/useProductListPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
@@ -35,6 +36,11 @@ export function ProductsPage() {
     total,
     reload,
   } = usePaginatedList(productsApi.list, { search, category: categoryFilter });
+
+  const { printing, printProductList, downloadProductList } = useProductListPrint({
+    search,
+    category: categoryFilter,
+  });
 
   useEffect(() => {
     productsApi.categories().then((res) => {
@@ -109,16 +115,28 @@ export function ProductsPage() {
       description="Manage your product catalog, pricing, and stock levels."
       breadcrumbs={["Home", "Products"]}
       actions={
-        <Button asChild>
-          <Link to="/products/new">
-            <Plus className="h-4 w-4" />
-            Add Product
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={printing} onClick={() => void printProductList()}>
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+            Print Product List
+          </Button>
+          <Button variant="secondary" disabled={printing} onClick={() => void downloadProductList()}>
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            PDF
+          </Button>
+          <Button asChild>
+            <Link to="/products/new">
+              <Plus className="h-4 w-4" />
+              Add Product
+            </Link>
+          </Button>
+        </div>
       }
     >
       <DataTable
         exportTitle="Products"
+        listPrint={false}
+        listPdf={false}
         columns={columns}
         data={products}
         loading={loading}

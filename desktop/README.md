@@ -2,67 +2,64 @@
 
 Tauri 2 desktop shell wrapping the React frontend (`../frontend`).
 
-## Prerequisites (Windows)
+The desktop app **starts the Django API automatically** on launch. Installed builds bundle a **standalone `mda-api.exe`** — **no Python required** on POS PCs.
+
+## Prerequisites (build machine only)
 
 1. **Node.js** 18+ and npm
-2. **Rust** — [https://rustup.rs](https://rustup.rs)
-   ```powershell
-   winget install Rustlang.Rustup
-   rustup default stable
-   ```
-3. **Visual Studio Build Tools** — C++ workload (required for Rust on Windows)
-4. **WebView2** — pre-installed on Windows 10/11
+2. **Python** 3.11+ (only to *build* the installer, not on target PCs)
+3. **Rust** — [https://rustup.rs](https://rustup.rs)
+4. **Visual Studio Build Tools** — C++ workload
+5. **WebView2** — on target Windows 10/11 PCs
 
-## Quick start
+## Build portable installer (no Python on target PCs)
 
 From the **repository root**:
 
-```bash
-make install-desktop   # npm install in desktop/
-make dev-desktop       # Tauri dev (starts Vite + desktop window)
-```
-
-Or from `desktop/`:
-
-```bash
-npm install
-npm run dev
-```
-
-Ensure the Django API is running (`make run-backend`) for full functionality.
-
-## Build installer
-
-```bash
+```powershell
+pip install -r backend/requirements/bundle.txt
+make install-desktop
 make build-desktop
 ```
 
-Output: `desktop/src-tauri/target/release/bundle/`
+This will:
 
-- **NSIS installer**: `nsis/MDA ERP_0.1.0_x64-setup.exe`
-- **MSI**: `msi/MDA ERP_0.1.0_x64_en-US.msi`
+1. Run PyInstaller → `backend/dist/mda-api-x86_64-pc-windows-msvc.exe`
+2. Bundle it inside the Tauri installer
+3. Produce MSI/NSIS under `desktop/src-tauri/target/release/bundle/`
 
-## Project layout
+Copy the installer to any Windows PC and install — **Python is not needed**.
 
-```
-desktop/
-├── package.json          # Tauri CLI scripts
-├── app-icon.png          # Source icon for tauri icon
-├── src-tauri/
-│   ├── Cargo.toml        # Rust dependencies
-│   ├── tauri.conf.json   # Window, bundle, frontend paths
-│   ├── src/              # Rust entry + commands
-│   ├── icons/            # Generated app icons
-│   └── capabilities/     # Tauri 2 permissions
-└── sync/                 # (Phase 9) Offline SQLite sync engine
+## Development (on your dev machine)
+
+Dev mode still uses system Python (faster iteration):
+
+```powershell
+pip install -r backend/requirements/desktop.txt
+make dev-desktop
 ```
 
-## Architecture
+On first launch, complete the **setup wizard** to create your company profile and administrator account.
+
+For dev demo data: `make seed-demo` (creates admin / admin12345 + sample catalog).
+
+## Data storage
+
+SQLite database and uploads live at:
+
+`%APPDATA%\com.mda.erp\`
+
+## How it works
 
 ```
-React UI (frontend/) → Tauri WebView → Rust shell → OS (print, files, updates)
-                              ↓
-                    Django API (when online)
+App launch → bundled mda-api.exe (SQLite in AppData) → UI at 127.0.0.1:8000
 ```
 
-Offline sync (`sync/`) is planned for Phase 9. The desktop app currently runs the full web UI against the local API.
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `make build-desktop` fails on PyInstaller | Run `pip install -r backend/requirements/bundle.txt` |
+| API timeout on first launch | First start runs migrations — wait up to 2 minutes |
+| Port 8000 in use | Close other Django instances |
+| Dev mode needs Python | Expected — only *installed* builds are Python-free |

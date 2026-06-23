@@ -10,6 +10,8 @@ interface PageLayoutProps {
   description?: string;
   breadcrumbs?: string[];
   actions?: ReactNode;
+  backTo?: string;
+  backLabel?: string;
   children: ReactNode;
   className?: string;
 }
@@ -19,6 +21,8 @@ export function PageLayout({
   description,
   breadcrumbs,
   actions,
+  backTo,
+  backLabel,
   children,
   className,
 }: PageLayoutProps) {
@@ -37,6 +41,8 @@ export function PageLayout({
           description={description}
           breadcrumbs={breadcrumbs}
           actions={actions}
+          backTo={backTo}
+          backLabel={backLabel}
         />
       </motion.div>
       <motion.div variants={animation.stagger.item} className="space-y-6">

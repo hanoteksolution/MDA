@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from apps.sales.models import Invoice, Quotation
 from apps.sales.serializers.sales_serializers import serialize_invoice, serialize_quotation
+from apps.sales.services.pos_service import PosService
 from apps.sales.services.sales_service import InvoiceService, QuotationService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
@@ -139,6 +140,24 @@ class InvoiceDetailView(APIView):
             update_data["branch_id"] = branch_id
         inv = InvoiceService.update(instance=inv, data=update_data, items=items, user=request.user)
         return success_response(data=serialize_invoice(inv, include_items=True), message="Invoice updated.")
+
+
+class InvoiceReceiptView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("sales.view")]
+
+    def get(self, request, pk):
+        inv = InvoiceService.list().get(pk=pk)
+        receipt = PosService.receipt_from_invoice(invoice=inv, user=request.user)
+        return success_response(data=receipt)
+
+
+class InvoiceDeliveryNoteView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("sales.view")]
+
+    def get(self, request, pk):
+        inv = InvoiceService.list().get(pk=pk)
+        note = PosService.delivery_note_from_invoice(invoice=inv, user=request.user)
+        return success_response(data=note)
 
 
 class SalesSummaryView(APIView):

@@ -4,6 +4,12 @@ backups/
 
 # Environment
 backend/.env
+backend/.env.cloud
+frontend/.env.development.local
+frontend/.env*.local
+
+# Logs
+build-desktop.log
 
 # Python
 __pycache__/
@@ -23,6 +29,9 @@ backend/staticfiles/
 
 # Desktop build
 desktop/src-tauri/target/
+desktop/backend-resource/
+backend/dist/
+backend/build/pyinstaller/
 
 # OS
 .DS_Store

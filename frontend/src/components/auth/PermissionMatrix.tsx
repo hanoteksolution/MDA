@@ -35,6 +35,9 @@ const MODULE_LABELS: Record<string, string> = {
   branches: "Branches",
   settings: "Settings",
   audit: "Audit",
+  platform: "Platform",
+  staff: "Staff",
+  futsal: "Futsal",
 };
 
 export function PermissionMatrix({

@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-save-pdf"
+description = "Allows saving PDF files via native save dialog."
+commands.allow = ["save_pdf_file"]

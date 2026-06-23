@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { Users, UserPlus, CreditCard, ShoppingBag, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { Users, UserPlus, CreditCard, ShoppingBag, Mail, Phone, Pencil, Trash2, Printer, FileDown, Loader2, FileOutput } from "lucide-react";
+import { useCustomerListPrint } from "../hooks/useCustomerListPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -34,6 +35,10 @@ export function CustomersPage() {
     total,
     reload,
   } = usePaginatedList(customersApi.list, { search, customer_type: typeFilter });
+  const { printing, printCustomerList, downloadCustomerList } = useCustomerListPrint({
+    search,
+    customer_type: typeFilter,
+  });
 
   useEffect(() => {
     setSummaryLoading(true);
@@ -110,10 +115,30 @@ export function CustomersPage() {
       title="Customers"
       description="Customer profiles, credit accounts, and purchase history."
       breadcrumbs={["Home", "Customers"]}
+      backTo="/dashboard"
+      backLabel="Dashboard"
       actions={
-        <Button asChild>
-          <Link to="/customers/new"><UserPlus className="h-4 w-4" /> Add Customer</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            disabled={printing}
+            onClick={() => void printCustomerList()}
+          >
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
+            Print Report
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={printing}
+            onClick={() => void downloadCustomerList()}
+          >
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            PDF
+          </Button>
+          <Button asChild>
+            <Link to="/customers/new"><UserPlus className="h-4 w-4" /> Add Customer</Link>
+          </Button>
+        </div>
       }
     >
       <KpiGrid>
@@ -123,10 +148,27 @@ export function CustomersPage() {
         <KpiCard title="Listed" value={String(total)} icon={<ShoppingBag className="h-5 w-5" />} loading={loading} />
       </KpiGrid>
 
-      <ContentSection title="Customer Directory" noPadding>
+      <ContentSection
+        title="Customer Directory"
+        noPadding
+        action={
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" disabled={printing} onClick={() => void printCustomerList()}>
+              {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              Print
+            </Button>
+            <Button size="sm" disabled={printing} onClick={() => void downloadCustomerList()}>
+              {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              PDF
+            </Button>
+          </div>
+        }
+      >
         <DataTable
           embedded
           exportTitle="Customers"
+          listPrint={false}
+          listPdf={false}
           columns={columns}
           data={customers}
           loading={loading}

@@ -38,6 +38,10 @@ interface DataTableProps<T> {
   onPrint?: () => void;
   onPdfDownload?: () => void;
   exportTitle?: string;
+  /** When false, hides the toolbar Print button (table list report). Default true. */
+  listPrint?: boolean;
+  /** When false, hides the toolbar PDF button (table list report). Default true. */
+  listPdf?: boolean;
   actions?: ReactNode;
   className?: string;
   embedded?: boolean;
@@ -74,6 +78,8 @@ export function DataTable<T>({
   onPrint,
   onPdfDownload,
   exportTitle,
+  listPrint = true,
+  listPdf = true,
   actions,
   className,
   embedded,
@@ -114,14 +120,18 @@ export function DataTable<T>({
 
   const handlePrint =
     onPrint ??
-    (canExport
-      ? () => printTable({ title: exportTitle!, columns: exportColumns, data })
+    (canExport && listPrint
+      ? () => {
+          void printTable({ title: exportTitle!, columns: exportColumns, data });
+        }
       : undefined);
 
   const handlePdf =
     onPdfDownload ??
-    (canExport
-      ? () => downloadTablePdf({ title: exportTitle!, columns: exportColumns, data })
+    (canExport && listPdf
+      ? () => {
+          void downloadTablePdf({ title: exportTitle!, columns: exportColumns, data });
+        }
       : undefined);
 
   const showFilterBar =
