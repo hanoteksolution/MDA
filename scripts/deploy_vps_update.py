@@ -143,7 +143,7 @@ def main() -> None:
         print(f"Web app (browser): {urls['public_url']}")
         print(f"API: {urls['api_url']}")
         if urls["host"] != VPS_HOST:
-            print(f"\nDNS: point {urls['host']} A record → {VPS_HOST}")
+            print(f"\nDNS: point {urls['host']} A record to {VPS_HOST}")
     finally:
         archive.unlink(missing_ok=True)
 
