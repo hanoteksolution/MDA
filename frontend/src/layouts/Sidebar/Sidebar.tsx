@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -21,7 +22,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { resolveMediaUrl } from "@/config/api";
 import { cn } from "@/utils/cn";
+import { settingsApi } from "@/services/api/admin";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -95,6 +98,29 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission } = usePermissions();
+  const [companyName, setCompanyName] = useState("MDA ERP");
+  const [logoUrl, setLogoUrl] = useState<string | undefined>();
+
+  useEffect(() => {
+    let active = true;
+    const loadCompany = async () => {
+      try {
+        const res = await settingsApi.company();
+        if (!active || !res.data) return;
+        setCompanyName(res.data.name || "MDA ERP");
+        setLogoUrl(resolveMediaUrl(res.data.logo));
+      } catch {
+        /* keep defaults */
+      }
+    };
+    loadCompany();
+    const onUpdate = () => loadCompany();
+    window.addEventListener("mda:company-updated", onUpdate);
+    return () => {
+      active = false;
+      window.removeEventListener("mda:company-updated", onUpdate);
+    };
+  }, []);
 
   const canSeeItem = (item: NavItem) => {
     if (!item.permission) return true;
@@ -110,6 +136,8 @@ export function Sidebar() {
     }))
     .filter((section) => section.items.length > 0);
 
+  const initial = (companyName || "M").charAt(0).toUpperCase();
+
   return (
     <aside
       className={cn(
@@ -119,15 +147,41 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex h-[72px] items-center justify-between border-b border-sidebar-border px-4">
-        {!sidebarCollapsed && (
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-sm">
-              M
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">MDA ERP</p>
+        {!sidebarCollapsed ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-xl object-contain bg-background border border-border"
+              />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-sm">
+                {initial}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-foreground">{companyName}</p>
               <p className="text-[10px] text-muted-foreground">Enterprise Edition</p>
             </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 justify-center">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-8 w-8 rounded-lg object-contain bg-background border border-border"
+                title={companyName}
+              />
+            ) : (
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs"
+                title={companyName}
+              >
+                {initial}
+              </div>
+            )}
           </div>
         )}
         <button

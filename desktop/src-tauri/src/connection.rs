@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 
 
-pub const LOCAL_API: &str = "http://127.0.0.1:8000/api/v1";
+pub const LOCAL_API: &str = "http://127.0.0.1:18765/api/v1";
 
 
 

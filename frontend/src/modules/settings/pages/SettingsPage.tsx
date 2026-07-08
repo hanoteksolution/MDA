@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Save, Plus, Pencil } from "lucide-react";
+import { Save, Plus, Pencil, Upload, X, Loader2 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
 import { ContentSection } from "@/components/layout/ContentSection";
@@ -9,6 +9,7 @@ import { DataTable, type Column } from "@/components/data/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { resolveMediaUrl } from "@/config/api";
 import { settingsApi } from "@/services/api/admin";
 import { PosProfileSettings } from "@/modules/settings/components/PosProfileSettings";
 import { ConnectionSettings } from "@/modules/settings/components/ConnectionSettings";
@@ -17,8 +18,11 @@ import type { BranchDetail, Company } from "@/types/models/admin";
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState("company");
   const [company, setCompany] = useState<Partial<Company>>({});
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,7 +32,10 @@ export function SettingsPage() {
     setLoading(true);
     try {
       const [c, b] = await Promise.all([settingsApi.company(), settingsApi.branches()]);
-      if (c.data) setCompany(c.data);
+      if (c.data) {
+        setCompany(c.data);
+        setLogoPreview(null);
+      }
       setBranches(b.data);
     } finally {
       setLoading(false);
@@ -37,6 +44,48 @@ export function SettingsPage() {
 
   useEffect(() => { load(); }, []);
 
+  const displayLogo = logoPreview || resolveMediaUrl(company.logo) || null;
+
+  const handleLogoFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image (JPEG, PNG, WebP, or GIF).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Logo must be 5 MB or smaller.");
+      return;
+    }
+    const local = URL.createObjectURL(file);
+    setLogoPreview(local);
+    setUploadingLogo(true);
+    try {
+      const res = await settingsApi.uploadLogo(file);
+      const updated = await settingsApi.updateCompany({ ...company, logo: res.data.url });
+      setCompany(updated.data);
+      setLogoPreview(null);
+      clearBrandingCache();
+      window.dispatchEvent(new Event("mda:company-updated"));
+    } catch (err) {
+      setLogoPreview(null);
+      alert(err instanceof Error ? err.message : "Logo upload failed");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const clearLogo = async () => {
+    setLogoPreview(null);
+    if (logoInputRef.current) logoInputRef.current.value = "";
+    try {
+      const updated = await settingsApi.updateCompany({ ...company, logo: "" });
+      setCompany(updated.data);
+      clearBrandingCache();
+      window.dispatchEvent(new Event("mda:company-updated"));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not remove logo");
+    }
+  };
+
   const saveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -44,7 +93,9 @@ export function SettingsPage() {
     try {
       const res = await settingsApi.updateCompany(company);
       setCompany(res.data);
+      setLogoPreview(null);
       clearBrandingCache();
+      window.dispatchEvent(new Event("mda:company-updated"));
       setSaved(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Save failed");
@@ -111,7 +162,7 @@ export function SettingsPage() {
         onChange={setTab}
       />
 
-      {tab === "company" && (
+      {tab === "company" && !loading && (
         <form onSubmit={saveCompany}>
           <FormSection title="Company Information" description="Legal and contact details for your organization.">
             <FormGrid>
@@ -154,6 +205,60 @@ export function SettingsPage() {
                 />
               </FormField>
             </FormGrid>
+          </FormSection>
+
+          <FormSection
+            title="Company Logo"
+            description="Shown in the sidebar, receipts, PDFs, and printed documents. JPEG, PNG, WebP, or GIF · max 5 MB."
+          >
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/40">
+                {displayLogo ? (
+                  <img src={displayLogo} alt="Company logo" className="h-full w-full object-contain p-2" />
+                ) : (
+                  <span className="text-2xl font-bold text-muted-foreground">
+                    {(company.name || "M").charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleLogoFile(file);
+                  }}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={uploadingLogo}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {uploadingLogo ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploadingLogo ? "Uploading…" : "Upload logo"}
+                  </Button>
+                  {displayLogo && (
+                    <Button type="button" variant="ghost" size="sm" onClick={clearLogo}>
+                      <X className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Logo updates immediately for the sidebar, receipts, and printed documents.
+                </p>
+              </div>
+            </div>
             <div className="mt-6 flex items-center justify-end gap-3">
               {saved && (
                 <span className="text-sm text-emerald-600">Company profile saved.</span>

@@ -1,0 +1,10 @@
+# Re-use existing VPS volumes (created before project was named "mda")
+name: mda
+
+volumes:
+  mda_pgdata:
+    external: true
+    name: docker_mda_pgdata
+  mda_media:
+    external: true
+    name: docker_mda_media

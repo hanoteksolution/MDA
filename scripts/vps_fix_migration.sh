@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
-cd /opt/mda/infrastructure/docker
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.vps.yml"
+cd /home/ubuntu/projects/mda
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.vps.yml -f docker-compose.volumes.yml"
 
 $COMPOSE exec -T db psql -U mda -d mda_erp <<'SQL'
 DROP INDEX IF EXISTS tenant_subscriptions_reference_code_3c461680_like;

@@ -20,7 +20,9 @@ export function contactIcon(type: "phone" | "email" | "web", color = "#fff"): st
 export function renderMdaBrand(branding: DocumentBranding, logoClass = "mda-logo"): string {
   const company = branding.companyName.toUpperCase();
   const tagline = (branding.tagline ?? "ERP & POS SYSTEM").toUpperCase();
-  const logo = LOGO_HEX.replace('class="mda-logo"', `class="${logoClass}"`);
+  const logo = branding.logoUrl
+    ? `<img class="${logoClass}" src="${esc(branding.logoUrl)}" alt="" style="object-fit:contain;border-radius:8px" />`
+    : LOGO_HEX.replace('class="mda-logo"', `class="${logoClass}"`);
   return `
     <div class="mda-brand">
       ${logo}

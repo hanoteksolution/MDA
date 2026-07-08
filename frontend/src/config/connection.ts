@@ -1,4 +1,4 @@
-export const LOCAL_API_BASE = "http://127.0.0.1:8000/api/v1";
+export const LOCAL_API_BASE = "http://127.0.0.1:18765/api/v1";
 
 const CLOUD_STORAGE_KEY = "mda_cloud_api_base";
 

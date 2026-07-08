@@ -44,7 +44,7 @@ export function DesktopBootGate({ children }: { children: React.ReactNode }) {
       }
 
       if (attempts >= maxAttempts) {
-        setError("Local shop database did not start. Close apps using port 8000 and restart MDA ERP.");
+        setError("Local shop database did not start. Close other MDA ERP windows and restart the app.");
         return;
       }
       window.setTimeout(poll, 500);

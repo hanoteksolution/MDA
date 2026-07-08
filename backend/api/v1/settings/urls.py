@@ -4,6 +4,7 @@ from api.v1.settings.views import (
     BranchDetailView,
     BranchListCreateView,
     BranchSetDefaultView,
+    CompanyLogoUploadView,
     CompanyProfileView,
     SettingDetailView,
     SettingsListView,
@@ -15,5 +16,6 @@ urlpatterns = [
     path("branches/<uuid:pk>/set-default/", BranchSetDefaultView.as_view(), name="branch-set-default"),
     path("", SettingsListView.as_view(), name="settings-list"),
     path("company/", CompanyProfileView.as_view(), name="settings-company"),
+    path("company/upload-logo/", CompanyLogoUploadView.as_view(), name="settings-company-upload-logo"),
     path("<str:key>/", SettingDetailView.as_view(), name="setting-detail"),
 ]

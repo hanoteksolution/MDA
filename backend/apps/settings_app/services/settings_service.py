@@ -73,14 +73,25 @@ class SettingsService:
         company = Company.active_objects().first()
         return company
 
+    ALLOWED_COMPANY_FIELDS = (
+        "name",
+        "legal_name",
+        "tax_id",
+        "email",
+        "phone",
+        "address",
+        "logo",
+    )
+
     @staticmethod
     @transaction.atomic
     def update_company_profile(*, data, user=None):
         company = Company.active_objects().first()
         if not company:
             company = Company.objects.create(name=data.get("name", "My Company"), created_by=user)
-        for key, value in data.items():
-            setattr(company, key, value)
+        for key in SettingsService.ALLOWED_COMPANY_FIELDS:
+            if key in data:
+                setattr(company, key, data[key] if data[key] is not None else "")
         company.updated_by = user
         company.save()
         return company

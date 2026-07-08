@@ -43,7 +43,7 @@ export const MDA_BASE_DOCUMENT_CSS = `
   display: flex; align-items: center; gap: 12px;
 }
 .mda-logo, .sd-logo-hex, .tr-logo, .pl-logo, .sr-logo, .cr-logo, .po-logo, .dn-logo {
-  width: 52px; height: 52px; flex-shrink: 0;
+  width: 52px; height: 52px; flex-shrink: 0; object-fit: contain; border-radius: 8px;
 }
 .mda-company, .sd-company-name, .tr-company, .pl-company, .sr-company, .cr-company, .po-company, .dn-company {
   margin: 0; font-size: 20px; font-weight: 800;

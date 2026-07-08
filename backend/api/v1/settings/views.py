@@ -6,6 +6,7 @@ from apps.authentication.serializers.auth_serializers import BranchSerializer, C
 from apps.settings_app.models import Branch, Company
 from apps.settings_app.services.settings_service import BranchService, SettingsService
 from core.responses.api_response import error_response, success_response
+from core.utils.media import save_company_logo
 from permissions.base import HasPermission
 
 
@@ -110,3 +111,26 @@ class CompanyProfileView(APIView):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         company = SettingsService.update_company_profile(data=request.data, user=request.user)
         return success_response(data=CompanySerializer(company).data, message="Company updated.")
+
+
+class CompanyLogoUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.has_permission("settings.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+
+        uploaded = request.FILES.get("image")
+        if not uploaded:
+            return error_response(message="No image file provided.", status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            url = save_company_logo(uploaded_file=uploaded)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+
+        return success_response(
+            data={"url": url, "path": url},
+            message="Logo uploaded.",
+            status=status.HTTP_201_CREATED,
+        )

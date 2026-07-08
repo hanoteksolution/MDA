@@ -4,8 +4,8 @@ import subprocess
 
 HOST = "safari-server"
 DOCKER = (
-    "cd /opt/mda/infrastructure/docker && "
-    "docker compose -f docker-compose.yml -f docker-compose.vps.yml"
+    "cd /home/ubuntu/projects/mda && "
+    "docker compose -f docker-compose.yml -f docker-compose.vps.yml -f docker-compose.volumes.yml"
 )
 
 subprocess.run(

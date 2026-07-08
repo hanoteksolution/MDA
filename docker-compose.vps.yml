@@ -1,36 +1,19 @@
-# Hostinger VPS overrides — public port 8010 serves web UI + API via nginx.
+# VPS overrides — public port 8010, nginx front-end
+name: mda
 
 services:
-
   db:
-
     ports:
-
       - "127.0.0.1:5437:5432"
-
-
-
-  api:
-
-    env_file:
-
-      - ../../backend/.env.cloud
-
-
 
   web:
     build:
-      context: ../..
+      context: .
       dockerfile: infrastructure/docker/Dockerfile.web
     image: mda-web
-
+    container_name: mda_web
     restart: unless-stopped
-
     ports:
-
       - "8010:80"
-
     depends_on:
-
       - api
-

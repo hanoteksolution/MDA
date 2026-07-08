@@ -36,6 +36,6 @@ CORS_ALLOWED_ORIGINS = [  # noqa: F405
     "tauri://localhost",
 ]
 
-# Local API only — desktop shell talks to 127.0.0.1
+# Local API only — desktop shell talks to 127.0.0.1 (avoid port 8000 conflicts)
 API_HOST = "127.0.0.1"
-API_PORT = int(os.environ.get("MDA_API_PORT", "8000"))
+API_PORT = int(os.environ.get("MDA_API_PORT", "18765"))

@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REMOTE = "safari-server"
-REMOTE_ROOT = "/opt/mda"
+REMOTE_ROOT = "/home/ubuntu/projects/mda"
 VPS_HOST = "88.222.220.238"
 API_PORT = 8010
 WEB_PORT = 8010
@@ -77,6 +77,11 @@ def build_archive() -> Path:
     tmp.close()
     archive_path = Path(tmp.name)
     with tarfile.open(archive_path, "w:gz") as tar:
+        for compose_file in ("docker-compose.yml", "docker-compose.vps.yml", "docker-compose.volumes.yml"):
+            path = ROOT / compose_file
+            if path.is_file():
+                tar.add(path, arcname=compose_file)
+
         for root_name in ("backend", "infrastructure", "scripts"):
             root = ROOT / root_name
             for file_path in root.rglob("*"):
@@ -95,15 +100,12 @@ def build_archive() -> Path:
 
 
 def remote_deploy_commands() -> list[str]:
-    compose = (
-        "docker compose -f docker-compose.yml -f docker-compose.vps.yml"
-    )
+    compose = "docker compose -f docker-compose.yml -f docker-compose.vps.yml -f docker-compose.volumes.yml"
     return [
         f"cd {REMOTE_ROOT}",
         "tar -xzf mda-deploy.tar.gz",
         "rm -f mda-deploy.tar.gz",
         f"python3 {REMOTE_ROOT}/infrastructure/scripts/patch_public_url_env.py",
-        "cd infrastructure/docker",
         f"{compose} up -d --build",
         f"{compose} exec -T api python manage.py migrate --settings=config.settings.production",
         f"{compose} exec -T api python manage.py bootstrap_system --settings=config.settings.production",

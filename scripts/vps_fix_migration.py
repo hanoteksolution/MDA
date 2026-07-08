@@ -7,7 +7,7 @@ import sys
 
 HOST = "safari-server"
 DOCKER = (
-    "cd /opt/mda/infrastructure/docker && "
+    "cd /home/ubuntu/projects/mda && "
     "docker compose -f docker-compose.yml -f docker-compose.vps.yml"
 )
 

@@ -1,6 +1,6 @@
 import type { ApiResponse } from "@/types/models";
 import type { AdminUser, BranchDetail, Company, RoleDetail, SystemSetting } from "@/types/models/admin";
-import { apiRequest } from "./http";
+import { apiRequest, apiUpload } from "./http";
 
 export const settingsApi = {
   company: () => apiRequest<ApiResponse<Company | null>>("/settings/company/"),
@@ -10,6 +10,9 @@ export const settingsApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  uploadLogo: (file: File) =>
+    apiUpload<ApiResponse<{ url: string; path: string }>>("/settings/company/upload-logo/", file),
 
   branches: () => apiRequest<ApiResponse<BranchDetail[]>>("/settings/branches/"),
 

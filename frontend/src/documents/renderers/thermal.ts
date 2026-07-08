@@ -2,6 +2,7 @@ import { formatCurrency } from "@/utils/cn";
 import type { PosReceipt } from "@/services/api/pos";
 import {
   formatThermalReceiptDate,
+  getCompanyLogoUrl,
   getPaymentLabel,
   getTaxRateLabel,
   type ThermalWidth,
@@ -41,6 +42,10 @@ export function renderPremiumThermalReceipt(
   const taxLabel = getTaxRateLabel(receipt);
   const paymentLabel = getPaymentLabel(receipt);
   const isCash = receipt.payment_method === "cash";
+  const logoUrl = getCompanyLogoUrl(receipt);
+  const logoHtml = logoUrl
+    ? `<img class="th-logo" src="${esc(logoUrl)}" alt="" style="object-fit:contain;border-radius:4px" />`
+    : LOGO_HEX;
 
   const items = receipt.items
     .map(
@@ -82,7 +87,7 @@ export function renderPremiumThermalReceipt(
   return `
     <div class="mda-thermal${isNarrow ? " narrow" : ""}">
       <div class="th-brand">
-        ${LOGO_HEX}
+        ${logoHtml}
         <div>
           <h1 class="th-company">${esc(company)}</h1>
           <p class="th-tag">${esc(tagline)}</p>

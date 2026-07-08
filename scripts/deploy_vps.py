@@ -12,7 +12,7 @@ from pathlib import Path
 import paramiko
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOTE_ROOT = "/opt/mda"
+REMOTE_ROOT = "/home/ubuntu/projects/mda"
 API_PORT = 8010
 DB_TUNNEL_PORT = 5437
 
@@ -131,7 +131,7 @@ CORS_ALLOWED_ORIGINS=http://88.222.220.238:{API_PORT},http://localhost:5173,http
 
         compose = (
             f"cd {REMOTE_ROOT}/infrastructure/docker && "
-            "docker compose -f docker-compose.yml -f docker-compose.vps.yml "
+            "docker compose -p docker -f docker-compose.yml -f docker-compose.vps.yml "
             "up -d --build"
         )
         run_remote(ssh, compose, check=False)

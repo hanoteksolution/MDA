@@ -7,11 +7,19 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
-const API_URL: &str = "http://127.0.0.1:8000/api/v1/health/";
-const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
+pub const LOCAL_API_PORT: u16 = 18765;
+
+fn health_url() -> String {
+    format!("http://127.0.0.1:{LOCAL_API_PORT}/api/v1/health/")
+}
+
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub fn is_api_healthy() -> bool {
-    ureq::get(API_URL).call().map(|r| r.status() == 200).unwrap_or(false)
+    ureq::get(&health_url())
+        .call()
+        .map(|r| r.status() == 200)
+        .unwrap_or(false)
 }
 
 enum ApiChild {
@@ -29,6 +37,13 @@ impl ApiChild {
             ApiChild::Sidecar(child) => {
                 let _ = child.kill();
             }
+        }
+    }
+
+    fn has_exited(&mut self) -> bool {
+        match self {
+            ApiChild::Process(child) => child.try_wait().ok().flatten().is_some(),
+            ApiChild::Sidecar(_) => false,
         }
     }
 }
@@ -82,6 +97,28 @@ fn python_args(python: &str) -> Vec<String> {
     }
 }
 
+fn kill_stale_sidecar() {
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "mda-api.exe", "/T"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+fn read_api_error_log(data_dir: &Path) -> Option<String> {
+    let log_path = data_dir.join("mda-api-error.log");
+    let text = std::fs::read_to_string(log_path).ok()?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.chars().take(800).collect())
+    }
+}
+
 fn spawn_dev_backend(data_dir: &Path) -> Result<ApiChild, String> {
     let backend_dir = backend_source_dir();
     let server_script = backend_dir.join("desktop_server.py");
@@ -101,6 +138,7 @@ fn spawn_dev_backend(data_dir: &Path) -> Result<ApiChild, String> {
         .current_dir(&backend_dir)
         .env("DJANGO_SETTINGS_MODULE", "config.settings.desktop")
         .env("MDA_DATA_DIR", data_dir)
+        .env("MDA_API_PORT", LOCAL_API_PORT.to_string())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
@@ -121,34 +159,60 @@ fn spawn_dev_backend(data_dir: &Path) -> Result<ApiChild, String> {
 }
 
 fn spawn_sidecar(app: &AppHandle, data_dir: &Path) -> Result<ApiChild, String> {
+    kill_stale_sidecar();
+
     let sidecar = app
         .shell()
         .sidecar("mda-api")
-        .map_err(|e| format!("Bundled API missing from installer. Rebuild with make build-desktop.\n{e}"))?;
+        .map_err(|e| {
+            format!(
+                "Bundled API missing from installer. Rebuild with make build-desktop.\n{e}"
+            )
+        })?;
 
     let (_rx, child) = sidecar
         .env("MDA_DATA_DIR", data_dir.to_string_lossy().to_string())
         .env("DJANGO_SETTINGS_MODULE", "config.settings.desktop")
+        .env("MDA_API_PORT", LOCAL_API_PORT.to_string())
         .spawn()
         .map_err(|e| format!("Failed to start bundled MDA API: {e}"))?;
 
     Ok(ApiChild::Sidecar(child))
 }
 
-fn wait_for_api() -> Result<(), String> {
+fn wait_for_api(child: &mut ApiChild, data_dir: &Path) -> Result<(), String> {
+    let url = health_url();
     let deadline = Instant::now() + STARTUP_TIMEOUT;
     while Instant::now() < deadline {
-        if let Ok(response) = ureq::get(API_URL).call() {
+        if child.has_exited() {
+            let detail = read_api_error_log(data_dir).unwrap_or_else(|| {
+                "The bundled API process exited during startup.".into()
+            });
+            return Err(format!(
+                "Local API stopped unexpectedly.\n{detail}\n\nLog: {}",
+                data_dir.join("mda-api-error.log").display()
+            ));
+        }
+        if let Ok(response) = ureq::get(&url).call() {
             if response.status() == 200 {
                 return Ok(());
             }
         }
         std::thread::sleep(Duration::from_millis(400));
     }
-    Err(
-        "Local API did not start in time. Ensure port 8000 is free and try restarting the app."
-            .into(),
-    )
+
+    let detail = read_api_error_log(data_dir).unwrap_or_default();
+    let mut message = format!(
+        "Local API did not start in time (port {LOCAL_API_PORT}). Close other MDA ERP windows and retry."
+    );
+    if !detail.is_empty() {
+        message.push_str(&format!("\n\n{detail}"));
+    }
+    message.push_str(&format!(
+        "\n\nDetails: {}",
+        data_dir.join("mda-api-error.log").display()
+    ));
+    Err(message)
 }
 
 pub fn start_backend(app: &AppHandle) -> Result<BackendState, String> {
@@ -160,13 +224,13 @@ pub fn start_backend(app: &AppHandle) -> Result<BackendState, String> {
 
     log::info!("MDA data directory: {}", data_dir.display());
 
-    let child = if cfg!(debug_assertions) {
+    let mut child = if cfg!(debug_assertions) {
         spawn_dev_backend(&data_dir)?
     } else {
         spawn_sidecar(app, &data_dir)?
     };
 
-    wait_for_api()?;
+    wait_for_api(&mut child, &data_dir)?;
 
     Ok(BackendState {
         child: Mutex::new(Some(child)),

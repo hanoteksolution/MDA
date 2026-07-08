@@ -22,7 +22,7 @@ def resolve_product_image_url(image: str, request=None) -> str:
     return path
 
 
-def save_product_image(*, uploaded_file) -> str:
+def _save_image(*, uploaded_file, folder: str) -> str:
     content_type = getattr(uploaded_file, "content_type", "") or ""
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise ValueError("Invalid image type. Use JPEG, PNG, WebP, or GIF.")
@@ -33,6 +33,14 @@ def save_product_image(*, uploaded_file) -> str:
     ext = Path(uploaded_file.name).suffix.lower().lstrip(".")
     if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
         ext = "jpg"
-    filename = f"products/{uuid.uuid4().hex}.{ext}"
+    filename = f"{folder}/{uuid.uuid4().hex}.{ext}"
     saved_path = default_storage.save(filename, uploaded_file)
     return default_storage.url(saved_path)
+
+
+def save_product_image(*, uploaded_file) -> str:
+    return _save_image(uploaded_file=uploaded_file, folder="products")
+
+
+def save_company_logo(*, uploaded_file) -> str:
+    return _save_image(uploaded_file=uploaded_file, folder="company")
