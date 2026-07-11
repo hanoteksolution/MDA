@@ -12,6 +12,13 @@ def resolve_product_image_url(image: str, request=None) -> str:
     """Return a browser-usable URL for a product image path or external URL."""
     if not image:
         return ""
+    # Ignore stock/demo placeholder hosts so the UI shows an empty upload state.
+    lower = image.lower()
+    if any(
+        host in lower
+        for host in ("picsum.photos", "placeholder.com", "placehold.co", "via.placeholder")
+    ):
+        return ""
     if image.startswith("http://") or image.startswith("https://"):
         return image
     path = image if image.startswith("/") else f"{settings.MEDIA_URL.rstrip('/')}/{image.lstrip('/')}"

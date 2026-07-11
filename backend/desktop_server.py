@@ -3,7 +3,8 @@
 MDA ERP local API server for the desktop app.
 
 Runs migrations, bootstraps roles/permissions, then serves on 127.0.0.1:8000.
-First-time superuser and company are created via the in-app setup wizard.
+Cloud shops: Connection → first cloud shop login provisions the local user.
+Offline-only: optional setup wizard creates a local company (not cloud-managed).
 """
 from __future__ import annotations
 

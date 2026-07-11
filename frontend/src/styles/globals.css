@@ -77,12 +77,15 @@
   }
 
   .ds-card-premium {
-    @apply relative rounded-2xl border border-border/70 bg-card text-card-foreground shadow-sm;
+    @apply relative rounded-2xl border border-border/60 bg-card text-card-foreground;
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.04),
+      0 8px 24px hsl(var(--foreground) / 0.04);
     background-image: linear-gradient(
-      135deg,
+      160deg,
       hsl(var(--card)) 0%,
-      hsl(var(--card)) 55%,
-      hsl(var(--muted) / 0.35) 100%
+      hsl(var(--card)) 50%,
+      hsl(var(--muted) / 0.28) 100%
     );
   }
 
@@ -105,27 +108,61 @@
   .pos-shell {
     @apply relative overflow-hidden;
     background:
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--primary) / 0.08), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 0%, hsl(var(--primary) / 0.05), transparent),
-      hsl(var(--background));
+      radial-gradient(ellipse 90% 55% at 8% -15%, hsl(var(--primary) / 0.1), transparent 55%),
+      radial-gradient(ellipse 70% 45% at 92% 0%, hsl(160 84% 39% / 0.06), transparent 50%),
+      linear-gradient(180deg, hsl(var(--card) / 0.35) 0%, hsl(var(--background)) 42%);
   }
 
   .pos-shell::before {
     content: "";
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px);
-    background-size: 24px 24px;
-    mask-image: linear-gradient(to bottom, black 0%, transparent 70%);
+    background-image: radial-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(to bottom, black 0%, transparent 75%);
     pointer-events: none;
   }
 
   .pos-glass {
-    @apply border border-border/60 bg-card/75 shadow-sm backdrop-blur-xl;
+    @apply border-b border-border/40 bg-card/80 shadow-[0_1px_0_hsl(var(--background)/0.6)] backdrop-blur-2xl;
   }
 
   .pos-category-active {
-    @apply bg-gradient-to-r from-primary to-emerald-600 text-primary-foreground shadow-lg shadow-primary/30 ring-2 ring-primary/20;
+    @apply bg-gradient-to-r from-primary via-primary to-emerald-600 text-primary-foreground shadow-[0_4px_14px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25;
+  }
+
+  .pos-product-card {
+    @apply rounded-xl border border-border/50 bg-card/95 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_8px_24px_hsl(var(--foreground)/0.04)] xl:rounded-[1.15rem];
+  }
+
+  .pos-product-grid {
+    display: grid;
+    gap: 0.625rem;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  }
+
+  @media (min-width: 1280px) {
+    .pos-product-grid {
+      gap: 0.875rem;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .pos-product-grid {
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    }
+  }
+
+  .pos-cart-panel {
+    @apply border-l border-border/40 bg-gradient-to-b from-card via-card to-muted/20 shadow-[-12px_0_36px_hsl(var(--foreground)/0.05)] backdrop-blur-2xl xl:shadow-[-16px_0_48px_hsl(var(--foreground)/0.06)];
+  }
+
+  @media (max-height: 820px) {
+    .pos-cart-panel .pos-cart-actions {
+      @apply gap-1.5 py-2.5;
+    }
   }
 }
 

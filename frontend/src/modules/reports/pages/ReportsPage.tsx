@@ -37,7 +37,7 @@ const REPORT_CATEGORIES = [
     title: "Sales Reports",
     description: "Revenue, invoices, and sales performance by period",
     icon: DollarSign,
-    reports: ["Daily Sales", "Sales by Product", "Sales by Customer", "Tax Summary"],
+    reports: ["Daily Sales", "Products Sold", "Unpaid Receipts", "Customer Monthly", "Sales by Product", "Sales by Customer", "Tax Summary"],
   },
   {
     id: "inventory",

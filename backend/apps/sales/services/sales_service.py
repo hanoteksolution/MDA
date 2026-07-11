@@ -4,7 +4,8 @@ from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from apps.sales.models import Invoice, InvoiceItem, Quotation, QuotationItem
+from apps.sales.models import DocumentSequence, Invoice, InvoiceItem, Quotation, QuotationItem
+from apps.sales.services.sequence_service import DocumentSequenceService
 from apps.settings_app.models import Branch
 
 
@@ -26,8 +27,11 @@ class QuotationService:
 
     @staticmethod
     def _next_number(*, branch: Branch) -> str:
-        count = Quotation.objects.filter(branch=branch).count() + 1
-        return f"QT-{branch.code}-{count:05d}"
+        return DocumentSequenceService.allocate(
+            branch=branch,
+            kind=DocumentSequence.KIND_QUOTATION,
+            width=5,
+        )["number"]
 
     @staticmethod
     def _recalculate(*, quotation: Quotation):
@@ -93,24 +97,56 @@ class QuotationService:
 
 class InvoiceService:
     @staticmethod
-    def list(*, search=None, status=None, customer_id=None, branch_id=None):
-        qs = Invoice.active_objects().select_related("customer", "branch", "created_by_user").prefetch_related("items__product")
+    def list(
+        *,
+        search=None,
+        status=None,
+        payment_state=None,
+        customer_id=None,
+        branch_id=None,
+        date_from=None,
+        date_to=None,
+        waiter=None,
+    ):
+        qs = Invoice.active_objects().select_related(
+            "customer", "branch", "created_by_user", "served_by_user"
+        ).prefetch_related("items__product")
         if search:
             qs = qs.filter(
-                Q(invoice_number__icontains=search) | Q(customer__full_name__icontains=search)
+                Q(invoice_number__icontains=search)
+                | Q(customer__full_name__icontains=search)
+                | Q(notes__icontains=search)
             )
         if status:
             qs = qs.filter(status=status)
+        if payment_state == "paid":
+            qs = qs.filter(status=Invoice.STATUS_PAID)
+        elif payment_state == "unpaid":
+            qs = qs.exclude(status__in=[Invoice.STATUS_PAID, Invoice.STATUS_CANCELLED])
         if customer_id:
             qs = qs.filter(customer_id=customer_id)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
+        if date_from:
+            qs = qs.filter(issue_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(issue_date__lte=date_to)
+        if waiter:
+            qs = qs.filter(
+                Q(served_by_user__first_name__icontains=waiter)
+                | Q(served_by_user__last_name__icontains=waiter)
+                | Q(served_by_user__username__icontains=waiter)
+                | Q(notes__icontains=f"Waiter: {waiter}")
+            )
         return qs.order_by("-issue_date", "-created_at")
 
     @staticmethod
     def _next_number(*, branch: Branch) -> str:
-        count = Invoice.objects.filter(branch=branch).count() + 1
-        return f"INV-{branch.code}-{count:05d}"
+        return DocumentSequenceService.allocate(
+            branch=branch,
+            kind=DocumentSequence.KIND_INVOICE,
+            width=5,
+        )["number"]
 
     @staticmethod
     def _recalculate(*, invoice: Invoice):
@@ -171,6 +207,19 @@ class InvoiceService:
                     created_by=user,
                 )
             InvoiceService._recalculate(invoice=instance)
+        return InvoiceService.list().get(pk=instance.pk)
+
+    @staticmethod
+    @transaction.atomic
+    def mark_paid(*, instance, user=None):
+        if instance.status == Invoice.STATUS_PAID:
+            raise ValueError("Invoice is already paid.")
+        if instance.status == Invoice.STATUS_CANCELLED:
+            raise ValueError("Cancelled invoices cannot be marked as paid.")
+        instance.status = Invoice.STATUS_PAID
+        instance.amount_paid = instance.total_amount
+        instance.updated_by = user
+        instance.save(update_fields=["status", "amount_paid", "updated_by", "updated_at"])
         return InvoiceService.list().get(pk=instance.pk)
 
     @staticmethod

@@ -30,6 +30,11 @@ export interface Invoice {
   tax_amount: number;
   total_amount: number;
   amount_paid: number;
+  balance_due?: number;
+  is_paid?: boolean;
+  payment_method?: string | null;
+  waiter_name?: string;
+  served_by_user_id?: string | null;
   notes: string;
   date: string;
   item_count: number;
@@ -98,8 +103,115 @@ export interface SalesSummary {
   quotations_count: number;
 }
 
+export interface DailyOpsProduct {
+  product_id: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface DailyOpsUnpaid {
+  invoice_id: string;
+  invoice_number: string;
+  customer_name: string;
+  customer_id: string;
+  status: string;
+  payment_method: string;
+  waiter_name: string;
+  total_amount: number;
+  amount_paid: number;
+  balance_due: number;
+  items: { name: string; quantity: number; line_total: number }[];
+}
+
+export interface DailyExpense {
+  id: string;
+  description: string;
+  category: string;
+  amount: number;
+  notes: string;
+  expense_date: string;
+  branch_id?: string;
+}
+
+export interface DailyOpsData {
+  date: string;
+  summary: {
+    invoices_count: number;
+    paid_total: number;
+    unpaid_count: number;
+    unpaid_total: number;
+    products_count: number;
+    expense_total: number;
+  };
+  products_sold: DailyOpsProduct[];
+  unpaid_receipts: DailyOpsUnpaid[];
+  expenses: DailyExpense[];
+  activity_dates?: string[];
+}
+
+export interface CustomerMonthlyAccount {
+  customer_id: string;
+  customer_name: string;
+  year: number;
+  month: number;
+  period_label: string;
+  summary: {
+    receipts_count: number;
+    total_amount: number;
+    total_paid: number;
+    total_due: number;
+  };
+  waiters: { name: string; amount_due: number }[];
+  products: { name: string; sku: string; quantity: number; amount: number }[];
+  receipts: {
+    invoice_id: string;
+    invoice_number: string;
+    issue_date: string;
+    status: string;
+    payment_method: string;
+    waiter_name: string;
+    total_amount: number;
+    amount_paid: number;
+    balance_due: number;
+    items: { name: string; sku: string; quantity: number; line_total: number }[];
+  }[];
+}
+
 export const salesApi = {
   summary: () => apiRequest<ApiResponse<SalesSummary>>("/sales/summary/"),
+
+  dailyOps: (date?: string) =>
+    apiRequest<ApiResponse<DailyOpsData>>(
+      `/sales/daily-ops/${date ? `?date=${encodeURIComponent(date)}` : ""}`
+    ),
+
+  customerMonthly: (params: { customer_id: string; year?: number; month?: number }) => {
+    const q = new URLSearchParams({ customer_id: params.customer_id });
+    if (params.year) q.set("year", String(params.year));
+    if (params.month) q.set("month", String(params.month));
+    return apiRequest<ApiResponse<CustomerMonthlyAccount>>(`/sales/customer-monthly/?${q}`);
+  },
+
+  expenses: (params: Record<string, string | undefined> = {}) =>
+    apiRequest<ApiResponse<DailyExpense[]>>(`/sales/expenses/${qs(params)}`),
+
+  createExpense: (data: {
+    description: string;
+    amount: number;
+    category?: string;
+    expense_date?: string;
+    notes?: string;
+    branch_id?: string;
+  }) =>
+    apiRequest<ApiResponse<DailyExpense>>("/sales/expenses/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteExpense: (id: string) =>
+    apiRequest<ApiResponse<null>>(`/sales/expenses/${id}/`, { method: "DELETE" }),
 
   invoices: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Invoice>>(`/sales/invoices/${qs(params)}`),
@@ -117,6 +229,9 @@ export const salesApi = {
 
   updateInvoice: (id: string, data: Record<string, unknown>) =>
     apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
+
+  markInvoicePaid: (id: string) =>
+    apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/mark-paid/`, { method: "POST" }),
 
   quotations: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Quotation>>(`/sales/quotations/${qs(params)}`),

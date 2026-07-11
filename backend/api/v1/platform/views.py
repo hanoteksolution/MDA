@@ -12,7 +12,11 @@ def _platform_user(user):
 
 
 def _platform_manage(user):
-    return PlatformService.is_platform_superuser(user)
+    return PlatformService.can_manage_shops(user)
+
+
+def _platform_global(user):
+    return PlatformService.is_global_platform_admin(user)
 
 
 def _subscriptions_user(user):
@@ -37,7 +41,7 @@ class PlatformTenantListCreateView(APIView):
         return success_response(data=data)
 
     def post(self, request):
-        if not (request.user.is_platform_admin or request.user.has_permission("platform.manage")):
+        if not _platform_manage(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         required = ["name"]
         if not all(request.data.get(k) for k in required):
@@ -74,6 +78,8 @@ class PlatformTenantDetailView(APIView):
         if not _platform_manage(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         tenant = Tenant.objects.get(pk=pk)
+        if not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         try:
             PlatformService.update_shop(tenant=tenant, data=request.data, user=request.user)
         except ValueError as exc:
@@ -83,6 +89,17 @@ class PlatformTenantDetailView(APIView):
             data=PlatformService.tenant_overview(tenant, period=period),
             message="Shop updated.",
         )
+
+    def delete(self, request, pk):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant:
+            return error_response(message="Shop not found.", status=status.HTTP_404_NOT_FOUND)
+        if not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        PlatformService.delete_shop(tenant=tenant, user=request.user)
+        return success_response(data=None, message="Shop deleted.")
 
 
 class PlatformTenantUsersView(APIView):
@@ -115,7 +132,13 @@ class PlatformSubscriptionListCreateView(APIView):
         if not _platform_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         unassigned_only = request.query_params.get("unassigned") == "1"
-        subs = PlatformService.list_subscriptions(unassigned_only=unassigned_only)
+        # Only global platform admins may list unassigned licenses.
+        if unassigned_only and not _platform_global(request.user):
+            unassigned_only = False
+        subs = PlatformService.list_subscriptions(
+            unassigned_only=unassigned_only,
+            user=request.user,
+        )
         return success_response(
             data=[PlatformService.subscription_payload(s) for s in subs]
         )
@@ -157,6 +180,19 @@ class PlatformSubscriptionDetailView(APIView):
             data=PlatformService.subscription_payload(sub),
             message="Subscription updated.",
         )
+
+    def delete(self, request, pk):
+        if not (_subscriptions_user(request.user) or _platform_global(request.user) or _platform_manage(request.user)):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        sub = TenantSubscription.objects.filter(pk=pk, deleted_at__isnull=True).select_related("tenant").first()
+        if not sub:
+            return error_response(message="Subscription not found.", status=status.HTTP_404_NOT_FOUND)
+        if sub.tenant_id and not PlatformService.user_can_access_tenant(request.user, sub.tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        if not sub.tenant_id and not _platform_global(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        PlatformService.delete_subscription(subscription=sub, user=request.user)
+        return success_response(data=None, message="Subscription deleted.")
 
 
 class PlatformSubscriptionUpdateView(APIView):
@@ -220,7 +256,7 @@ class PlatformSubscriptionAlertsView(APIView):
     def get(self, request):
         if not _platform_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        return success_response(data=PlatformService.list_payment_alerts())
+        return success_response(data=PlatformService.list_payment_alerts(user=request.user))
 
 
 class PlatformMySubscriptionAlertView(APIView):
@@ -260,10 +296,12 @@ class PlatformShopGroupListCreateView(APIView):
     def get(self, request):
         if not _platform_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        if _platform_manage(request.user):
+        if _platform_global(request.user):
             groups = PlatformService.list_shop_groups()
         elif request.user.managed_shop_group_id:
             groups = PlatformService.list_shop_groups().filter(pk=request.user.managed_shop_group_id)
+        elif _platform_manage(request.user):
+            groups = PlatformService.list_shop_groups()
         else:
             groups = PlatformService.list_shop_groups().none()
         return success_response(
@@ -271,7 +309,7 @@ class PlatformShopGroupListCreateView(APIView):
         )
 
     def post(self, request):
-        if not _platform_manage(request.user):
+        if not _platform_global(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         try:
             group = PlatformService.create_shop_group(data=request.data, user=request.user)

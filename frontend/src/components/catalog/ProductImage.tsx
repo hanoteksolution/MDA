@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Package } from "lucide-react";
-import { resolveMediaUrl } from "@/config/api";
+import { useEffect, useState } from "react";
+import { ImageIcon, Package } from "lucide-react";
+import { resolveProductImageUrl } from "@/config/api";
 import { cn } from "@/utils/cn";
 import type { Product } from "@/types/models/catalog";
 
@@ -25,40 +25,46 @@ export function getStockStatus(stock: number, minimum: number) {
   return { label: "In Stock", variant: "success" as const };
 }
 
-function picsumUrl(seed: string) {
-  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/400/400`;
-}
-
 interface ProductImageProps {
   product: Pick<Product, "name" | "image" | "category_name" | "sku">;
   className?: string;
   iconClassName?: string;
+  /** When true, empty state is a quiet “no photo” instead of category gradient. */
+  emptyQuiet?: boolean;
 }
 
-export function ProductImage({ product, className, iconClassName }: ProductImageProps) {
-  const [stage, setStage] = useState<"primary" | "fallback" | "placeholder">(
-    product.image ? "primary" : product.sku ? "fallback" : "placeholder"
-  );
+export function ProductImage({ product, className, iconClassName, emptyQuiet }: ProductImageProps) {
+  const resolved = resolveProductImageUrl(product.image);
+  const [failed, setFailed] = useState(false);
 
-  const src =
-    stage === "primary"
-      ? resolveMediaUrl(product.image)
-      : stage === "fallback" && product.sku
-        ? picsumUrl(product.sku)
-        : null;
+  useEffect(() => {
+    setFailed(false);
+  }, [resolved]);
 
-  if (src) {
+  if (resolved && !failed) {
     return (
       <img
-        src={src}
+        key={resolved}
+        src={resolved}
         alt={product.name}
         loading="lazy"
-        onError={() => {
-          if (stage === "primary" && product.sku) setStage("fallback");
-          else setStage("placeholder");
-        }}
+        onError={() => setFailed(true)}
         className={cn("h-full w-full object-cover", className)}
       />
+    );
+  }
+
+  if (emptyQuiet) {
+    return (
+      <div
+        className={cn(
+          "flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 text-muted-foreground",
+          className
+        )}
+      >
+        <ImageIcon className={cn("h-8 w-8 opacity-50", iconClassName)} strokeWidth={1.25} />
+        <span className="text-[11px] font-medium opacity-70">No photo</span>
+      </div>
     );
   }
 
@@ -107,12 +113,28 @@ interface ProductImagePreviewProps {
   sku?: string;
   categoryName?: string;
   className?: string;
+  emptyQuiet?: boolean;
 }
 
-export function ProductImagePreview({ image, name = "", sku, categoryName, className }: ProductImagePreviewProps) {
+export function ProductImagePreview({
+  image,
+  name = "",
+  sku,
+  categoryName,
+  className,
+  emptyQuiet = true,
+}: ProductImagePreviewProps) {
   return (
-    <div className={cn("aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted/30", className)}>
-      <ProductImage product={{ name, image: image || "", sku: sku || name, category_name: categoryName || name }} />
+    <div
+      className={cn(
+        "aspect-[4/3] overflow-hidden rounded-2xl border border-border/50 bg-muted/20 shadow-[inset_0_1px_0_hsl(var(--background))]",
+        className
+      )}
+    >
+      <ProductImage
+        product={{ name, image: image || "", sku: sku || name, category_name: categoryName || name }}
+        emptyQuiet={emptyQuiet}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Pencil, Plus, RefreshCw } from "lucide-react";
+import { Building2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DataTable, type Column } from "@/components/data/DataTable";
@@ -97,8 +97,11 @@ interface ShopEditState {
 export function PlatformShopsPage() {
   const user = useAuthStore((s) => s.user);
   const { hasPermission } = usePermissions();
-  const canManage = Boolean(user?.is_platform_admin || hasPermission("platform.manage"));
   const isGroupManager = Boolean(user?.managed_shop_group);
+  const isGlobalAdmin = Boolean(user?.is_platform_admin);
+  const canManage = Boolean(
+    isGlobalAdmin || hasPermission("platform.manage") || isGroupManager
+  );
   const pageTitle = isGroupManager ? "My Shops" : "All Shops";
   const pageDescription = isGroupManager
     ? "Sales and subscription status for every shop in your group."
@@ -112,6 +115,7 @@ export function PlatformShopsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState<ShopFormState>(EMPTY_FORM);
   const [editingShop, setEditingShop] = useState<ShopEditState | null>(null);
   const [editingSub, setEditingSub] = useState<PlatformSubscriptionRow | null>(null);
@@ -131,10 +135,8 @@ export function PlatformShopsPage() {
       platformApi.subscriptions(true),
       platformApi.subscriptions(),
       platformApi.plans(),
+      platformApi.shopGroups(),
     ];
-    if (canManage) {
-      requests.push(platformApi.shopGroups());
-    }
     Promise.all(requests)
       .then((results) => {
         const [tenantsRes, unassignedRes, allRes, plansRes, groupsRes] = results as [
@@ -142,16 +144,25 @@ export function PlatformShopsPage() {
           Awaited<ReturnType<typeof platformApi.subscriptions>>,
           Awaited<ReturnType<typeof platformApi.subscriptions>>,
           Awaited<ReturnType<typeof platformApi.plans>>,
-          Awaited<ReturnType<typeof platformApi.shopGroups>> | undefined,
+          Awaited<ReturnType<typeof platformApi.shopGroups>>,
         ];
-        setShops(tenantsRes.data);
-        setUnassignedSubs(unassignedRes.data);
+        const groupId = user?.managed_shop_group?.id;
+        const scoped = groupId
+          ? tenantsRes.data.filter((s) => s.shop_group_id === groupId)
+          : tenantsRes.data;
+        setShops(scoped);
+        setUnassignedSubs(isGroupManager ? [] : unassignedRes.data);
         setAllSubs(allRes.data);
         setPlans(plansRes.data);
-        if (groupsRes) setShopGroups(groupsRes.data);
+        setShopGroups(groupsRes.data);
         setForm((prev) => {
-          if (prev.plan_code || !plansRes.data.length) return prev;
-          return { ...prev, plan_code: plansRes.data[0].code };
+          const next = { ...prev };
+          if (!next.plan_code && plansRes.data.length) next.plan_code = plansRes.data[0].code;
+          if (isGroupManager && groupId) {
+            next.shop_group_mode = "existing";
+            next.shop_group_id = groupId;
+          }
+          return next;
         });
       })
       .catch((err) => {
@@ -165,7 +176,27 @@ export function PlatformShopsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when identity/group changes
+  }, [user?.id, user?.managed_shop_group?.id]);
+
+  const handleDeleteShop = async (shop: PlatformTenantRow) => {
+    if (
+      !confirm(
+        `Delete shop "${shop.name}"?\n\nThis removes it from the platform list. This cannot be undone from here.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(shop.id);
+    try {
+      await platformApi.deleteShop(shop.id);
+      load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete shop.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const openEditShop = async (shop: PlatformTenantRow) => {
     setShopEditError("");
@@ -291,7 +322,9 @@ export function PlatformShopsPage() {
         payload.status = form.subscription_status;
         payload.trial_days = Number(form.trial_days) || 30;
       }
-      if (form.shop_group_mode === "existing" && form.shop_group_id) {
+      if (isGroupManager && user?.managed_shop_group?.id) {
+        payload.shop_group_id = user.managed_shop_group.id;
+      } else if (form.shop_group_mode === "existing" && form.shop_group_id) {
         payload.shop_group_id = form.shop_group_id;
       } else if (form.shop_group_mode === "new" && form.shop_group_name.trim()) {
         payload.shop_group_name = form.shop_group_name.trim();
@@ -372,10 +405,22 @@ export function PlatformShopsPage() {
       header: "Actions",
       cell: (r) =>
         canManage ? (
-          <Button size="sm" variant="secondary" onClick={() => openEditShop(r)}>
-            <Pencil className="h-3 w-3" />
-            Edit
-          </Button>
+          <div className="flex flex-wrap gap-1">
+            <Button size="sm" variant="secondary" onClick={() => openEditShop(r)}>
+              <Pencil className="h-3 w-3" />
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              loading={deletingId === r.id}
+              onClick={() => void handleDeleteShop(r)}
+            >
+              <Trash2 className="h-3 w-3" />
+              Delete
+            </Button>
+          </div>
         ) : (
           <span className="text-sm text-muted-foreground">View only</span>
         ),
@@ -507,34 +552,45 @@ export function PlatformShopsPage() {
               {canManage && (
                 <div className="mt-8 border-t border-border pt-6">
                   <h3 className="text-base font-semibold text-foreground">Shop group</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Link shops under one owner (e.g. Shop A and Shop B) for a multi-shop manager on the cloud.
-                  </p>
-                  <FormGrid className="mt-4">
-                    <FormField label="Group assignment" className="md:col-span-2">
-                      <Select
-                        value={editingShop.shop_group_id || "__none__"}
-                        onValueChange={(v) =>
-                          setEditingShop({
-                            ...editingShop,
-                            shop_group_id: v === "__none__" ? "" : v,
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="No group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">No group</SelectItem>
-                          {shopGroups.map((g) => (
-                            <SelectItem key={g.id} value={g.id}>
-                              {g.name} ({g.shop_count} shops)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                  </FormGrid>
+                  {isGroupManager ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This shop stays in your group:{" "}
+                      <span className="font-medium text-foreground">
+                        {user?.managed_shop_group?.name}
+                      </span>
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Link shops under one owner (e.g. Shop A and Shop B) for a multi-shop manager on the cloud.
+                      </p>
+                      <FormGrid className="mt-4">
+                        <FormField label="Group assignment" className="md:col-span-2">
+                          <Select
+                            value={editingShop.shop_group_id || "__none__"}
+                            onValueChange={(v) =>
+                              setEditingShop({
+                                ...editingShop,
+                                shop_group_id: v === "__none__" ? "" : v,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="No group" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">No group</SelectItem>
+                              {shopGroups.map((g) => (
+                                <SelectItem key={g.id} value={g.id}>
+                                  {g.name} ({g.shop_count ?? g.tenant_count ?? 0} shops)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormField>
+                      </FormGrid>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -799,62 +855,73 @@ export function PlatformShopsPage() {
             {canManage && (
               <div className="mt-8 border-t border-border pt-6">
                 <h3 className="text-base font-semibold text-foreground">Shop group</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Optional — group multiple cafeterias under one multi-shop manager account.
-                </p>
-                <FormGrid className="mt-4">
-                  <FormField label="Group" className="md:col-span-2">
-                    <Select
-                      value={form.shop_group_mode}
-                      onValueChange={(v) =>
-                        setForm({
-                          ...form,
-                          shop_group_mode: v as ShopGroupMode,
-                          shop_group_id: "",
-                          shop_group_name: "",
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No group</SelectItem>
-                        <SelectItem value="existing">Link to existing group</SelectItem>
-                        <SelectItem value="new">Create new group</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                  {form.shop_group_mode === "existing" && (
-                    <FormField label="Existing group" required className="md:col-span-2">
-                      <Select
-                        value={form.shop_group_id || undefined}
-                        onValueChange={(v) => setForm({ ...form, shop_group_id: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={shopGroups.length ? "Select group" : "No groups yet"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {shopGroups.map((g) => (
-                            <SelectItem key={g.id} value={g.id}>
-                              {g.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                  )}
-                  {form.shop_group_mode === "new" && (
-                    <FormField label="New group name" required className="md:col-span-2">
-                      <Input
-                        required
-                        value={form.shop_group_name}
-                        onChange={(e) => setForm({ ...form, shop_group_name: e.target.value })}
-                        placeholder="e.g. A&M Holdings"
-                      />
-                    </FormField>
-                  )}
-                </FormGrid>
+                {isGroupManager ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    New shops are added to your group:{" "}
+                    <span className="font-medium text-foreground">
+                      {user?.managed_shop_group?.name}
+                    </span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Optional — group multiple cafeterias under one multi-shop manager account.
+                    </p>
+                    <FormGrid className="mt-4">
+                      <FormField label="Group" className="md:col-span-2">
+                        <Select
+                          value={form.shop_group_mode}
+                          onValueChange={(v) =>
+                            setForm({
+                              ...form,
+                              shop_group_mode: v as ShopGroupMode,
+                              shop_group_id: "",
+                              shop_group_name: "",
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No group</SelectItem>
+                            <SelectItem value="existing">Link to existing group</SelectItem>
+                            <SelectItem value="new">Create new group</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormField>
+                      {form.shop_group_mode === "existing" && (
+                        <FormField label="Existing group" required className="md:col-span-2">
+                          <Select
+                            value={form.shop_group_id || undefined}
+                            onValueChange={(v) => setForm({ ...form, shop_group_id: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={shopGroups.length ? "Select group" : "No groups yet"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {shopGroups.map((g) => (
+                                <SelectItem key={g.id} value={g.id}>
+                                  {g.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormField>
+                      )}
+                      {form.shop_group_mode === "new" && (
+                        <FormField label="New group name" required className="md:col-span-2">
+                          <Input
+                            required
+                            value={form.shop_group_name}
+                            onChange={(e) => setForm({ ...form, shop_group_name: e.target.value })}
+                            placeholder="e.g. A&M Holdings"
+                          />
+                        </FormField>
+                      )}
+                    </FormGrid>
+                  </>
+                )}
               </div>
             )}
 

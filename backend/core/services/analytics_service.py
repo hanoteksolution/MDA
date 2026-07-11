@@ -280,6 +280,86 @@ class AnalyticsService:
                         "status": inv.status,
                     })
                 return {"columns": ["date", "invoice", "customer", "amount", "status"], "rows": rows}
+            if report == "Products Sold":
+                from apps.sales.models import Invoice, InvoiceItem
+                from django.db.models import Sum
+
+                inv_qs = AnalyticsService._invoice_qs(
+                    branch_id=branch_id, date_from=date_from, date_to=date_to
+                ).exclude(status=Invoice.STATUS_CANCELLED)
+                product_rows = (
+                    InvoiceItem.objects.filter(invoice__in=inv_qs)
+                    .values("product__name", "product__sku")
+                    .annotate(quantity=Sum("quantity"), revenue=Sum("line_total"))
+                    .order_by("-quantity")[:100]
+                )
+                return {
+                    "columns": ["product", "sku", "quantity", "revenue"],
+                    "rows": [
+                        {
+                            "product": r["product__name"],
+                            "sku": r["product__sku"],
+                            "quantity": float(r["quantity"] or 0),
+                            "revenue": float(r["revenue"] or 0),
+                        }
+                        for r in product_rows
+                    ],
+                }
+            if report == "Unpaid Receipts":
+                from apps.sales.models import Invoice
+
+                rows = []
+                for inv in (
+                    AnalyticsService._invoice_qs(branch_id=branch_id, date_from=date_from, date_to=date_to)
+                    .exclude(status__in=[Invoice.STATUS_PAID, Invoice.STATUS_CANCELLED])
+                    .select_related("customer", "served_by_user")
+                    .order_by("-issue_date")[:100]
+                ):
+                    waiter = ""
+                    if inv.served_by_user:
+                        waiter = inv.served_by_user.get_full_name() or inv.served_by_user.username
+                    rows.append({
+                        "date": inv.issue_date.isoformat(),
+                        "invoice": inv.invoice_number,
+                        "customer": inv.customer.full_name,
+                        "waiter": waiter or "—",
+                        "total": float(inv.total_amount),
+                        "due": float(inv.total_amount - inv.amount_paid),
+                        "status": inv.status,
+                    })
+                return {
+                    "columns": ["date", "invoice", "customer", "waiter", "total", "due", "status"],
+                    "rows": rows,
+                }
+            if report == "Customer Monthly":
+                from apps.sales.models import Invoice
+                from django.db.models import Sum, F
+
+                qs = AnalyticsService._invoice_qs(
+                    branch_id=branch_id, date_from=date_from, date_to=date_to
+                ).exclude(status=Invoice.STATUS_CANCELLED)
+                rows = list(
+                    qs.values("customer__full_name")
+                    .annotate(
+                        total=Sum("total_amount"),
+                        paid=Sum("amount_paid"),
+                        count=Count("id"),
+                    )
+                    .order_by("-total")[:50]
+                )
+                return {
+                    "columns": ["customer", "receipts", "total", "paid", "due"],
+                    "rows": [
+                        {
+                            "customer": r["customer__full_name"],
+                            "receipts": r["count"],
+                            "total": float(r["total"] or 0),
+                            "paid": float(r["paid"] or 0),
+                            "due": float((r["total"] or 0) - (r["paid"] or 0)),
+                        }
+                        for r in rows
+                    ],
+                }
             if report == "Sales by Product":
                 rows = AnalyticsService.get_top_products(branch_id=branch_id, period="year", limit=25)
                 return {"columns": ["name", "sku", "sold", "revenue"], "rows": rows}

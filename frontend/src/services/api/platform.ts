@@ -37,6 +37,7 @@ export interface PlatformShopGroupRow {
   contact_email: string;
   contact_phone: string;
   shop_count: number;
+  tenant_count?: number;
   is_active: boolean;
 }
 
@@ -153,6 +154,11 @@ export const platformApi = {
       body: JSON.stringify(data),
     }),
 
+  deleteShop: (id: string) =>
+    platformCloudRequest<ApiResponse<null>>(`/platform/tenants/${id}/`, {
+      method: "DELETE",
+    }),
+
   tenantUsers: (tenantId: string) =>
     platformCloudRequest<ApiResponse<PlatformUserOption[]>>(`/platform/tenants/${tenantId}/users/`),
 
@@ -202,6 +208,11 @@ export const platformApi = {
     platformCloudRequest<ApiResponse<PlatformSubscriptionRow>>(`/platform/subscriptions/${id}/`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+
+  deleteSubscription: (id: string) =>
+    platformCloudRequest<ApiResponse<null>>(`/platform/subscriptions/${id}/`, {
+      method: "DELETE",
     }),
 
   assignSubscription: (subscriptionId: string, tenantId: string) =>

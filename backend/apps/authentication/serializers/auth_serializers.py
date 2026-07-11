@@ -22,6 +22,8 @@ class UserSerializer(serializers.ModelSerializer):
     role_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     branch_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     permissions = serializers.SerializerMethodField()
+    direct_permissions = serializers.SerializerMethodField()
+    permission_ids = serializers.SerializerMethodField()
     shop_slug = serializers.SerializerMethodField()
     managed_shop_group = serializers.SerializerMethodField()
 
@@ -30,13 +32,26 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
-            "is_active", "is_platform_admin", "permissions", "shop_slug",
-            "managed_shop_group", "last_login", "date_joined",
+            "is_active", "is_platform_admin", "permissions", "direct_permissions",
+            "permission_ids", "shop_slug", "managed_shop_group", "last_login", "date_joined",
         ]
         read_only_fields = ["id", "last_login", "date_joined"]
 
     def get_permissions(self, obj):
         return obj.get_permissions()
+
+    def get_direct_permissions(self, obj):
+        perms = (
+            obj.direct_permissions.filter(deleted_at__isnull=True)
+            .select_related("permission")
+        )
+        return PermissionSerializer([up.permission for up in perms], many=True).data
+
+    def get_permission_ids(self, obj):
+        return [
+            str(up.permission_id)
+            for up in obj.direct_permissions.filter(deleted_at__isnull=True)
+        ]
 
     def get_shop_slug(self, obj):
         if obj.tenant_id:
@@ -56,12 +71,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=True)
     role_id = serializers.UUIDField(required=False, allow_null=True)
     branch_id = serializers.UUIDField(required=False, allow_null=True)
+    permission_ids = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True, required=False
+    )
 
     class Meta:
         model = User
         fields = [
             "username", "email", "password", "first_name", "last_name",
-            "phone", "role_id", "branch_id", "is_active",
+            "phone", "role_id", "branch_id", "is_active", "permission_ids",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -72,6 +90,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role_id = validated_data.pop("role_id", None)
         branch_id = validated_data.pop("branch_id", None)
+        permission_ids = validated_data.pop("permission_ids", None)
         password = validated_data.pop("password")
         user = User.objects.create_user(**validated_data, password=password)
         if role_id:
@@ -79,6 +98,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if branch_id:
             user.branch_id = branch_id
         user.save()
+        if permission_ids is not None:
+            from apps.authentication.services.auth_service import UserService
+
+            UserService._set_direct_permissions(user, permission_ids)
         return user
 
 

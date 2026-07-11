@@ -3,7 +3,10 @@ import { useAuthStore } from "@/store/authStore";
 export function usePermissions() {
   const user = useAuthStore((s) => s.user);
   const permissions = user?.permissions ?? [];
-  const isSuperAdmin = user?.role?.slug === "super_admin";
+  const isSuperAdmin =
+    Boolean(user?.is_platform_admin) ||
+    user?.role?.slug === "super_admin" ||
+    user?.role?.slug === "platform_admin";
 
   const hasPermission = (codename: string) => {
     if (isSuperAdmin) return true;

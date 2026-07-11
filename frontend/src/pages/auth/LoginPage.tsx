@@ -9,12 +9,21 @@ import { Label } from "@/components/ui/label";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
 import { useAuthStore } from "@/store/authStore";
 import { setupApi } from "@/services/api/setup";
-import { ensureConnectionLoaded, isLocalApiBase } from "@/config/connection";
+import {
+  ensureConnectionLoaded,
+  getHybridConfig,
+  isLocalApiBase,
+} from "@/config/connection";
 import { getApiBase } from "@/config/api";
 import { isTauri } from "@/utils/platform";
 import { cn } from "@/utils/cn";
 
 const REMEMBER_KEY = "mda_remember_username";
+
+function shopConnectionReady(): boolean {
+  const cfg = getHybridConfig();
+  return Boolean(cfg?.cloud_api_base && cfg.tenant_slug && cfg.sync_secret);
+}
 
 const formContainer = {
   hidden: { opacity: 0 },
@@ -48,23 +57,41 @@ export function LoginPage() {
   useEffect(() => {
     let cancelled = false;
 
+    const withTimeout = <T,>(promise: Promise<T>, ms: number) =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new Error("API timeout")), ms);
+        }),
+      ]);
+
     const checkSetup = async (attempt = 0) => {
       try {
         await ensureConnectionLoaded();
+        if (cancelled) return;
         setApiTarget(getApiBase());
-        const res = await setupApi.status();
+        const res = await withTimeout(setupApi.status(), 5000);
         if (cancelled) return;
         if (res.data.needs_setup) {
+          // Desktop: cloud shop path — connection → login → provision (skip local Setup).
+          if (isTauri()) {
+            if (!shopConnectionReady()) {
+              navigate("/connection", { replace: true });
+              return;
+            }
+            setCheckingSetup(false);
+            return;
+          }
           navigate("/setup", { replace: true });
           return;
         }
         setCheckingSetup(false);
       } catch {
         if (cancelled) return;
-        if (attempt < 8) {
+        if (attempt < 3) {
           window.setTimeout(() => {
             void checkSetup(attempt + 1);
-          }, 500);
+          }, 400);
           return;
         }
         setApiTarget(getApiBase());
@@ -106,8 +133,10 @@ export function LoginPage() {
     } catch {
       try {
         const res = await setupApi.status();
-        if (res.data.needs_setup) {
+        if (res.data.needs_setup && !isTauri()) {
           navigate("/setup", { replace: true });
+        } else if (res.data.needs_setup && isTauri() && !shopConnectionReady()) {
+          navigate("/connection", { replace: true });
         }
       } catch {
         // stay on login with store error
@@ -167,7 +196,9 @@ export function LoginPage() {
               transition={{ delay: 0.15 }}
               className="mt-2 text-muted-foreground"
             >
-              Sign in to access your enterprise dashboard
+              {isTauri() && shopConnectionReady()
+                ? "Sign in with your cloud shop account. This PC will work offline after the first login."
+                : "Sign in to access your enterprise dashboard"}
             </motion.p>
             {isTauri() && apiTarget && (
               <motion.p

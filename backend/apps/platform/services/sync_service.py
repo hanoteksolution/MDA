@@ -1,8 +1,12 @@
 import json
+import os
 import secrets
 import uuid
+from datetime import date, timedelta
+from pathlib import Path
 from urllib import error, request
 
+from django.conf import settings
 from django.utils import timezone
 
 from apps.platform.models import ShopSyncSnapshot, Tenant
@@ -22,6 +26,7 @@ SYNC_KEYS = {
     "last_status": "sync.last_status",
     "last_message": "sync.last_message",
     "initial_pull_done": "sync.initial_pull_done",
+    "subscription_alert": "sync.subscription_alert",
 }
 
 
@@ -64,6 +69,66 @@ class ShopSyncService:
         return ShopSyncService.get_config()
 
     @staticmethod
+    def _connection_file_path() -> Path | None:
+        data_dir = os.environ.get("MDA_DATA_DIR") or getattr(settings, "DATA_DIR", None)
+        if not data_dir:
+            return None
+        return Path(data_dir) / "connection.json"
+
+    @staticmethod
+    def load_connection_file() -> dict:
+        """Read Tauri connection.json from the desktop data directory."""
+        path = ShopSyncService._connection_file_path()
+        if not path or not path.is_file():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        cloud = (raw.get("cloud_api_base") or raw.get("api_base") or "").strip().rstrip("/")
+        return {
+            "cloud_api_base": cloud,
+            "tenant_slug": (raw.get("tenant_slug") or "").strip(),
+            "sync_secret": (raw.get("sync_secret") or "").strip(),
+        }
+
+    @staticmethod
+    def ensure_connection_config(*, overrides: dict | None = None, user=None) -> dict:
+        """
+        Merge connection into Django sync settings.
+
+        Priority: explicit overrides → existing DB values → connection.json on disk.
+        """
+        cfg = ShopSyncService.get_config()
+        file_cfg = ShopSyncService.load_connection_file()
+        merged = {
+            "cloud_api_base": (
+                ((overrides or {}).get("cloud_api_base") or "").strip().rstrip("/")
+                or (cfg.get("cloud_api_base") or "").strip().rstrip("/")
+                or (file_cfg.get("cloud_api_base") or "").strip().rstrip("/")
+            ),
+            "tenant_slug": (
+                ((overrides or {}).get("tenant_slug") or "").strip()
+                or (cfg.get("tenant_slug") or "").strip()
+                or (file_cfg.get("tenant_slug") or "").strip()
+            ),
+            "sync_secret": (
+                ((overrides or {}).get("sync_secret") or "").strip()
+                or (cfg.get("sync_secret") or "").strip()
+                or (file_cfg.get("sync_secret") or "").strip()
+            ),
+        }
+        if (
+            merged["cloud_api_base"] != (cfg.get("cloud_api_base") or "")
+            or merged["tenant_slug"] != (cfg.get("tenant_slug") or "")
+            or merged["sync_secret"] != (cfg.get("sync_secret") or "")
+        ):
+            ShopSyncService.save_config(data=merged, user=user)
+        return ShopSyncService.get_config()
+
+    @staticmethod
     def _device_id() -> str:
         return ShopSyncService.get_config()["device_id"]
 
@@ -94,6 +159,7 @@ class ShopSyncService:
             "customers": catalog["customers"],
             "invoices": catalog["invoices"],
             "inventory": catalog["inventory"],
+            "waiters": catalog.get("waiters", []),
             "synced_at": timezone.now().isoformat(),
         }
 
@@ -124,19 +190,28 @@ class ShopSyncService:
         if not initial_done and ShopSyncService._get_setting(SYNC_KEYS["last_at"]):
             initial_done = True
 
+        # Always pull catalog from cloud when online (products, prices, users, waiters).
+        since_pull = None if not initial_done else parse_since(cfg.get("last_pull_at"))
+        pull_url = f"{cloud}/sync/shop-pull/"
+        if since_pull:
+            pull_url = f"{pull_url}?since={since_pull.isoformat()}"
+        pull_response = ShopSyncService._http_json("GET", pull_url, headers)
+        pull_data = pull_response.get("data", pull_response)
+        pulled_stats = CatalogSyncEngine.apply_pull_bundle(pull_data, user=user)
+
+        now = timezone.now().isoformat()
+        ShopSyncService._set_setting(SYNC_KEYS["initial_pull_done"], "1", user)
+        ShopSyncService._set_setting(
+            SYNC_KEYS["last_pull_at"], pull_data.get("server_time", now), user
+        )
+
         if not initial_done:
-            pull_url = f"{cloud}/sync/shop-pull/"
-            pull_response = ShopSyncService._http_json("GET", pull_url, headers)
-            pull_data = pull_response.get("data", pull_response)
-            pulled_stats = CatalogSyncEngine.apply_pull_bundle(pull_data, user=user)
-            now = timezone.now().isoformat()
-            ShopSyncService._set_setting(SYNC_KEYS["initial_pull_done"], "1", user)
             ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
-            ShopSyncService._set_setting(SYNC_KEYS["last_pull_at"], pull_data.get("server_time", now), user)
             ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
             msg = (
                 f"Initial download from cloud: {pulled_stats.get('products', 0)} products, "
-                f"{pulled_stats.get('customers', 0)} customers."
+                f"{pulled_stats.get('customers', 0)} customers, "
+                f"{pulled_stats.get('users', 0)} users."
             )
             ShopSyncService._set_setting(SYNC_KEYS["last_message"], msg, user)
             return {
@@ -147,8 +222,9 @@ class ShopSyncService:
                 "message": msg,
             }
 
-        since = parse_since(cfg.get("last_sync_at"))
-        push_payload = ShopSyncService._collect_payload(since=since)
+        # Then push local sales / customers / stock / waiters to cloud.
+        since_push = parse_since(cfg.get("last_sync_at") or cfg.get("last_at"))
+        push_payload = ShopSyncService._collect_payload(since=since_push)
         push_result = ShopSyncService._http_json(
             "POST",
             f"{cloud}/sync/shop-push/",
@@ -156,27 +232,131 @@ class ShopSyncService:
             push_payload,
         )
 
-        now = timezone.now().isoformat()
         ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
         ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
 
         pushed_invoices = len(push_payload.get("invoices", []))
         pushed_customers = len(push_payload.get("customers", []))
-        msg = f"Uploaded to cloud: {pushed_invoices} invoices, {pushed_customers} customers."
+        msg = (
+            f"Synced — pulled {pulled_stats.get('products', 0)} products, "
+            f"{pulled_stats.get('users', 0)} users; "
+            f"uploaded {pushed_invoices} invoices, {pushed_customers} customers."
+        )
         ShopSyncService._set_setting(SYNC_KEYS["last_message"], msg, user)
 
         return {
             "status": "success",
-            "mode": "push",
+            "mode": "bidirectional",
             "synced_at": now,
+            "pulled": pulled_stats,
             "pushed": {
                 "invoices": pushed_invoices,
                 "customers": pushed_customers,
                 "inventory": len(push_payload.get("inventory", [])),
+                "waiters": len(push_payload.get("waiters", [])),
             },
             "cloud": push_result.get("data", {}),
             "message": msg,
         }
+
+    @staticmethod
+    def get_subscription_status() -> dict:
+        """
+        Evaluate synced subscription against the device clock.
+        Used offline to soft-warn or hard-lock the shop app.
+        """
+        row = SettingsService.get_by_key(key=SYNC_KEYS["subscription_alert"])
+        raw = row.value if row else None
+        payload = None
+        if isinstance(raw, dict):
+            payload = raw
+        elif isinstance(raw, str) and raw.strip():
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except (json.JSONDecodeError, TypeError):
+                payload = None
+
+        if not payload:
+            return {
+                "has_subscription": False,
+                "locked": False,
+                "show_alert": False,
+                "is_usable": True,
+                "alert": None,
+                "evaluated_on": timezone.localdate().isoformat(),
+                "source": "none",
+            }
+
+        today = timezone.localdate()
+        expires_raw = payload.get("expires_at")
+        grace_days = int(payload.get("grace_period_days") or 5)
+        warning_days = int(payload.get("warning_days") or 5)
+        status = (payload.get("status") or "").lower()
+        payment_current = bool(payload.get("is_payment_current"))
+
+        expires_at = None
+        if expires_raw:
+            try:
+                expires_at = date.fromisoformat(str(expires_raw)[:10])
+            except ValueError:
+                expires_at = None
+
+        days_until = (expires_at - today).days if expires_at else None
+        grace_remaining = None
+        if expires_at and days_until is not None and days_until < 0:
+            grace_remaining = max(grace_days - (today - expires_at).days, 0)
+
+        if status == "suspended":
+            locked = True
+        elif expires_at:
+            locked = today > (expires_at + timedelta(days=grace_days))
+        else:
+            locked = False
+
+        show_alert = False
+        if not locked and expires_at and not payment_current:
+            if days_until is not None and 0 <= days_until <= warning_days:
+                show_alert = True
+            elif days_until is not None and days_until < 0 and grace_remaining is not None and grace_remaining >= 0:
+                show_alert = True
+
+        alert = {
+            **payload,
+            "is_usable": not locked,
+            "days_until_expiry": days_until,
+            "grace_days_remaining": grace_remaining,
+            "severity": "critical" if (locked or (days_until is not None and days_until < 0)) else "warning",
+        }
+        if locked:
+            alert["title"] = "Subscription expired — app locked"
+            alert["message"] = (
+                f"This shop's subscription ended on {expires_at.isoformat() if expires_at else '—'}. "
+                "Connect to the internet, ask the owner to renew payment on the cloud, "
+                "then tap Sync now to unlock."
+            )
+
+        return {
+            "has_subscription": True,
+            "locked": locked,
+            "show_alert": show_alert or locked,
+            "is_usable": not locked,
+            "alert": alert,
+            "evaluated_on": today.isoformat(),
+            "source": "sync",
+            "last_pull_at": ShopSyncService._get_setting(SYNC_KEYS["last_pull_at"]),
+        }
+
+    @staticmethod
+    def assert_subscription_usable():
+        status = ShopSyncService.get_subscription_status()
+        if status.get("locked"):
+            raise ValueError(
+                status.get("alert", {}).get("message")
+                or "Subscription expired. Sync after payment to unlock."
+            )
+        return status
 
     @staticmethod
     def ensure_tenant_sync_secret(tenant: Tenant) -> str:

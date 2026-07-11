@@ -8,8 +8,18 @@ from apps.settings_app.models import Company
 class Command(BaseCommand):
     help = "Link existing companies to tenants and ensure subscription plans exist"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--reset-role-permissions",
+            action="store_true",
+            help="Wipe system roles back to built-in defaults (destroys custom Admin changes).",
+        )
+
     def handle(self, *args, **options):
-        bootstrap_roles_and_permissions(stdout=self.stdout)
+        bootstrap_roles_and_permissions(
+            stdout=self.stdout,
+            reset_role_permissions=options["reset_role_permissions"],
+        )
         PlatformService.ensure_default_plans()
         linked = 0
         for company in Company.active_objects().filter(tenant__isnull=True):

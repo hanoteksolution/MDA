@@ -15,8 +15,8 @@ export function printThermalDocument(bodyHtml: string, options: PrintThermalOpti
     const existing = document.getElementById(FRAME_ID);
     if (existing) existing.remove();
 
-    const pad = options.width === "58mm" ? "2mm 2mm" : "3mm 3mm";
-    const baseFont = options.width === "58mm" ? "11px" : "13px";
+    const pad = options.width === "58mm" ? "3mm 4mm" : "4mm 6mm";
+    const baseFont = options.width === "58mm" ? "10px" : "12px";
 
     const frame = document.createElement("iframe");
     frame.id = FRAME_ID;
@@ -46,7 +46,7 @@ export function printThermalDocument(bodyHtml: string, options: PrintThermalOpti
   <title>Receipt</title>
   <style>
     ${options.css}
-    @page { margin: 0; }
+    @page { margin: 0; size: auto; }
     * { box-sizing: border-box; }
     html, body {
       margin: 0 !important;
@@ -59,17 +59,24 @@ export function printThermalDocument(bodyHtml: string, options: PrintThermalOpti
       print-color-adjust: exact;
     }
     body {
-      padding: ${pad};
+      padding: ${pad} !important;
       font-size: ${baseFont};
     }
     .mda-thermal {
       width: 100% !important;
       max-width: 100% !important;
-      margin: 0;
-      padding: 0;
+      margin: 0 auto;
+      padding: 0 2mm !important;
+      overflow: hidden;
     }
     .th-table { width: 100%; table-layout: fixed; }
-    .th-table .item-name { word-break: break-word; }
+    .th-table .item-name { word-break: break-word; overflow-wrap: anywhere; }
+    .th-meta .row,
+    .th-totals .row,
+    .th-guide-row {
+      gap: 4px;
+      padding: 0 1px;
+    }
     .th-barcode img { width: 100%; max-width: 100%; height: auto; min-height: 36px; }
   </style>
 </head>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Building2, Lock, User, ArrowRight, ShieldCheck } from "lucide-react";
+import { Building2, Cloud, Lock, User, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, FormGrid, FormSection } from "@/components/forms/FormField";
@@ -9,9 +9,12 @@ import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
 import { setupApi } from "@/services/api/setup";
 import { useAuthStore } from "@/store/authStore";
 import { clearBrandingCache } from "@/documents/branding";
+import { isTauri } from "@/utils/platform";
 
 export function SetupPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const allowOffline = searchParams.get("offline") === "1";
   const { isAuthenticated } = useAuthStore();
   const [checking, setChecking] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +38,12 @@ export function SetupPage() {
       return;
     }
 
+    // Desktop default: link to an existing cloud shop (not create a local-only shop).
+    if (isTauri() && !allowOffline) {
+      navigate("/connection", { replace: true });
+      return;
+    }
+
     setupApi.status()
       .then((res) => {
         if (!res.data.needs_setup) {
@@ -43,7 +52,7 @@ export function SetupPage() {
       })
       .catch(() => setError("Could not reach the local API. Ensure the backend is running."))
       .finally(() => setChecking(false));
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, allowOffline]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,10 +115,19 @@ export function SetupPage() {
           className="mx-auto w-full max-w-xl"
         >
           <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-tight">Welcome to MDA ERP</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Offline-only setup</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Set up your company profile and create the administrator account.
+              Creates a shop that exists only on this PC. It will not appear on the cloud and cannot be
+              managed remotely. Prefer connecting to your cloud shop instead.
             </p>
+            {isTauri() && (
+              <Button type="button" variant="secondary" className="mt-4" asChild>
+                <Link to="/connection">
+                  <Cloud className="h-4 w-4" />
+                  Connect to cloud shop
+                </Link>
+              </Button>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">

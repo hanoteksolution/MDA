@@ -1,9 +1,13 @@
 import re
+import json
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
+from apps.authentication.models import User
 from apps.customers.models import Customer
 from apps.sales.models import Invoice
 from apps.sales.serializers.sales_serializers import serialize_invoice
@@ -22,6 +26,7 @@ PAYMENT_LABELS = {
     "mobile": "Mobile Money",
     "bank": "Bank Transfer",
     "split": "Split Payment",
+    "on_account": "Pay Later / Account",
     "invoice": "Invoice",
 }
 
@@ -51,22 +56,65 @@ def _pos_profile_key(user_id) -> str:
 def get_pos_profile(*, user):
     setting = SettingsService.get_by_key(key=_pos_profile_key(user.id))
     if setting:
-        return setting.value
-    return {
-        "merchants": [],
-        "default_payment_method": "cash",
-        "receipt_footer": "Thank you for shopping with us! We appreciate your business.",
-        "return_policy": DEFAULT_RETURN_POLICY,
-    }
+        profile = setting.value if isinstance(setting.value, dict) else {}
+    else:
+        profile = {
+            "merchants": [],
+            "waiters": [],
+            "default_payment_method": "cash",
+            "receipt_footer": "Thank you for shopping with us! We appreciate your business.",
+            "return_policy": DEFAULT_RETURN_POLICY,
+        }
+
+    # Merge shop-level waiters synced from cloud / shared across cashiers.
+    shop_waiters_row = SettingsService.get_by_key(key="pos.waiters")
+    shop_waiters = []
+    if shop_waiters_row and shop_waiters_row.value:
+        raw = shop_waiters_row.value
+        if isinstance(raw, list):
+            shop_waiters = raw
+        elif isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    shop_waiters = parsed
+            except (json.JSONDecodeError, TypeError):
+                shop_waiters = []
+
+    if shop_waiters:
+        by_id = {str(w.get("id")): w for w in (profile.get("waiters") or []) if w.get("id")}
+        for w in shop_waiters:
+            wid = str(w.get("id") or "")
+            if wid and wid in by_id:
+                by_id[wid] = {**by_id[wid], **w}
+            elif wid:
+                by_id[wid] = w
+            else:
+                by_id[f"name:{(w.get('name') or '').lower()}"] = w
+        profile = {**profile, "waiters": list(by_id.values())}
+    elif "waiters" not in profile:
+        profile["waiters"] = []
+
+    return profile
 
 
 def save_pos_profile(*, user, data):
-    return SettingsService.upsert(
+    SettingsService.upsert(
         key=_pos_profile_key(user.id),
         value=data,
         category="pos",
         user=user,
     )
+    # Keep shop-level waiters in sync for cloud push/pull.
+    waiters = data.get("waiters") if isinstance(data, dict) else None
+    if isinstance(waiters, list):
+        SettingsService.upsert(
+            key="pos.waiters",
+            value=waiters,
+            category="pos",
+            user=user,
+        )
+    return data
 
 
 def _resolve_walkin_customer(*, branch: Branch) -> Customer:
@@ -108,6 +156,8 @@ class PosService:
         order_notes = data.get("notes") or ""
         amount_tendered = data.get("amount_tendered")
         payment_reference = (data.get("payment_reference") or "").strip()
+        waiter_id = data.get("waiter_id")
+        waiter_name = (data.get("waiter_name") or "").strip()
 
         profile = get_pos_profile(user=user)
         merchant = None
@@ -117,6 +167,19 @@ class PosService:
                 break
         if not merchant and profile.get("merchants"):
             merchant = next((m for m in profile["merchants"] if m.get("is_default")), profile["merchants"][0])
+
+        served_by_user = None
+        if waiter_id:
+            for w in profile.get("waiters") or []:
+                if w.get("id") == waiter_id:
+                    waiter_name = w.get("name") or waiter_name
+                    linked_user_id = w.get("user_id")
+                    if linked_user_id:
+                        served_by_user = User.objects.filter(pk=linked_user_id, is_active=True).first()
+                    break
+
+        if payment_method == "on_account" and (not customer_id or customer_id == "walkin"):
+            raise ValueError("Select a registered customer for pay-later / account sales.")
 
         parsed_items = [
             {
@@ -139,17 +202,28 @@ class PosService:
         payment_note = f"Payment: {payment_method}"
         if merchant:
             payment_note += f" | Merchant: {merchant.get('merchant_number', '')} ({merchant.get('company_name', '')})"
+        if payment_reference:
+            payment_note += f" | Ref: {payment_reference}"
+        if waiter_name:
+            payment_note += f" | Waiter: {waiter_name}"
         notes = f"{order_notes}\n{payment_note}".strip() if order_notes else payment_note
+
+        is_on_account = payment_method == "on_account"
+        invoice_status = Invoice.STATUS_SENT if is_on_account else Invoice.STATUS_PAID
+        amount_paid = Decimal("0") if is_on_account else total_amount
+        due_date = timezone.localdate() + timedelta(days=30) if is_on_account else None
 
         invoice = InvoiceService.create(
             data={
                 "customer_id": str(customer.id),
                 "branch_id": str(branch.id),
-                "status": Invoice.STATUS_PAID,
+                "status": invoice_status,
                 "issue_date": timezone.localdate(),
+                "due_date": due_date,
                 "discount_amount": discount_amount,
-                "amount_paid": total_amount,
+                "amount_paid": amount_paid,
                 "notes": notes,
+                "served_by_user": served_by_user,
             },
             items=parsed_items,
             user=user,
@@ -176,8 +250,263 @@ class PosService:
             change=change,
             payment_reference=payment_reference,
             tax_rate=tax_rate,
+            waiter_name=waiter_name,
         )
         return {"invoice": serialize_invoice(invoice, include_items=True), "receipt": receipt}
+
+    @staticmethod
+    def list_waiter_sales(
+        *,
+        user,
+        waiter_id=None,
+        user_id=None,
+        branch_id=None,
+        days=30,
+        date_from=None,
+        date_to=None,
+        waiter_name=None,
+    ):
+        """List invoices served by a waiter (linked user or name in notes)."""
+        branch = _resolve_branch(branch_id)
+        if date_from or date_to:
+            start = date_from or (timezone.localdate() - timedelta(days=30))
+            end = date_to or timezone.localdate()
+            if isinstance(start, str):
+                from datetime import date as date_cls
+                start = date_cls.fromisoformat(start)
+            if isinstance(end, str):
+                from datetime import date as date_cls
+                end = date_cls.fromisoformat(end)
+        else:
+            start = timezone.localdate() - timedelta(days=max(1, int(days or 30)))
+            end = timezone.localdate()
+
+        qs = (
+            Invoice.active_objects()
+            .filter(branch=branch, issue_date__gte=start, issue_date__lte=end)
+            .exclude(status=Invoice.STATUS_CANCELLED)
+            .select_related("customer", "served_by_user", "created_by_user")
+            .prefetch_related("items__product")
+            .order_by("-issue_date", "-created_at")
+        )
+
+        profile = get_pos_profile(user=user)
+        resolved_name = (waiter_name or "").strip()
+        linked_user_id = user_id
+
+        if waiter_id:
+            for w in profile.get("waiters") or []:
+                if w.get("id") == waiter_id:
+                    resolved_name = (w.get("name") or "").strip() or resolved_name
+                    linked_user_id = w.get("user_id") or linked_user_id
+                    break
+
+        if linked_user_id and resolved_name:
+            qs = qs.filter(
+                Q(served_by_user_id=linked_user_id)
+                | Q(notes__icontains=f"Waiter: {resolved_name}")
+            )
+        elif linked_user_id:
+            qs = qs.filter(served_by_user_id=linked_user_id)
+        elif resolved_name:
+            qs = qs.filter(notes__icontains=f"Waiter: {resolved_name}")
+        else:
+            return []
+
+        results = []
+        for inv in qs[:200]:
+            pm, pref = _parse_payment_from_notes(inv.notes or "")
+            results.append({
+                "invoice_id": str(inv.id),
+                "invoice_number": inv.invoice_number,
+                "customer_name": inv.customer.full_name,
+                "status": inv.status,
+                "payment_method": pm,
+                "payment_method_label": PAYMENT_LABELS.get(pm, pm.title()),
+                "total_amount": float(inv.total_amount),
+                "amount_paid": float(inv.amount_paid),
+                "balance_due": float(inv.total_amount - inv.amount_paid),
+                "issue_date": inv.issue_date.isoformat(),
+                "waiter_name": resolved_name or (
+                    (inv.served_by_user.get_full_name() or inv.served_by_user.username)
+                    if inv.served_by_user
+                    else ""
+                ),
+                "items": [
+                    {
+                        "name": i.product.name,
+                        "sku": i.product.sku,
+                        "quantity": float(i.quantity),
+                        "line_total": float(i.line_total),
+                    }
+                    for i in inv.items.all()
+                ],
+            })
+        return results
+
+    @staticmethod
+    def waiter_performance(*, user, branch_id=None, date_from=None, date_to=None, waiter_id=None, waiter_name=None):
+        """Aggregate paid / unpaid / on-account performance per waiter."""
+        from datetime import date as date_cls
+
+        branch = _resolve_branch(branch_id)
+        end = date_to or timezone.localdate()
+        start = date_from or (end - timedelta(days=30))
+        if isinstance(start, str):
+            start = date_cls.fromisoformat(start)
+        if isinstance(end, str):
+            end = date_cls.fromisoformat(end)
+
+        profile = get_pos_profile(user=user)
+        profile_waiters = [
+            {
+                "id": str(w.get("id") or ""),
+                "name": (w.get("name") or "").strip(),
+                "user_id": w.get("user_id") or None,
+                "is_active": w.get("is_active", True),
+            }
+            for w in (profile.get("waiters") or [])
+            if (w.get("name") or "").strip()
+        ]
+
+        invoices = (
+            Invoice.active_objects()
+            .filter(branch=branch, issue_date__gte=start, issue_date__lte=end)
+            .exclude(status=Invoice.STATUS_CANCELLED)
+            .select_related("customer", "served_by_user")
+            .prefetch_related("items__product")
+            .order_by("-issue_date", "-created_at")
+        )
+
+        def resolve_waiter(inv):
+            if inv.served_by_user_id:
+                # Prefer profile name for linked user
+                for w in profile_waiters:
+                    if w["user_id"] and str(w["user_id"]) == str(inv.served_by_user_id):
+                        return w["name"], w["id"], w["user_id"]
+                name = inv.served_by_user.get_full_name() or inv.served_by_user.username
+                return name, "", str(inv.served_by_user_id)
+            match = re.search(r"Waiter:\s*([^|\n]+)", inv.notes or "", re.IGNORECASE)
+            if match:
+                name = match.group(1).strip()
+                for w in profile_waiters:
+                    if w["name"].lower() == name.lower():
+                        return w["name"], w["id"], w["user_id"]
+                return name, "", None
+            return "", "", None
+
+        buckets: dict[str, dict] = {}
+
+        def ensure_bucket(name, wid="", uid=None):
+            key = name.lower() if name else "__unassigned__"
+            if key not in buckets:
+                buckets[key] = {
+                    "waiter_id": wid or "",
+                    "waiter_name": name or "Unassigned",
+                    "user_id": uid,
+                    "receipts_count": 0,
+                    "paid_count": 0,
+                    "unpaid_count": 0,
+                    "on_account_count": 0,
+                    "total_served": Decimal("0"),
+                    "paid_total": Decimal("0"),
+                    "unpaid_total": Decimal("0"),
+                    "items_sold": Decimal("0"),
+                }
+            elif wid and not buckets[key]["waiter_id"]:
+                buckets[key]["waiter_id"] = wid
+            elif uid and not buckets[key]["user_id"]:
+                buckets[key]["user_id"] = uid
+            return buckets[key]
+
+        # Seed profile waiters so they appear even with zero sales
+        for w in profile_waiters:
+            if w.get("is_active", True):
+                ensure_bucket(w["name"], w["id"], w["user_id"])
+
+        all_receipts = []
+        for inv in invoices:
+            name, wid, uid = resolve_waiter(inv)
+            if not name:
+                continue
+            pm, _ = _parse_payment_from_notes(inv.notes or "")
+            is_paid = inv.status == Invoice.STATUS_PAID
+            balance = inv.total_amount - inv.amount_paid
+            b = ensure_bucket(name, wid, uid)
+            b["receipts_count"] += 1
+            b["total_served"] += inv.total_amount
+            b["items_sold"] += sum((i.quantity for i in inv.items.all()), Decimal("0"))
+            if is_paid:
+                b["paid_count"] += 1
+                b["paid_total"] += inv.total_amount
+            else:
+                b["unpaid_count"] += 1
+                b["unpaid_total"] += balance
+            if pm == "on_account" or (not is_paid and pm in ("on_account", "invoice")):
+                b["on_account_count"] += 1
+
+            all_receipts.append({
+                "invoice_id": str(inv.id),
+                "invoice_number": inv.invoice_number,
+                "customer_name": inv.customer.full_name,
+                "status": inv.status,
+                "payment_method": pm,
+                "payment_method_label": PAYMENT_LABELS.get(pm, pm.title()),
+                "total_amount": float(inv.total_amount),
+                "amount_paid": float(inv.amount_paid),
+                "balance_due": float(balance),
+                "issue_date": inv.issue_date.isoformat(),
+                "waiter_name": name,
+                "waiter_id": wid,
+                "items": [
+                    {
+                        "name": i.product.name,
+                        "sku": i.product.sku,
+                        "quantity": float(i.quantity),
+                        "line_total": float(i.line_total),
+                    }
+                    for i in inv.items.all()
+                ],
+            })
+
+        waiters = []
+        for b in buckets.values():
+            waiters.append({
+                **b,
+                "total_served": float(b["total_served"]),
+                "paid_total": float(b["paid_total"]),
+                "unpaid_total": float(b["unpaid_total"]),
+                "items_sold": float(b["items_sold"]),
+            })
+        waiters.sort(key=lambda x: (-x["total_served"], x["waiter_name"].lower()))
+
+        # Optional filter for detail
+        selected_name = (waiter_name or "").strip()
+        selected_id = waiter_id or ""
+        if selected_id:
+            for w in profile_waiters:
+                if w["id"] == selected_id:
+                    selected_name = w["name"]
+                    break
+        receipts = all_receipts
+        if selected_name:
+            receipts = [r for r in all_receipts if r["waiter_name"].lower() == selected_name.lower()]
+            waiters = [w for w in waiters if w["waiter_name"].lower() == selected_name.lower()]
+
+        return {
+            "date_from": start.isoformat(),
+            "date_to": end.isoformat(),
+            "summary": {
+                "waiters_count": len([w for w in waiters if w["waiter_name"] != "Unassigned" or w["receipts_count"]]),
+                "receipts_count": sum(w["receipts_count"] for w in waiters),
+                "paid_total": sum(w["paid_total"] for w in waiters),
+                "unpaid_total": sum(w["unpaid_total"] for w in waiters),
+                "on_account_count": sum(w["on_account_count"] for w in waiters),
+                "total_served": sum(w["total_served"] for w in waiters),
+            },
+            "waiters": waiters,
+            "receipts": receipts if (selected_name or selected_id) else [],
+        }
 
     @staticmethod
     def build_receipt(
@@ -193,6 +522,7 @@ class PosService:
         change=None,
         payment_reference="",
         tax_rate=Decimal("0"),
+        waiter_name="",
     ):
         now = timezone.localtime()
         after_discount = invoice.subtotal - invoice.discount_amount
@@ -200,16 +530,31 @@ class PosService:
         if computed_tax_rate <= 0 and after_discount > 0 and invoice.tax_amount > 0:
             computed_tax_rate = float(invoice.tax_amount / after_discount)
 
-        loyalty_earned = int(invoice.total_amount // 10)
-        loyalty_total = loyalty_earned + 1160
+        payment_guide = []
+        for m in (profile.get("merchants") or [])[:4]:
+            if m.get("provider") != "mobile":
+                continue
+            label = (m.get("label") or m.get("company_name") or "Mobile").strip()
+            number = (m.get("merchant_number") or "").strip()
+            if label and number:
+                payment_guide.append({"label": label, "number": number})
+
+        is_paid = invoice.status == Invoice.STATUS_PAID
 
         return {
             "invoice_number": invoice.invoice_number,
             "invoice_id": str(invoice.id),
+            "status": invoice.status,
+            "is_paid": is_paid,
             "date": invoice.issue_date.isoformat(),
             "time": now.strftime("%H:%M"),
-            "datetime_display": now.strftime("%b %d, %Y · %I:%M %p"),
+            "datetime_display": now.strftime("%d/%m/%Y %I:%M %p"),
             "cashier": user.get_full_name() or user.username,
+            "waiter": waiter_name or (
+                invoice.served_by_user.get_full_name()
+                if getattr(invoice, "served_by_user", None)
+                else ""
+            ),
             "terminal": "POS-001",
             "customer_name": invoice.customer.full_name,
             "customer_address": invoice.customer.address or "",
@@ -233,6 +578,7 @@ class PosService:
             "merchant": merchant,
             "merchant_reference": merchant.get("merchant_number", "") if merchant else "",
             "payment_reference": payment_reference,
+            "payment_guide": payment_guide,
             "items": [
                 {
                     "name": i.product.name,
@@ -253,12 +599,9 @@ class PosService:
             "payment_method_label": PAYMENT_LABELS.get(payment_method, payment_method.title()),
             "amount_tendered": float(amount_tendered) if amount_tendered is not None else None,
             "change": change,
-            "footer": profile.get("receipt_footer")
-            or "Thank you for shopping with us! We appreciate your business.",
+            "footer": profile.get("receipt_footer") or "Thank you for your purchase!",
             "return_policy": profile.get("return_policy") or DEFAULT_RETURN_POLICY,
             "verification_path": f"/receipt/verify/{invoice.id}",
-            "loyalty_points_earned": loyalty_earned,
-            "loyalty_points_total": loyalty_total,
         }
 
     @staticmethod
@@ -268,7 +611,9 @@ class PosService:
         company = Company.active_objects().first()
         profile = get_pos_profile(user=user)
         payment_method, payment_reference = _parse_payment_from_notes(invoice.notes or "")
-        if invoice.status != "paid" and payment_method == "cash":
+        if invoice.status == Invoice.STATUS_PAID and payment_method in ("invoice", "on_account"):
+            payment_method = "cash"
+        elif invoice.status != Invoice.STATUS_PAID and payment_method == "cash":
             payment_method = "invoice"
 
         cashier = user

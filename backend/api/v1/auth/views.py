@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.db.models import Q
 
 from apps.authentication.models import Permission, Role, User
 from apps.authentication.serializers.auth_serializers import (
@@ -76,12 +77,18 @@ class DesktopProvisionView(APIView):
                 message="Username, password, and cloud access token are required.",
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        connection = {
+            "cloud_api_base": (request.data.get("cloud_api_base") or "").strip(),
+            "tenant_slug": (request.data.get("tenant_slug") or "").strip(),
+            "sync_secret": (request.data.get("sync_secret") or "").strip(),
+        }
         try:
             user, tokens = DesktopProvisionService.provision_from_cloud(
                 username=username,
                 password=password,
                 cloud_access_token=cloud_access,
                 request=request,
+                connection=connection,
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
@@ -99,10 +106,15 @@ class UserListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("users.view")]
 
     def get(self, request):
-        users = UserService.list_users()
+        users = UserService.list_users(viewer=request.user)
         search = request.query_params.get("search")
         if search:
-            users = users.filter(username__icontains=search)
+            users = users.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
         serializer = UserSerializer(users, many=True)
         return success_response(data=serializer.data)
 
@@ -114,11 +126,17 @@ class UserListCreateView(APIView):
         data = serializer.validated_data.copy()
         role_id = data.pop("role_id", None)
         branch_id = data.pop("branch_id", None)
+        permission_ids = data.pop("permission_ids", None)
         if role_id:
             data["role_id"] = role_id
         if branch_id:
             data["branch_id"] = branch_id
-        user = UserService.create_user(data=data, created_by=request.user)
+        if permission_ids is not None:
+            data["permission_ids"] = permission_ids
+        try:
+            user = UserService.create_user(data=data, created_by=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=UserSerializer(user).data,
             message="User created.",
@@ -129,34 +147,49 @@ class UserListCreateView(APIView):
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("users.view")]
 
-    def get_object(self, pk):
-        return UserService.list_users().get(pk=pk)
+    def get_object(self, pk, viewer):
+        return UserService.get_manageable_user(pk=pk, viewer=viewer)
 
     def get(self, request, pk):
-        user = self.get_object(pk)
+        try:
+            user = self.get_object(pk, request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_404_NOT_FOUND)
         return success_response(data=UserSerializer(user).data)
 
     def put(self, request, pk):
         if not request.user.has_permission("users.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        user = self.get_object(pk)
+        try:
+            user = self.get_object(pk, request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_404_NOT_FOUND)
         serializer = UserCreateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data.copy()
         role_id = data.pop("role_id", None)
         branch_id = data.pop("branch_id", None)
-        if role_id:
+        permission_ids = data.pop("permission_ids", None)
+        if role_id is not None:
             data["role_id"] = role_id
-        if branch_id:
+        if branch_id is not None:
             data["branch_id"] = branch_id
-        user = UserService.update_user(user=user, data=data, updated_by=request.user)
+        if permission_ids is not None:
+            data["permission_ids"] = permission_ids
+        try:
+            user = UserService.update_user(user=user, data=data, updated_by=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(data=UserSerializer(user).data, message="User updated.")
 
     def delete(self, request, pk):
         if not request.user.has_permission("users.delete"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        user = self.get_object(pk)
-        UserService.deactivate(user=user, deactivated_by=request.user)
+        try:
+            user = self.get_object(pk, request.user)
+            UserService.deactivate(user=user, deactivated_by=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(message="User deactivated.")
 
 
@@ -164,7 +197,7 @@ class RoleListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("roles.view")]
 
     def get(self, request):
-        roles = RoleService.list_roles()
+        roles = RoleService.list_roles(viewer=request.user)
         return success_response(data=RoleSerializer(roles, many=True).data)
 
     def post(self, request):

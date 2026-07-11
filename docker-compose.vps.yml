@@ -15,5 +15,7 @@ services:
     restart: unless-stopped
     ports:
       - "8010:80"
+    volumes:
+      - mda_media:/var/www/media:ro
     depends_on:
       - api

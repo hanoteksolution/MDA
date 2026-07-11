@@ -114,7 +114,6 @@ class Command(BaseCommand):
         ]
 
         for sku, barcode, name, cat, brand, unit, min_stock, cost, sell, _qty, qty in sample_products:
-            image = f"https://picsum.photos/seed/{sku}/400/400"
             product, created = Product.objects.get_or_create(
                 sku=sku,
                 defaults={
@@ -126,13 +125,14 @@ class Command(BaseCommand):
                     "minimum_stock": min_stock,
                     "cost_price": Decimal(str(cost)),
                     "selling_price": Decimal(str(sell)),
-                    "image": image,
+                    "image": "",
                     "is_active": True,
                     "created_by": user,
                 },
             )
-            if not created:
-                product.image = image
+            # Clear legacy picsum placeholder URLs from earlier seeds.
+            if product.image and "picsum.photos" in product.image:
+                product.image = ""
                 product.save(update_fields=["image", "updated_at"])
             inv = InventoryService.ensure_inventory_record(product=product, warehouse=warehouse, user=user)
             if created or inv.quantity == 0:

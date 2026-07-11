@@ -7,13 +7,33 @@ from core.responses.api_response import error_response, success_response
 
 
 class SyncConfigView(APIView):
-    permission_classes = [IsAuthenticated]
+    """
+    Authenticated sync settings.
+
+    On desktop with an empty user DB, AllowAny so Connection can be saved
+    before the first cloud shop login/provision.
+    """
+
+    def get_permissions(self):
+        from django.conf import settings
+
+        from apps.authentication.services.setup_service import SetupService
+
+        if (
+            getattr(settings, "DESKTOP_MODE", False)
+            and SetupService.needs_setup()
+            and self.request.method in ("PUT", "PATCH", "GET")
+        ):
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get(self, request):
+        ShopSyncService.ensure_connection_config()
         return success_response(data=ShopSyncService.get_config())
 
     def put(self, request):
-        data = ShopSyncService.save_config(data=request.data, user=request.user)
+        user = request.user if getattr(request.user, "is_authenticated", False) else None
+        data = ShopSyncService.save_config(data=request.data, user=user)
         return success_response(data=data, message="Sync settings saved.")
 
 
@@ -27,7 +47,17 @@ class SyncRunView(APIView):
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:
             return error_response(message=str(exc), status=status.HTTP_502_BAD_GATEWAY)
+        result["subscription"] = ShopSyncService.get_subscription_status()
         return success_response(data=result, message=result.get("message", "Bidirectional sync complete."))
+
+
+class SubscriptionStatusView(APIView):
+    """Local subscription lock status from last cloud sync (works offline)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return success_response(data=ShopSyncService.get_subscription_status())
 
 
 class ShopPushSyncView(APIView):

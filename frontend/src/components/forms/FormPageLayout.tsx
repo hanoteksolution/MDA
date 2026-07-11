@@ -34,8 +34,8 @@ export function FormActions({ children, className }: FormActionsProps) {
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-2xl border border-border",
-        "bg-card px-6 py-4 shadow-sm",
+        "flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60",
+        "bg-card/90 px-6 py-4 shadow-[0_8px_30px_hsl(var(--foreground)/0.04)] backdrop-blur-sm",
         className
       )}
     >

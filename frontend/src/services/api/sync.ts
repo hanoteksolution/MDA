@@ -5,8 +5,10 @@ export interface SyncRunResult {
   status: string;
   synced_at: string;
   message?: string;
-  pushed?: { invoices: number; customers: number; inventory: number };
+  mode?: string;
+  pushed?: { invoices: number; customers: number; inventory: number; waiters?: number };
   pulled?: Record<string, number>;
+  subscription?: SubscriptionStatus;
 }
 
 export interface SyncConfig {
@@ -19,6 +21,39 @@ export interface SyncConfig {
   last_status: string;
   last_message: string;
   initial_pull_done?: boolean;
+}
+
+export interface SubscriptionStatusAlert {
+  subscription_id: string;
+  reference_code: string;
+  tenant_id?: string | null;
+  tenant_name?: string | null;
+  plan: string;
+  plan_code?: string;
+  status: string;
+  monthly_fee: number;
+  expires_at: string | null;
+  last_paid_at?: string | null;
+  days_until_expiry: number | null;
+  warning_days?: number;
+  grace_period_days: number;
+  grace_days_remaining: number | null;
+  is_payment_current?: boolean;
+  is_usable?: boolean;
+  severity: "warning" | "critical";
+  title: string;
+  message: string;
+}
+
+export interface SubscriptionStatus {
+  has_subscription: boolean;
+  locked: boolean;
+  show_alert: boolean;
+  is_usable: boolean;
+  alert: SubscriptionStatusAlert | null;
+  evaluated_on: string;
+  source: string;
+  last_pull_at?: string;
 }
 
 export const syncApi = {
@@ -34,6 +69,9 @@ export const syncApi = {
     apiRequest<ApiResponse<SyncRunResult>>("/sync/run/", {
       method: "POST",
     }),
+
+  subscriptionStatus: () =>
+    apiRequest<ApiResponse<SubscriptionStatus>>("/sync/subscription-status/"),
 };
 
 /** Platform APIs: browser uses same-origin API; desktop uses cloud when configured. */

@@ -110,12 +110,22 @@ ROLE_PERMISSIONS = {
     "shop_group_manager": [
         "dashboard.view", "reports.view", "reports.export",
         "staff.performance.view", "staff.performance.evaluate",
-        "platform.view", "finance.view", "sales.view", "customers.view",
+        "platform.view", "platform.manage",
+        "finance.view", "sales.view", "customers.view",
     ],
 }
 
 
-def bootstrap_roles_and_permissions(stdout=None) -> dict[str, Permission]:
+def bootstrap_roles_and_permissions(stdout=None, *, reset_role_permissions: bool = False) -> dict[str, Permission]:
+    """
+    Ensure system permissions and roles exist.
+
+    By default this is **additive**: new default permissions are added to roles,
+    but custom permissions assigned in Admin are never removed.
+
+    Pass reset_role_permissions=True (or bootstrap_system --reset-role-permissions)
+    to wipe each system role back to the built-in ROLE_PERMISSIONS list.
+    """
     write = stdout.write if stdout else (lambda msg: None)
 
     write("Bootstrapping permissions...\n")
@@ -125,22 +135,38 @@ def bootstrap_roles_and_permissions(stdout=None) -> dict[str, Permission]:
             codename=codename,
             defaults={"name": name, "module": module},
         )
+        # Keep catalog labels in sync without touching role assignments
+        if perm.name != name or perm.module != module:
+            perm.name = name
+            perm.module = module
+            perm.save(update_fields=["name", "module", "updated_at"])
         perm_map[codename] = perm
 
     write("Bootstrapping roles...\n")
     for slug, name in Role.SYSTEM_ROLES:
-        role, _ = Role.objects.get_or_create(
+        role, created = Role.objects.get_or_create(
             slug=slug,
             defaults={"name": name, "is_system": True},
         )
-        RolePermission.objects.filter(role=role).delete()
+        if not role.is_system:
+            role.is_system = True
+            role.save(update_fields=["is_system", "updated_at"])
+
         codes = ROLE_PERMISSIONS.get(slug, [])
         if codes == "*":
             codes = list(perm_map.keys())
+
+        if reset_role_permissions:
+            write(f"  Resetting permissions for role '{slug}' to defaults...\n")
+            RolePermission.objects.filter(role=role).delete()
+
         for code in codes:
             if code in perm_map:
                 RolePermission.objects.get_or_create(
                     role=role, permission=perm_map[code]
                 )
+
+        if created:
+            write(f"  Created role '{slug}'.\n")
 
     return perm_map

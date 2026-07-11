@@ -104,12 +104,12 @@ export interface InventoryAdjustment {
 }
 
 export interface ProductFormData {
-  sku: string;
+  sku?: string;
   barcode?: string;
   name: string;
   category_id: string;
   brand_id?: string;
-  unit_id: string;
+  unit_id?: string;
   cost_price: number;
   selling_price: number;
   minimum_stock: number;

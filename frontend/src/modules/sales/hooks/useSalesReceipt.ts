@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { salesApi } from "@/services/api/sales";
 import type { PosReceipt } from "@/services/api/pos";
+import type { SaleDocStatus } from "@/services/api/sales";
 import type { SalesDocumentPreviewState } from "../components/SalesReceiptDialog";
 import {
   printReceiptDocument,
@@ -137,8 +138,35 @@ export function useSalesReceipt() {
     async (invoiceId: string, mode: SalesDocumentPreviewState["mode"]) => {
       setLoadingId(invoiceId);
       try {
+        const [invRes, receipt] = await Promise.all([
+          salesApi.getInvoice(invoiceId),
+          fetchReceipt(invoiceId),
+        ]);
+        setDocumentPreview({
+          receipt,
+          mode,
+          invoiceId,
+          status: invRes.data.status,
+        });
+      } finally {
+        setLoadingId(null);
+      }
+    },
+    [fetchReceipt]
+  );
+
+  const markInvoicePaid = useCallback(
+    async (invoiceId: string) => {
+      setLoadingId(invoiceId);
+      try {
+        const res = await salesApi.markInvoicePaid(invoiceId);
         const receipt = await fetchReceipt(invoiceId);
-        setDocumentPreview({ receipt, mode });
+        setDocumentPreview((prev) =>
+          prev?.invoiceId === invoiceId
+            ? { ...prev, receipt, status: res.data.status as SaleDocStatus }
+            : prev
+        );
+        return res.data;
       } finally {
         setLoadingId(null);
       }
@@ -171,5 +199,6 @@ export function useSalesReceipt() {
     viewInvoice,
     viewThermalReceipt,
     closePreview,
+    markInvoicePaid,
   };
 }

@@ -233,6 +233,7 @@ class TenantSubscription(BaseModel):
             if self.expires_at and days_left is not None and days_left < 0
             else None,
             "is_payment_current": self.is_payment_current,
+            "is_usable": self.is_usable,
             "severity": severity,
             "title": title,
             "message": message,

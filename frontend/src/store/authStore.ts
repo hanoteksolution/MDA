@@ -44,7 +44,12 @@ async function tryCloudShopProvision(username: string, password: string): Promis
   }
 
   try {
-    const provision = await api.desktopProvision(username, password, cloudToken);
+    const hybrid = getHybridConfig();
+    const provision = await api.desktopProvision(username, password, cloudToken, {
+      cloud_api_base: hybrid?.cloud_api_base || "",
+      tenant_slug: hybrid?.tenant_slug || "",
+      sync_secret: hybrid?.sync_secret || "",
+    });
     clearCloudSession();
     try {
       await syncApi.run();
@@ -79,7 +84,8 @@ function hasValidToken(): boolean {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: hasValidToken(),
-  isLoading: false,
+  // While a token exists, wait for /me before rendering permission-gated routes.
+  isLoading: hasValidToken(),
   error: null,
 
   login: async (username, password) => {

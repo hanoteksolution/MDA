@@ -1,8 +1,11 @@
 export { SettingsPage } from "@/modules/settings/pages/SettingsPage";
 export { AdminPage } from "@/modules/admin/pages/AdminPage";
 export { PosPage } from "@/modules/pos/pages/PosPage";
+export { WaiterPerformancePage } from "@/modules/pos/pages/WaiterPerformancePage";
 export { PurchasesPage } from "@/modules/purchases/pages/PurchasesPage";
 export { SalesPage } from "@/modules/sales/pages/SalesPage";
+export { DailyOpsPage } from "@/modules/sales/pages/DailyOpsPage";
+export { ReceiptManagementPage } from "@/modules/sales/pages/ReceiptManagementPage";
 export { CustomersPage } from "@/modules/customers/pages/CustomersPage";
 export { SuppliersPage } from "@/modules/suppliers/pages/SuppliersPage";
 export { FinancePage } from "@/modules/finance/pages/FinancePage";

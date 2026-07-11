@@ -24,12 +24,38 @@ export function getCloudApiBase(): string | null {
 
 export function resolveMediaUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const normalized = path.replace(/\\/g, "/").trim();
+  if (!normalized) return undefined;
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("blob:") ||
+    normalized.startsWith("data:")
+  ) {
+    return normalized;
+  }
 
   const apiBase = getApiBase();
   const origin = apiBase.startsWith("http")
     ? apiBase.replace(/\/api\/v1$/, "")
     : window.location.origin;
 
-  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${origin}${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
+}
+
+/** Stock/demo image hosts — treat as no image so UI shows upload empty state. */
+export function isPlaceholderMediaUrl(path?: string | null): boolean {
+  if (!path) return true;
+  const lower = path.toLowerCase();
+  return (
+    lower.includes("picsum.photos") ||
+    lower.includes("placeholder.com") ||
+    lower.includes("placehold.co") ||
+    lower.includes("via.placeholder")
+  );
+}
+
+export function resolveProductImageUrl(path?: string | null): string | undefined {
+  if (!path || isPlaceholderMediaUrl(path)) return undefined;
+  return resolveMediaUrl(path);
 }

@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.authentication.models import Role, User
 from apps.customers.models import Customer
 from apps.inventory.models import Inventory, Warehouse
 from apps.platform.models import Tenant
@@ -16,6 +17,8 @@ from apps.products.models import Brand, Category, Product, Unit
 from apps.sales.models import Invoice, InvoiceItem
 from apps.settings_app.models import Branch, Company
 from apps.settings_app.services.settings_service import SettingsService
+
+SHOP_WAITERS_KEY = "pos.waiters"
 
 
 def parse_since(value: str | None) -> datetime | None:
@@ -71,9 +74,35 @@ class CatalogSyncEngine:
       return qs
 
   @staticmethod
+  def _load_shop_waiters() -> list:
+      row = SettingsService.get_by_key(key=SHOP_WAITERS_KEY)
+      if not row or row.value in (None, "", {}, []):
+          return []
+      raw = row.value
+      if isinstance(raw, list):
+          return raw
+      if isinstance(raw, str):
+          try:
+              data = json.loads(raw)
+              return data if isinstance(data, list) else []
+          except (json.JSONDecodeError, TypeError):
+              return []
+      return []
+
+  @staticmethod
+  def _save_shop_waiters(waiters: list, *, user=None):
+      SettingsService.upsert(
+          key=SHOP_WAITERS_KEY,
+          value=waiters if isinstance(waiters, list) else [],
+          category="pos",
+          user=user,
+      )
+
+  @staticmethod
   def export_pull_bundle(*, tenant: Tenant, since: datetime | None = None) -> dict:
       company = CatalogSyncEngine._company_for_tenant(tenant)
       warehouse = CatalogSyncEngine._default_warehouse(company)
+      branch = CatalogSyncEngine._default_branch(company)
 
       units = CatalogSyncEngine._filter_since(Unit.active_objects(), since)
       brands = CatalogSyncEngine._filter_since(Brand.active_objects(), since)
@@ -95,7 +124,36 @@ class CatalogSyncEngine:
           subscription = sub.alert_payload()
 
       customers_qs = Customer.active_objects().select_related("branch")
+      if branch:
+          customers_qs = customers_qs.filter(branch=branch)
       customers_qs = CatalogSyncEngine._filter_since(customers_qs, since)
+
+      from django.db.models import Q
+
+      users_qs = (
+          User.objects.filter(
+              Q(tenant=tenant) | Q(branch__company__tenant=tenant),
+              deleted_at__isnull=True,
+              is_platform_admin=False,
+          )
+          .select_related("role", "branch")
+          .distinct()
+      )
+      if since:
+          users_qs = users_qs.filter(updated_at__gte=since)
+
+      waiters = CatalogSyncEngine._load_shop_waiters()
+      # Prefer tenant-scoped waiters setting if stored under sync key on cloud company context
+      tenant_waiter_row = SettingsService.get_by_key(key=f"pos.waiters.{tenant.slug}")
+      if tenant_waiter_row and tenant_waiter_row.value not in (None, "", {}, []):
+          tw = tenant_waiter_row.value
+          if isinstance(tw, str):
+              try:
+                  tw = json.loads(tw)
+              except (json.JSONDecodeError, TypeError):
+                  tw = []
+          if isinstance(tw, list) and tw:
+              waiters = tw
 
       return {
           "server_time": timezone.now().isoformat(),
@@ -162,6 +220,19 @@ class CatalogSyncEngine:
               }
               for c in customers_qs[:1000]
           ],
+          "users": [
+              {
+                  "username": u.username,
+                  "email": u.email or "",
+                  "first_name": u.first_name or "",
+                  "last_name": u.last_name or "",
+                  "role_slug": u.role.slug if u.role_id else "cashier",
+                  "is_active": u.is_active,
+                  "updated_at": _iso(getattr(u, "updated_at", None) or u.date_joined),
+              }
+              for u in users_qs[:200]
+          ],
+          "waiters": waiters,
       }
 
   @staticmethod
@@ -229,13 +300,23 @@ class CatalogSyncEngine:
               for inv in inv_qs[:500]
           ],
           "inventory": inventory_rows[:2000],
+          "waiters": CatalogSyncEngine._load_shop_waiters(),
           "branch_code": branch.code if branch else "",
       }
 
   @staticmethod
   @transaction.atomic
   def apply_pull_bundle(data: dict, *, user=None) -> dict:
-      stats = {"units": 0, "brands": 0, "categories": 0, "products": 0, "customers": 0, "inventory": 0}
+      stats = {
+          "units": 0,
+          "brands": 0,
+          "categories": 0,
+          "products": 0,
+          "customers": 0,
+          "inventory": 0,
+          "users": 0,
+          "waiters": 0,
+      }
 
       for row in data.get("units", []):
           if CatalogSyncEngine._upsert_unit(row):
@@ -263,6 +344,15 @@ class CatalogSyncEngine:
           if CatalogSyncEngine._upsert_customer(row, user=user):
               stats["customers"] += 1
 
+      for row in data.get("users", []):
+          if CatalogSyncEngine._upsert_user(row, user=user):
+              stats["users"] += 1
+
+      waiters = data.get("waiters")
+      if isinstance(waiters, list):
+          CatalogSyncEngine._save_shop_waiters(waiters, user=user)
+          stats["waiters"] = len(waiters)
+
       warehouse = CatalogSyncEngine._default_warehouse(CatalogSyncEngine._local_company())
       if warehouse:
           for row in data.get("products", []):
@@ -273,7 +363,7 @@ class CatalogSyncEngine:
       if sub:
           SettingsService.upsert(
               key="sync.subscription_alert",
-              value=json.dumps(sub),
+              value=sub if isinstance(sub, dict) else json.dumps(sub),
               category="sync",
               user=user,
           )
@@ -286,7 +376,7 @@ class CatalogSyncEngine:
       company = CatalogSyncEngine._company_for_tenant(tenant)
       branch = CatalogSyncEngine._default_branch(company)
       warehouse = CatalogSyncEngine._default_warehouse(company)
-      stats = {"customers": 0, "invoices": 0, "inventory": 0}
+      stats = {"customers": 0, "invoices": 0, "inventory": 0, "waiters": 0}
 
       for row in payload.get("customers", []):
           if CatalogSyncEngine._upsert_customer(row, branch=branch, user=user):
@@ -302,7 +392,57 @@ class CatalogSyncEngine:
               if CatalogSyncEngine._upsert_invoice(row, branch=branch, user=user):
                   stats["invoices"] += 1
 
+      waiters = payload.get("waiters")
+      if isinstance(waiters, list):
+          SettingsService.upsert(
+              key=f"pos.waiters.{tenant.slug}",
+              value=waiters,
+              category="pos",
+              user=user,
+          )
+          CatalogSyncEngine._save_shop_waiters(waiters, user=user)
+          stats["waiters"] = len(waiters)
+
       return stats
+
+  @staticmethod
+  def _upsert_user(row: dict, *, user=None) -> bool:
+      """Upsert shop user metadata from cloud. Passwords are set via desktop provision."""
+      username = (row.get("username") or "").strip()
+      if not username:
+          return False
+      existing = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
+      role_slug = (row.get("role_slug") or "cashier").strip()
+      role = Role.objects.filter(slug=role_slug).first() or Role.objects.filter(slug="cashier").first()
+      branch = CatalogSyncEngine._default_branch(CatalogSyncEngine._local_company())
+      company = CatalogSyncEngine._local_company()
+      tenant = company.tenant if company else None
+
+      defaults = {
+          "email": row.get("email") or f"{username}@local",
+          "first_name": row.get("first_name") or "",
+          "last_name": row.get("last_name") or "",
+          "is_active": row.get("is_active", True),
+          "is_platform_admin": False,
+          "deleted_at": None,
+      }
+      if role:
+          defaults["role"] = role
+      if branch:
+          defaults["branch"] = branch
+      if tenant:
+          defaults["tenant"] = tenant
+
+      if existing:
+          for key, value in defaults.items():
+              setattr(existing, key, value)
+          existing.save()
+          return True
+
+      created = User(username=username, **defaults)
+      created.set_unusable_password()
+      created.save()
+      return True
 
   @staticmethod
   def _upsert_unit(row: dict) -> bool:

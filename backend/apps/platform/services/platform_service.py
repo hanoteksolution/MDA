@@ -74,26 +74,46 @@ class PlatformService:
         return company.tenant if company else None
 
     @staticmethod
-    def is_platform_superuser(user) -> bool:
+    def is_global_platform_admin(user) -> bool:
+        """True platform owners — see every shop. Not multi-shop group managers."""
         return bool(
             user.is_platform_admin
             or user.is_superuser
             or (user.role and user.role.slug in ("super_admin", "platform_admin"))
-            or user.has_permission("platform.manage")
         )
 
     @staticmethod
-    def accessible_tenant_ids(user) -> list:
-        if PlatformService.is_platform_superuser(user):
-            return list(
-                Tenant.objects.filter(deleted_at__isnull=True).values_list("id", flat=True)
-            )
+    def is_platform_superuser(user) -> bool:
+        """Global platform admin OR unrestricted platform.manage (no managed group)."""
+        if PlatformService.is_global_platform_admin(user):
+            return True
         if user.managed_shop_group_id:
+            return False
+        return bool(user.has_permission("platform.manage"))
+
+    @staticmethod
+    def can_manage_shops(user) -> bool:
+        """Create/edit/delete shops — global admin, platform.manage, or group manager."""
+        if PlatformService.is_global_platform_admin(user):
+            return True
+        if user.managed_shop_group_id:
+            return True
+        return bool(user.has_permission("platform.manage"))
+
+    @staticmethod
+    def accessible_tenant_ids(user) -> list:
+        # Multi-shop managers are ALWAYS limited to their group (even if they also
+        # have platform.manage — that permission must not escalate them to all shops).
+        if user.managed_shop_group_id and not PlatformService.is_global_platform_admin(user):
             return list(
                 Tenant.objects.filter(
                     shop_group_id=user.managed_shop_group_id,
                     deleted_at__isnull=True,
                 ).values_list("id", flat=True)
+            )
+        if PlatformService.is_platform_superuser(user):
+            return list(
+                Tenant.objects.filter(deleted_at__isnull=True).values_list("id", flat=True)
             )
         if user.tenant_id:
             return [user.tenant_id]
@@ -107,7 +127,7 @@ class PlatformService:
     @staticmethod
     def list_tenants_for_user(user, *, active_only=False):
         ids = PlatformService.accessible_tenant_ids(user)
-        qs = Tenant.objects.filter(id__in=ids).select_related(
+        qs = Tenant.objects.filter(id__in=ids, deleted_at__isnull=True).select_related(
             "subscription__plan", "shop_group"
         ).prefetch_related("companies")
         if active_only:
@@ -125,6 +145,7 @@ class PlatformService:
             "contact_phone": group.contact_phone,
             "is_active": group.is_active,
             "tenant_count": tenant_count,
+            "shop_count": tenant_count,
         }
 
     @staticmethod
@@ -199,8 +220,17 @@ class PlatformService:
         return qs.order_by("name")
 
     @staticmethod
-    def list_subscriptions(*, unassigned_only=False):
-        qs = TenantSubscription.objects.select_related("plan", "tenant", "contact_user")
+    def list_subscriptions(*, unassigned_only=False, user=None):
+        qs = TenantSubscription.objects.select_related("plan", "tenant", "contact_user").filter(
+            deleted_at__isnull=True
+        )
+        if user is not None and not PlatformService.is_global_platform_admin(user):
+            if user.managed_shop_group_id or not PlatformService.is_platform_superuser(user):
+                ids = PlatformService.accessible_tenant_ids(user)
+                qs = qs.filter(tenant_id__in=ids)
+                # Group managers never see unassigned licenses meant for platform owners
+                if user.managed_shop_group_id:
+                    unassigned_only = False
         if unassigned_only:
             qs = qs.filter(tenant__isnull=True)
         return qs.order_by("-created_at")
@@ -260,10 +290,20 @@ class PlatformService:
     def tenant_overview(tenant: Tenant, *, period: str = "month"):
         company = tenant.companies.filter(deleted_at__isnull=True).first()
         branch = None
+        warehouse = None
         if company:
             branch = Branch.active_objects().filter(company=company, is_default=True).first()
             if not branch:
                 branch = Branch.active_objects().filter(company=company).first()
+            if branch:
+                from apps.inventory.models import Warehouse, Inventory
+                from apps.products.models import Product
+                from django.db.models import Sum, F
+
+                warehouse = (
+                    Warehouse.active_objects().filter(branch=branch, is_default=True).first()
+                    or Warehouse.active_objects().filter(branch=branch).first()
+                )
         branch_id = str(branch.id) if branch else None
         kpis = AnalyticsService.get_kpis(branch_id=branch_id, period=period)
         snapshot_kpis = CloudShopSyncService.latest_kpis(tenant)
@@ -274,6 +314,40 @@ class PlatformService:
             branch_id=branch_id, tenant_id=str(tenant.id), period=period
         )
         group = tenant.shop_group
+
+        users = list(PlatformService.list_tenant_users(tenant)[:50])
+        catalog = {"products_count": 0, "stock_units": 0, "stock_value": 0.0, "low_stock": 0}
+        if warehouse:
+            inv_qs = Inventory.active_objects().filter(warehouse=warehouse)
+            agg = inv_qs.aggregate(
+                units=Sum("quantity"),
+                value=Sum(F("quantity") * F("product__cost_price")),
+            )
+            catalog["products_count"] = Product.active_objects().count()
+            catalog["stock_units"] = float(agg["units"] or 0)
+            catalog["stock_value"] = float(agg["value"] or 0)
+            catalog["low_stock"] = (
+                inv_qs.filter(quantity__lte=F("product__minimum_stock")).count()
+            )
+
+        waiters = []
+        from apps.settings_app.services.settings_service import SettingsService
+        import json
+
+        for key in (f"pos.waiters.{tenant.slug}", "pos.waiters"):
+            row = SettingsService.get_by_key(key=key)
+            if not row or row.value in (None, "", {}, []):
+                continue
+            raw = row.value
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    raw = []
+            if isinstance(raw, list) and raw:
+                waiters = raw
+                break
+
         return {
             "tenant": {
                 "id": str(tenant.id),
@@ -292,6 +366,27 @@ class PlatformService:
             "company": {"id": str(company.id), "name": company.name} if company else None,
             "kpis": kpis,
             "staff_performance": staff[:5],
+            "catalog": catalog,
+            "users": [
+                {
+                    "id": str(u.id),
+                    "username": u.username,
+                    "full_name": u.get_full_name() or u.username,
+                    "role": u.role.name if u.role_id else "",
+                    "is_active": u.is_active,
+                }
+                for u in users
+            ],
+            "waiters": [
+                {
+                    "id": str(w.get("id") or ""),
+                    "name": w.get("name") or "",
+                    "user_id": w.get("user_id") or None,
+                    "is_active": w.get("is_active", True),
+                }
+                for w in waiters
+                if (w.get("name") or "").strip()
+            ],
         }
 
     @staticmethod
@@ -444,8 +539,12 @@ class PlatformService:
         if "is_active" in data:
             tenant.is_active = bool(data["is_active"])
         if "shop_group_id" in data:
-            gid = data.get("shop_group_id")
-            tenant.shop_group = ShopGroup.objects.get(pk=gid) if gid else None
+            # Group managers cannot move shops out of (or into) another group.
+            if user and user.managed_shop_group_id and not PlatformService.is_global_platform_admin(user):
+                tenant.shop_group_id = user.managed_shop_group_id
+            else:
+                gid = data.get("shop_group_id")
+                tenant.shop_group = ShopGroup.objects.get(pk=gid) if gid else None
         tenant.updated_by = user
         tenant.save()
 
@@ -498,6 +597,23 @@ class PlatformService:
 
     @staticmethod
     @transaction.atomic
+    def delete_shop(*, tenant: Tenant, user=None):
+        tenant.is_active = False
+        tenant.updated_by = user
+        tenant.save(update_fields=["is_active", "updated_by", "updated_at"])
+        tenant.soft_delete(user=user)
+        for company in tenant.companies.filter(deleted_at__isnull=True):
+            company.soft_delete(user=user)
+        return tenant
+
+    @staticmethod
+    @transaction.atomic
+    def delete_subscription(*, subscription: TenantSubscription, user=None):
+        subscription.soft_delete(user=user)
+        return subscription
+
+    @staticmethod
+    @transaction.atomic
     def update_subscription(*, tenant: Tenant, data: dict, user=None):
         sub = tenant.subscription
         if "monthly_fee" in data:
@@ -531,9 +647,16 @@ class PlatformService:
         return sub
 
     @staticmethod
-    def list_payment_alerts():
+    def list_payment_alerts(*, user=None):
+        qs = TenantSubscription.objects.select_related("plan", "tenant").filter(
+            tenant__isnull=False,
+            deleted_at__isnull=True,
+        )
+        if user is not None:
+            ids = PlatformService.accessible_tenant_ids(user)
+            qs = qs.filter(tenant_id__in=ids)
         alerts = []
-        for sub in TenantSubscription.objects.select_related("plan", "tenant").filter(tenant__isnull=False):
+        for sub in qs:
             if sub.needs_payment_alert:
                 alerts.append(sub.alert_payload())
         return alerts
@@ -563,6 +686,7 @@ class PlatformService:
         owner: dict,
         shop_group: ShopGroup | None = None,
         as_group_manager: bool = False,
+        created_by=None,
     ):
         username = (owner.get("username") or "").strip()
         password = owner.get("password") or ""
@@ -576,6 +700,8 @@ class PlatformService:
             if as_group_manager and shop_group:
                 existing.set_password(password)
                 PlatformService.assign_group_manager(group=shop_group, manager_user=existing)
+                if created_by and not existing.created_by_id:
+                    existing.created_by = created_by
                 existing.save()
                 return existing
             raise ValueError(f"Username '{username}' is already taken.")
@@ -593,6 +719,7 @@ class PlatformService:
                 phone=(owner.get("phone") or tenant.contact_phone or "").strip(),
                 role=role,
                 managed_shop_group=shop_group,
+                created_by=created_by,
                 is_active=True,
             )
             return user
@@ -615,6 +742,7 @@ class PlatformService:
             role=role,
             branch=branch,
             tenant=tenant,
+            created_by=created_by,
             is_active=True,
         )
 
@@ -633,7 +761,10 @@ class PlatformService:
     @transaction.atomic
     def create_shop(*, data: dict, user=None):
         shop_group = None
-        if data.get("shop_group_id"):
+        # Multi-shop managers can only create shops inside their own group.
+        if user and user.managed_shop_group_id and not PlatformService.is_global_platform_admin(user):
+            shop_group = user.managed_shop_group
+        elif data.get("shop_group_id"):
             shop_group = ShopGroup.objects.get(pk=data["shop_group_id"])
         elif (data.get("shop_group_name") or "").strip():
             shop_group = PlatformService.create_shop_group(
@@ -695,6 +826,7 @@ class PlatformService:
                 owner=owner,
                 shop_group=shop_group,
                 as_group_manager=as_group_manager,
+                created_by=user,
             )
 
         subscription_id = data.get("subscription_id")

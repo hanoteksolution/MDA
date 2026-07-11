@@ -1,6 +1,8 @@
 from django.db import transaction
 from django.db.models import Q
 
+import uuid
+
 from apps.audit.repositories.audit_repository import AuditRepository
 from apps.inventory.models import Warehouse
 from apps.inventory.services.inventory_service import InventoryService
@@ -63,6 +65,31 @@ class UnitService:
 
 class ProductService:
     @staticmethod
+    def _default_unit():
+        unit = Unit.objects.filter(name__iexact="Each").first()
+        if unit:
+            return unit
+        return Unit.objects.create(name="Each", abbreviation="ea")
+
+    @staticmethod
+    def _prepare_product_data(data, *, for_create: bool):
+        prepared = dict(data)
+        sku = (prepared.get("sku") or "").strip()
+        if sku:
+            prepared["sku"] = sku
+        elif for_create:
+            prepared["sku"] = f"SKU-{uuid.uuid4().hex[:8].upper()}"
+
+        unit_id = prepared.get("unit_id") or prepared.get("unit")
+        if unit_id:
+            prepared["unit_id"] = unit_id
+        elif for_create:
+            prepared["unit_id"] = ProductService._default_unit().id
+
+        prepared.pop("unit", None)
+        return prepared
+
+    @staticmethod
     def list(*, search=None, category_id=None, brand_id=None, is_active=None):
         qs = Product.active_objects().select_related("category", "brand", "unit")
         if search:
@@ -86,7 +113,10 @@ class ProductService:
     @staticmethod
     @transaction.atomic
     def create(*, data, user=None, initial_stock=0, warehouse=None):
-        product = Product.objects.create(**data, created_by=user)
+        product = Product.objects.create(
+            **ProductService._prepare_product_data(data, for_create=True),
+            created_by=user,
+        )
         if warehouse and initial_stock:
             inv = InventoryService.ensure_inventory_record(
                 product=product, warehouse=warehouse, user=user
@@ -103,7 +133,12 @@ class ProductService:
     @staticmethod
     @transaction.atomic
     def update(*, product, data, user=None):
-        for key, value in data.items():
+        prepared = ProductService._prepare_product_data(data, for_create=False)
+        if not (data.get("sku") or "").strip():
+            prepared.pop("sku", None)
+        if not data.get("unit_id") and "unit" not in data:
+            prepared.pop("unit_id", None)
+        for key, value in prepared.items():
             setattr(product, key, value)
         product.updated_by = user
         product.save()

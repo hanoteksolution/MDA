@@ -64,6 +64,28 @@ class RolePermission(BaseModel):
         return f"{self.role.slug} -> {self.permission.codename}"
 
 
+class UserPermission(BaseModel):
+    """Extra permissions granted directly to a user (in addition to their role)."""
+
+    user = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.CASCADE,
+        related_name="direct_permissions",
+    )
+    permission = models.ForeignKey(
+        Permission,
+        on_delete=models.CASCADE,
+        related_name="user_grants",
+    )
+
+    class Meta:
+        db_table = "user_permissions_extra"
+        unique_together = ["user", "permission"]
+
+    def __str__(self):
+        return f"{self.user_id} -> {self.permission.codename}"
+
+
 from apps.authentication.models.managers import UserManager
 
 
@@ -98,6 +120,13 @@ class User(AbstractUser):
         blank=True,
         related_name="managers",
     )
+    created_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_users",
+    )
     is_platform_admin = models.BooleanField(default=False)
     phone = models.CharField(max_length=50, blank=True)
     avatar = models.CharField(max_length=500, blank=True)
@@ -121,14 +150,27 @@ class User(AbstractUser):
     def is_deleted(self):
         return self.deleted_at is not None
 
-    def get_permissions(self):
-        if not self.role:
+    def get_role_permissions(self):
+        if not self.role_id:
             return []
         return list(
-            self.role.role_permissions.select_related("permission").values_list(
-                "permission__codename", flat=True
-            )
+            self.role.role_permissions.filter(deleted_at__isnull=True)
+            .select_related("permission")
+            .values_list("permission__codename", flat=True)
         )
+
+    def get_direct_permissions(self):
+        return list(
+            self.direct_permissions.filter(deleted_at__isnull=True)
+            .select_related("permission")
+            .values_list("permission__codename", flat=True)
+        )
+
+    def get_permissions(self):
+        """Effective permissions = role permissions ∪ direct user grants."""
+        codes = set(self.get_role_permissions())
+        codes.update(self.get_direct_permissions())
+        return sorted(codes)
 
     def has_permission(self, codename):
         if self.is_platform_admin or self.is_superuser or (self.role and self.role.slug == "super_admin"):

@@ -21,8 +21,11 @@ import {
   SettingsPage,
   AdminPage,
   PosPage,
+  WaiterPerformancePage,
   PurchasesPage,
   SalesPage,
+  DailyOpsPage,
+  ReceiptManagementPage,
   CustomersPage,
   SuppliersPage,
   FinancePage,
@@ -174,6 +177,30 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="sales.view">
                 <SalesPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/daily-ops"
+            element={
+              <PermissionGuard permission="sales.view">
+                <DailyOpsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/receipts"
+            element={
+              <PermissionGuard permission="sales.view">
+                <ReceiptManagementPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/waiter-performance"
+            element={
+              <PermissionGuard permission={["pos.access", "sales.view"]}>
+                <WaiterPerformancePage />
               </PermissionGuard>
             }
           />

@@ -36,11 +36,12 @@ export function PurchasesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const { data: orders, loading, page, setPage, pageSize, setPageSize, total } = usePaginatedList(
+  const { data: orders, loading, page, setPage, pageSize, setPageSize, total, reload } = usePaginatedList(
     purchasesApi.list,
     { search, status: statusFilter }
   );
   const { loadingId, printPurchaseOrder, downloadPurchaseOrder } = usePurchaseOrderPrint();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     purchasesApi.summary()
@@ -48,6 +49,22 @@ export function PurchasesPage() {
       .catch(() => setSummary(null))
       .finally(() => setSummaryLoading(false));
   }, []);
+
+  const handleDelete = async (po: PurchaseOrder) => {
+    if (!confirm(`Delete purchase order ${po.order_number}?\n\nThis cannot be undone from here.`)) {
+      return;
+    }
+    setDeletingId(po.id);
+    try {
+      await purchasesApi.delete(po.id);
+      reload();
+      purchasesApi.summary().then((sum) => setSummary(sum.data)).catch(() => {});
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete purchase order.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const columns: Column<PurchaseOrder>[] = [
     { key: "po", header: "PO #", cell: (r) => <span className="font-mono text-xs font-medium">{r.order_number}</span>, exportValue: (r) => r.order_number },
@@ -102,6 +119,16 @@ export function PurchasesPage() {
             </Button>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(`/purchases/${r.id}/edit`)}>
               <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              title="Delete purchase order"
+              loading={deletingId === r.id}
+              onClick={() => void handleDelete(r)}
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         );

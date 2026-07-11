@@ -1,4 +1,4 @@
-import { resolveMediaUrl } from "@/config/api";
+import { resolveProductImageUrl } from "@/config/api";
 import { formatCurrency } from "@/utils/cn";
 import type { Product } from "@/types/models/catalog";
 import { getDocumentBranding } from "./branding";
@@ -80,7 +80,7 @@ export function buildProductListPayload(
     index: i + 1,
     sku: p.sku,
     name: p.name,
-    imageUrl: resolveMediaUrl(p.image) ?? (p.sku ? `https://picsum.photos/seed/${encodeURIComponent(p.sku)}/64/64` : undefined),
+    imageUrl: resolveProductImageUrl(p.image),
     category: p.category_name || "—",
     cost: formatCurrency(p.cost_price),
     price: formatCurrency(p.selling_price),

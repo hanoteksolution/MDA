@@ -15,6 +15,7 @@ import {
   FileOutput,
   FileDown,
   Truck,
+  CircleCheck,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
@@ -32,6 +33,10 @@ import { useSalesReceipt } from "../hooks/useSalesReceipt";
 const INVOICE_STATUS: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary", sent: "warning", paid: "success", overdue: "destructive", cancelled: "destructive",
 };
+
+function canMarkPaid(status: string) {
+  return status !== "paid" && status !== "cancelled";
+}
 
 export function SalesPage() {
   const navigate = useNavigate();
@@ -58,7 +63,45 @@ export function SalesPage() {
     viewInvoice,
     viewThermalReceipt,
     closePreview,
+    markInvoicePaid,
   } = useSalesReceipt();
+
+  const refreshSummary = () => {
+    salesApi.summary()
+      .then((sum) => setSummary(sum.data))
+      .catch(() => setSummary(null));
+  };
+
+  const handleMarkPaid = async (invoice: Invoice) => {
+    if (
+      !window.confirm(
+        `Mark ${invoice.number} as paid for ${formatCurrency(invoice.total_amount)}?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await markInvoicePaid(invoice.id);
+      invoiceList.reload();
+      refreshSummary();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not mark as paid");
+    }
+  };
+
+  const handleMarkPaidFromDialog = async (invoiceId: string) => {
+    const inv = invoiceList.data.find((i) => i.id === invoiceId) as Invoice | undefined;
+    if (inv && !window.confirm(`Mark ${inv.number} as paid for ${formatCurrency(inv.total_amount)}?`)) {
+      return;
+    }
+    try {
+      await markInvoicePaid(invoiceId);
+      invoiceList.reload();
+      refreshSummary();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not mark as paid");
+    }
+  };
 
   useEffect(() => {
     salesApi.summary()
@@ -86,10 +129,25 @@ export function SalesPage() {
       exportable: false,
       cell: (r) => {
         const busy = receiptLoadingId === r.id;
+        const inv = tab === "invoices" ? (r as Invoice) : null;
+        const unpaid = inv && canMarkPaid(inv.status);
         return (
           <div className="flex items-center justify-end gap-0.5">
             {tab === "invoices" ? (
               <>
+                {unpaid && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 px-2 text-emerald-600 hover:text-emerald-700"
+                    title="Mark as paid"
+                    disabled={busy}
+                    onClick={() => handleMarkPaid(inv)}
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CircleCheck className="h-4 w-4" />}
+                    <span className="hidden text-xs font-semibold lg:inline">Paid</span>
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -273,7 +331,12 @@ export function SalesPage() {
         />
       </ContentSection>
 
-      <SalesReceiptDialog preview={documentPreview} onClose={closePreview} />
+      <SalesReceiptDialog
+        preview={documentPreview}
+        onClose={closePreview}
+        onMarkPaid={handleMarkPaidFromDialog}
+        markingPaid={!!documentPreview && receiptLoadingId === documentPreview.invoiceId}
+      />
     </PageLayout>
   );
 }

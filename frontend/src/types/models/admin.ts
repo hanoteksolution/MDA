@@ -32,6 +32,9 @@ export interface AdminUser {
   is_active: boolean;
   role: { id: string; name: string; slug: string } | null;
   branch: { id: string; name: string; code: string } | null;
+  permissions?: string[];
+  direct_permissions?: { id: string; name: string; codename: string; module: string }[];
+  permission_ids?: string[];
   last_login: string | null;
   date_joined: string;
 }

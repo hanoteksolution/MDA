@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Package, TrendingUp, Info, FileOutput, Download, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, FileOutput, Download, Loader2, Tag, ImageIcon, Boxes, Sparkles } from "lucide-react";
 import { useProductListPrint } from "../hooks/useProductListPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DataTable, type Column } from "@/components/data/DataTable";
-import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
+import { FormField, FormGrid, FormPanel, FormPanelSection } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
 import { CreatableSelect } from "@/components/forms/CreatableSelect";
-import { ProductThumbnail, ProductImagePreview } from "@/components/catalog/ProductImage";
+import { ProductThumbnail } from "@/components/catalog/ProductImage";
 import { ProductImageUpload } from "@/components/catalog/ProductImageUpload";
+import { ProductPreviewCard } from "../components/ProductPreviewCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { productsApi, inventoryApi } from "@/services/api/catalog";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
@@ -118,13 +118,13 @@ export function ProductsPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" disabled={printing} onClick={() => void printProductList()}>
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
-            Print Product List
+            Print
           </Button>
           <Button variant="secondary" disabled={printing} onClick={() => void downloadProductList()}>
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            PDF
+            Export PDF
           </Button>
-          <Button asChild>
+          <Button asChild className="shadow-[0_8px_20px_hsl(var(--primary)/0.22)]">
             <Link to="/products/new">
               <Plus className="h-4 w-4" />
               Add Product
@@ -133,6 +133,28 @@ export function ProductsPage() {
         </div>
       }
     >
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: "Catalog items", value: total, icon: Package },
+          { label: "On this page", value: products.length, icon: Boxes },
+          { label: "Categories", value: categories.length, icon: Tag },
+        ].map(({ label, value, icon: Icon }) => (
+          <div
+            key={label}
+            className="ds-card-premium flex items-center gap-4 px-5 py-4"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+              <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ds-card-premium overflow-hidden">
       <DataTable
         exportTitle="Products"
         listPrint={false}
@@ -161,6 +183,7 @@ export function ProductsPage() {
         }
         emptyMessage="No products found. Add your first product to get started."
       />
+      </div>
     </PageLayout>
   );
 }
@@ -206,9 +229,6 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         load("brands", () => productsApi.brands(), (res) => setBrands(res.data.results)),
         load("units", () => productsApi.units(), (res) => {
           setUnits(res.data);
-          if (res.data.length) {
-            setForm((f) => ({ ...f, unit_id: f.unit_id || res.data[0].id }));
-          }
         }),
         load("warehouses", () => inventoryApi.warehouses(), (res) => {
           setWarehouses(res.data.results);
@@ -246,6 +266,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         description: p.description, image: p.image || "", is_active: p.is_active,
         initial_stock: "0", warehouse_id: "",
       });
+      setImagePreview(null);
       setLoading(false);
     });
   }, [editId]);
@@ -255,12 +276,12 @@ export function ProductFormPage({ editId }: { editId?: string }) {
     setSaving(true);
     try {
       const payload = {
-        sku: form.sku,
+        sku: form.sku.trim() || undefined,
         barcode: form.barcode || undefined,
         name: form.name,
         category_id: form.category_id,
         brand_id: form.brand_id || undefined,
-        unit_id: form.unit_id,
+        unit_id: form.unit_id || undefined,
         cost_price: parseFloat(form.cost_price),
         selling_price: parseFloat(form.selling_price),
         minimum_stock: parseInt(form.minimum_stock, 10),
@@ -300,46 +321,30 @@ export function ProductFormPage({ editId }: { editId?: string }) {
   return (
     <PageLayout
       title={editId ? "Edit Product" : "Add Product"}
-      description={editId ? "Update product details and pricing." : "Create a new product in your catalog."}
+      description={editId ? "Update product details, pricing, and visibility." : "Create a polished catalog entry for POS, sales, and inventory."}
       breadcrumbs={["Home", "Products", editId ? "Edit" : "New"]}
+      backTo="/products"
+      backLabel="Back to products"
     >
       {optionsError && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {optionsError}
         </div>
       )}
       <form onSubmit={handleSubmit}>
         <FormPageLayout
           main={
-            <>
-              <FormSection title="General Information" description="Basic product identity and classification.">
+            <FormPanel
+              title={editId ? "Edit product" : "Product registration"}
+              description="Complete each section below. SKU and unit are optional — we assign defaults when left blank."
+            >
+              <FormPanelSection
+                icon={<Tag className="h-4 w-4" />}
+                title="General information"
+                description="Classification, identity, and internal notes."
+              >
                 <FormGrid>
-                  <FormField label="Product Name" required>
-                    <Input
-                      required
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder="e.g. Wireless Mouse"
-                    />
-                  </FormField>
-                  <FormField label="SKU" required hint="Unique stock-keeping unit code">
-                    <Input
-                      required
-                      value={form.sku}
-                      onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                      placeholder="e.g. WM-001"
-                      className="font-mono"
-                    />
-                  </FormField>
-                  <FormField label="Barcode" hint="Optional EAN/UPC barcode">
-                    <Input
-                      value={form.barcode}
-                      onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                      placeholder="Scan or enter barcode"
-                      className="font-mono"
-                    />
-                  </FormField>
-                  <FormField label="Category" required>
+                  <FormField label="Category" required className="md:col-span-2">
                     <CreatableSelect
                       value={form.category_id}
                       onChange={(v) => setForm({ ...form, category_id: v })}
@@ -353,6 +358,31 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                         setCategories((prev) => [...prev, item]);
                         return item;
                       }}
+                    />
+                  </FormField>
+                  <FormField label="Product Name" required>
+                    <Input
+                      required
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      placeholder="e.g. Wireless Mouse"
+                      className="h-11 rounded-xl"
+                    />
+                  </FormField>
+                  <FormField label="SKU" hint="Optional — auto-generated if empty">
+                    <Input
+                      value={form.sku}
+                      onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                      placeholder="e.g. WM-001"
+                      className="h-11 rounded-xl font-mono"
+                    />
+                  </FormField>
+                  <FormField label="Barcode" hint="Optional EAN/UPC barcode">
+                    <Input
+                      value={form.barcode}
+                      onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                      placeholder="Scan or enter barcode"
+                      className="h-11 rounded-xl font-mono"
                     />
                   </FormField>
                   <FormField label="Brand">
@@ -371,14 +401,15 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       }}
                     />
                   </FormField>
-                  <FormField label="Unit" required>
+                  <FormField label="Unit" hint="Optional — defaults to Each">
                     <CreatableSelect
                       value={form.unit_id}
                       onChange={(v) => setForm({ ...form, unit_id: v })}
                       options={units}
-                      placeholder={optionsLoading ? "Loading units..." : "Select unit"}
+                      placeholder={optionsLoading ? "Loading units..." : "Select unit (optional)"}
                       disabled={optionsLoading}
                       createLabel="Create new unit..."
+                      allowNone
                       onCreate={async (name) => {
                         const res = await productsApi.createUnit(name);
                         const item = { id: res.data.id, name: res.data.name };
@@ -392,14 +423,18 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    rows={3}
-                    placeholder="Product description for internal use..."
-                    className="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                    rows={4}
+                    placeholder="Short internal description for staff and reports..."
+                    className="flex w-full resize-none rounded-xl border border-input bg-background/80 px-4 py-3 text-sm shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.03)] focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 </FormField>
-              </FormSection>
+              </FormPanelSection>
 
-              <FormSection title="Product Image" description="Upload a photo for catalog, POS, and receipts.">
+              <FormPanelSection
+                icon={<ImageIcon className="h-4 w-4" />}
+                title="Product image"
+                description="Shown in catalog, POS tiles, receipts, and exports."
+              >
                 <ProductImageUpload
                   value={form.image}
                   previewUrl={imagePreview ?? undefined}
@@ -413,9 +448,13 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                     return res.data.url;
                   }}
                 />
-              </FormSection>
+              </FormPanelSection>
 
-              <FormSection title="Pricing & Inventory" description="Cost, selling price, and stock configuration.">
+              <FormPanelSection
+                icon={<Boxes className="h-4 w-4" />}
+                title="Pricing & inventory"
+                description="Cost structure, retail price, and stock thresholds."
+              >
                 <FormGrid>
                   <FormField label="Cost Price" required>
                     <Input
@@ -426,6 +465,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       value={form.cost_price}
                       onChange={(e) => setForm({ ...form, cost_price: e.target.value })}
                       placeholder="0.00"
+                      className="h-11 rounded-xl tabular-nums"
                     />
                   </FormField>
                   <FormField label="Selling Price" required>
@@ -437,6 +477,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       value={form.selling_price}
                       onChange={(e) => setForm({ ...form, selling_price: e.target.value })}
                       placeholder="0.00"
+                      className="h-11 rounded-xl tabular-nums"
                     />
                   </FormField>
                   <FormField label="Minimum Stock" hint="Low-stock alert threshold">
@@ -445,6 +486,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       min="0"
                       value={form.minimum_stock}
                       onChange={(e) => setForm({ ...form, minimum_stock: e.target.value })}
+                      className="h-11 rounded-xl tabular-nums"
                     />
                   </FormField>
                   {!editId && (
@@ -455,6 +497,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                           min="0"
                           value={form.initial_stock}
                           onChange={(e) => setForm({ ...form, initial_stock: e.target.value })}
+                          className="h-11 rounded-xl tabular-nums"
                         />
                       </FormField>
                       <FormField label="Warehouse">
@@ -483,103 +526,67 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                     </>
                   )}
                 </FormGrid>
-              </FormSection>
-            </>
+              </FormPanelSection>
+            </FormPanel>
           }
           aside={
             <>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Package className="h-4 w-4 text-primary" />
-                    Product Preview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ProductImagePreview
-                    image={imagePreview || form.image}
-                    name={form.name}
-                    sku={form.sku}
-                    categoryName={categories.find((c) => c.id === form.category_id)?.name}
-                  />
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</p>
-                    <p className="mt-1 font-semibold">{form.name || "—"}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">SKU</p>
-                      <p className="mt-1 font-mono text-sm">{form.sku || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</p>
-                      <Badge variant={form.is_active ? "success" : "secondary"} className="mt-1">
-                        {form.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-muted/50 p-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Cost</span>
-                      <span>{formatCurrency(cost)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Price</span>
-                      <span className="font-semibold">{formatCurrency(price)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t border-border pt-2">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <TrendingUp className="h-3.5 w-3.5" /> Margin
-                      </span>
-                      <span className={margin >= 0 ? "text-primary font-semibold" : "text-destructive font-semibold"}>
-                        {margin.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <ProductPreviewCard
+                image={imagePreview || form.image}
+                name={form.name}
+                sku={form.sku}
+                categoryName={categories.find((c) => c.id === form.category_id)?.name}
+                isActive={form.is_active}
+                cost={cost}
+                price={price}
+                margin={margin}
+              />
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <label className="flex items-center gap-3 cursor-pointer">
+              <div className="ds-card-premium overflow-hidden">
+                <div className="border-b border-border/60 px-5 py-4">
+                  <p className="text-sm font-semibold tracking-tight">Visibility</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Control where this product appears</p>
+                </div>
+                <div className="p-5">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/60 p-4 transition-colors hover:bg-muted/20">
                     <Checkbox
                       checked={form.is_active}
                       onCheckedChange={(v) => setForm({ ...form, is_active: !!v })}
+                      className="mt-0.5"
                     />
                     <div>
-                      <p className="text-sm font-medium">Active product</p>
-                      <p className="text-xs text-muted-foreground">Inactive products are hidden from POS and sales</p>
-                    </div>
-                  </label>
-                </CardContent>
-              </Card>
-
-              <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="pt-6">
-                  <div className="flex gap-3">
-                    <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Tip</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Set minimum stock levels to receive low-stock alerts on your dashboard and inventory pages.
+                      <p className="text-sm font-medium">Active in catalog</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Inactive products are hidden from POS and sales workflows.
                       </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-primary/15 bg-primary/5 px-5 py-4">
+                <div className="flex gap-3">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Set minimum stock to receive low-inventory alerts on your dashboard and inventory pages.
+                  </p>
+                </div>
+              </div>
             </>
           }
           actions={
             <FormActions>
-              <Button type="submit" loading={saving}>
-                {editId ? "Save Changes" : "Create Product"}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate("/products")}>
-                Cancel
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button type="submit" loading={saving} className="min-w-[140px] shadow-[0_8px_20px_hsl(var(--primary)/0.2)]">
+                  {editId ? "Save Changes" : "Create Product"}
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => navigate("/products")}>
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {editId ? "Updates apply immediately across POS and reports." : "Product will be available in POS after creation."}
+              </p>
             </FormActions>
           }
         />

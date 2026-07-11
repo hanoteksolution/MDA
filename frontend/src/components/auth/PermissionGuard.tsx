@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { useAuthStore } from "@/store/authStore";
 import { usePermissions } from "@/hooks/usePermissions";
 
 interface PermissionGuardProps {
@@ -13,7 +14,20 @@ export function PermissionGuard({
   permission,
   fallback = "/dashboard",
 }: PermissionGuardProps) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission } = usePermissions();
+
+  // Refresh / cold start: token exists but /me has not returned yet — do not redirect.
+  if (isAuthenticated && (isLoading || !user)) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   const allowed = Array.isArray(permission)
     ? hasAnyPermission(...permission)
     : hasPermission(permission);

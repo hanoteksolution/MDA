@@ -126,7 +126,14 @@ export function CloudConnectionForm({ onSaved, showBackLink = false }: CloudConn
               </Link>
             </Button>
           )}
-          {saved && <span className="text-sm text-emerald-600">Saved. You can sign in now.</span>}
+          {saved && (
+            <span className="text-sm text-emerald-600">
+              Saved.{" "}
+              <Link to="/login" className="font-medium underline underline-offset-2">
+                Continue to sign in
+              </Link>
+            </span>
+          )}
         </div>
         <Button type="submit" loading={saving} disabled={loading}>
           <RefreshCw className="h-4 w-4" />

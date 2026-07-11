@@ -19,6 +19,8 @@ import {
   Globe2,
   CreditCard,
   Goal,
+  CalendarDays,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -46,6 +48,9 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access" },
       { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view" },
+      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view" },
+      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view" },
+      { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"] },
       { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view" },
     ],
   },
@@ -142,11 +147,16 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
-        sidebarCollapsed ? "w-[72px]" : "w-[280px]"
+        sidebarCollapsed ? "w-[64px] xl:w-[72px]" : "w-[220px] xl:w-[280px]"
       )}
     >
       {/* Logo */}
-      <div className="flex h-[72px] items-center justify-between border-b border-sidebar-border px-4">
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-between border-b border-sidebar-border px-3 xl:px-4",
+          "h-12 xl:h-[72px]"
+        )}
+      >
         {!sidebarCollapsed ? (
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             {logoUrl ? (

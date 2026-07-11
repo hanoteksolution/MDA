@@ -85,6 +85,13 @@ class Invoice(BaseModel):
     created_by_user = models.ForeignKey(
         "authentication.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices"
     )
+    served_by_user = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="served_invoices",
+    )
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True)
     issue_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
@@ -117,3 +124,72 @@ class InvoiceItem(BaseModel):
     def save(self, *args, **kwargs):
         self.line_total = Decimal(str(self.quantity)) * Decimal(str(self.unit_price))
         super().save(*args, **kwargs)
+
+
+class DocumentSequence(BaseModel):
+    """Per-branch serial counters for accountable receipt / document numbers."""
+
+    KIND_ORDER_SLIP = "order_slip"
+    KIND_HOLD_SLIP = "hold_slip"
+    KIND_INVOICE = "invoice"
+    KIND_QUOTATION = "quotation"
+
+    KIND_CHOICES = [
+        (KIND_ORDER_SLIP, "Order slip"),
+        (KIND_HOLD_SLIP, "Hold slip"),
+        (KIND_INVOICE, "Invoice"),
+        (KIND_QUOTATION, "Quotation"),
+    ]
+
+    branch = models.ForeignKey(
+        "settings_app.Branch",
+        on_delete=models.CASCADE,
+        related_name="document_sequences",
+    )
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES, db_index=True)
+    last_value = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "document_sequences"
+        unique_together = [["branch", "kind"]]
+
+    def __str__(self):
+        return f"{self.branch_id}:{self.kind}={self.last_value}"
+
+
+class Expense(BaseModel):
+    """Daily operating expense (rent, utilities, supplies, etc.)."""
+
+    CATEGORY_CHOICES = [
+        ("utilities", "Utilities"),
+        ("rent", "Rent"),
+        ("supplies", "Supplies"),
+        ("salaries", "Salaries"),
+        ("transport", "Transport"),
+        ("food", "Food & Beverage"),
+        ("maintenance", "Maintenance"),
+        ("other", "Other"),
+    ]
+
+    branch = models.ForeignKey(
+        "settings_app.Branch", on_delete=models.PROTECT, related_name="expenses"
+    )
+    expense_date = models.DateField(default=timezone.localdate, db_index=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default="other")
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=18, decimal_places=4)
+    notes = models.TextField(blank=True)
+    created_by_user = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="expenses_created",
+    )
+
+    class Meta:
+        db_table = "expenses"
+        ordering = ["-expense_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.description} ({self.amount})"

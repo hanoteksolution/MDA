@@ -6,8 +6,15 @@ function apiUrl(endpoint: string): string {
   return `${base}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 }
 
-const PUBLIC_ENDPOINTS = ["/auth/login/", "/auth/refresh/", "/setup/"];
-const AUTH_ROUTES = ["/login", "/forgot-password", "/setup"];
+const PUBLIC_ENDPOINTS = [
+  "/auth/login/",
+  "/auth/refresh/",
+  "/auth/desktop-status/",
+  "/auth/desktop-provision/",
+  "/setup/",
+  "/sync/config/",
+];
+const AUTH_ROUTES = ["/login", "/forgot-password", "/setup", "/connection"];
 
 let logoutInProgress = false;
 let refreshPromise: Promise<string | null> | null = null;

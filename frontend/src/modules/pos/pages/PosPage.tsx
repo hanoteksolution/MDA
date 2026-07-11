@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Search, ScanBarcode, QrCode, Wifi, WifiOff, RefreshCw,
+  Search, ScanBarcode, Wifi, WifiOff,
   SlidersHorizontal, ArrowUpDown, MapPin, CheckCircle2,
-  ShoppingCart, ChevronDown, ChevronUp, LayoutGrid,
+  ShoppingCart, LayoutGrid,
 } from "lucide-react";
 import { useSetPageMeta } from "@/contexts/PageMetaContext";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,11 @@ import type { Category } from "@/types/models/catalog";
 import { usePosCart } from "../hooks/usePosCart";
 import { PosProductCard } from "../components/PosProductCard";
 import { PosCartPanel } from "../components/PosCartPanel";
-import { PosBottomWidgets } from "../components/PosBottomWidgets";
 import { PosCheckoutPanel } from "../components/PosCheckoutPanel";
 import { PosHeldSalesPanel } from "../components/PosHeldSalesPanel";
+import { PosWaiterSalesPanel } from "../components/PosWaiterSalesPanel";
+import { posApi, type PosWaiter } from "@/services/api/pos";
+import { printHeldSaleSlip } from "../receipt/printCartSlip";
 import type { PosReceipt } from "@/services/api/pos";
 
 export function PosPage() {
@@ -36,14 +38,15 @@ export function PosPage() {
   const [customerId, setCustomerId] = useState("walkin");
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [lastSync, setLastSync] = useState(new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState<string | null>(null);
   const [draftsOpen, setDraftsOpen] = useState(false);
-  const [widgetsCollapsed, setWidgetsCollapsed] = useState(false);
+  const [waiterSalesOpen, setWaiterSalesOpen] = useState(false);
+  const [waiters, setWaiters] = useState<PosWaiter[]>([]);
+  const [waiterId, setWaiterId] = useState("");
 
   const {
-    cart, favorites, recentSales, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, taxRate,
+    cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, taxRate,
     orderNotes, setOrderNotes, totals, addToCart, updateQty, removeLine,
     clearCart, toggleFavorite, holdSale, resumeHeldSale, deleteHeldSale, completeSale,
   } = usePosCart();
@@ -59,12 +62,12 @@ export function PosPage() {
         setProducts(prodRes.data.results);
         setCategories(catRes.data.results.filter((c) => c.is_active));
         setCustomers(custRes.data.results.map((c) => ({ id: c.id, name: c.full_name })));
-        setLastSync(new Date());
       } finally {
         setLoading(false);
       }
     };
     load();
+    posApi.profile().then((res) => setWaiters(res.data.waiters ?? [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -91,11 +94,6 @@ export function PosPage() {
     });
   }, [products, search, categoryId]);
 
-  const favoriteProducts = useMemo(
-    () => products.filter((p) => favorites.includes(p.id)),
-    [products, favorites]
-  );
-
   const handleAdd = useCallback(
     (product: Product) => {
       if (!addToCart(product)) return;
@@ -117,17 +115,90 @@ export function PosPage() {
     [completeSale]
   );
 
-  const handleHold = useCallback(() => {
-    const held = holdSale();
+  const handleCreateCustomer = useCallback(
+    async (data: { full_name: string; phone?: string }) => {
+      const res = await customersApi.create({
+        full_name: data.full_name,
+        phone: data.phone || "",
+        email: "",
+        customer_type: "retail",
+        credit_limit: 0,
+        branch_id: user?.branch?.id,
+        is_active: true,
+      });
+      const entry = { id: res.data.id, name: res.data.full_name };
+      setCustomers((prev) => [entry, ...prev]);
+      setCustomerId(entry.id);
+      setCheckoutMsg(`Customer ${entry.name} added`);
+      setTimeout(() => setCheckoutMsg(null), 2500);
+    },
+    [user?.branch?.id]
+  );
+
+  const handleCreateWaiter = useCallback(async (name: string) => {
+    const profileRes = await posApi.profile();
+    const profile = profileRes.data;
+    const newWaiter: PosWaiter = {
+      id: crypto.randomUUID(),
+      name,
+      is_active: true,
+    };
+    const waitersList = [...(profile.waiters ?? []), newWaiter];
+    await posApi.saveProfile({ ...profile, waiters: waitersList });
+    setWaiters(waitersList);
+    setWaiterId(newWaiter.id);
+    setCheckoutMsg(`Waiter ${name} added`);
+    setTimeout(() => setCheckoutMsg(null), 2500);
+  }, []);
+
+  const waiterName = useMemo(
+    () => waiters.find((w) => w.id === waiterId)?.name ?? "",
+    [waiters, waiterId]
+  );
+
+  const handleHold = useCallback(async () => {
+    const held = holdSale({
+      customerId,
+      waiterId: waiterId || undefined,
+      waiterName: waiterName || undefined,
+    });
     if (held) {
-      setCheckoutMsg(`Sale held · ${held.label}`);
+      const disc = held.discountAmount;
+      const afterDisc = held.subtotal - disc;
+      const taxAmt = afterDisc * taxRate;
+      const total = afterDisc + taxAmt;
+      const cust =
+        held.customerId && held.customerId !== "walkin"
+          ? customers.find((c) => c.id === held.customerId)?.name ?? "Customer"
+          : "Walk-in Customer";
+      await printHeldSaleSlip({
+        label: held.label,
+        customerName: cust,
+        waiterName: held.waiterName,
+        branchName: user?.branch?.name,
+        branchCode: user?.branch?.code,
+        branchId: user?.branch?.id,
+        cart: held.cart,
+        subtotal: held.subtotal,
+        discount: disc,
+        tax: taxAmt,
+        taxRate,
+        grandTotal: total,
+        notes: held.notes,
+        heldAt: new Date(held.heldAt).toLocaleString(),
+      });
+      setCheckoutMsg(`On hold · ${held.label}`);
       setTimeout(() => setCheckoutMsg(null), 2500);
     }
-  }, [holdSale]);
+  }, [holdSale, customerId, waiterId, waiterName, taxRate, customers, user?.branch]);
 
   const handleResumeHeld = useCallback(
     (id: string) => {
-      if (resumeHeldSale(id)) {
+      const result = resumeHeldSale(id);
+      if (result?.restored) {
+        const sale = result.sale;
+        if (sale.customerId) setCustomerId(sale.customerId);
+        if (sale.waiterId) setWaiterId(sale.waiterId);
         setCheckoutMsg("Held sale restored to cart");
         setTimeout(() => setCheckoutMsg(null), 2500);
       }
@@ -175,68 +246,105 @@ export function PosPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const syncLabel = useMemo(() => {
-    const diff = Math.floor((Date.now() - lastSync.getTime()) / 60000);
-    if (diff < 1) return "Synced just now";
-    return `Synced ${diff}m ago`;
-  }, [lastSync]);
+  const hasCart = cart.length > 0;
 
   return (
-    <div className="pos-shell -m-6 flex h-[calc(100vh-104px)] overflow-hidden rounded-xl border border-border/40 shadow-sm">
-      {/* Left — product area (70%) */}
-      <div className="relative z-[1] flex min-w-0 flex-[7] flex-col">
+    <div className="pos-shell flex h-full min-h-0 overflow-hidden rounded-xl border border-border/30 shadow-[0_16px_48px_hsl(var(--foreground)/0.05)] xl:rounded-2xl xl:shadow-[0_24px_80px_hsl(var(--foreground)/0.06)]">
+      {/* Left — product area */}
+      <div className="relative z-[1] flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <div className="pos-glass relative flex shrink-0 flex-wrap items-center gap-3 border-b border-border/50 px-5 py-3">
-          <div className="flex shrink-0 items-center gap-2.5 pr-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-600 text-primary-foreground shadow-lg shadow-primary/30">
-              <ShoppingCart className="h-5 w-5" />
+        <div className="pos-glass relative flex shrink-0 flex-nowrap items-center gap-2 px-3 py-2.5 xl:gap-3 xl:px-5 xl:py-3">
+          <div className="flex shrink-0 items-center gap-2.5 pr-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-emerald-600 text-primary-foreground shadow-[0_8px_24px_hsl(var(--primary)/0.35)] xl:h-11 xl:w-11 xl:rounded-2xl">
+              <ShoppingCart className="h-4 w-4 xl:h-5 xl:w-5" strokeWidth={2.25} />
             </div>
-            <div className="hidden sm:block">
-              <p className="text-xs font-bold uppercase tracking-widest text-primary">POS Terminal</p>
-              <p className="text-[11px] text-muted-foreground">{filtered.length} products</p>
+            <div className="hidden lg:block">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary/90 xl:text-[11px]">
+                Point of Sale
+              </p>
+              <p className="text-xs font-medium tracking-tight text-foreground xl:text-sm">
+                {filtered.length} products ready
+              </p>
             </div>
           </div>
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70" />
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground xl:left-4" />
             <Input
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products by name, SKU or barcode..."
-              className="h-11 rounded-xl border-border/60 bg-muted/30 pl-10 pr-14 shadow-inner focus-visible:ring-primary/30"
+              placeholder="Search name, SKU, or barcode…"
+              className="h-10 rounded-xl border-border/50 bg-background/70 pl-10 pr-12 text-sm shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.04)] focus-visible:ring-primary/25 xl:h-11 xl:rounded-2xl xl:pl-11 xl:pr-14"
             />
-            <kbd className="absolute right-3 top-1/2 hidden h-6 -translate-y-1/2 items-center rounded-md border border-border/70 bg-card px-2 text-[10px] font-medium text-muted-foreground sm:inline-flex">
+            <kbd className="absolute right-2.5 top-1/2 hidden h-6 -translate-y-1/2 items-center rounded-lg border border-border/60 bg-card/90 px-2 text-[10px] font-medium text-muted-foreground xl:inline-flex">
               F2
             </kbd>
           </div>
 
-          <Button variant="secondary" size="sm" className="h-11 shrink-0 gap-2 rounded-xl px-4 font-semibold shadow-sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-10 shrink-0 gap-2 rounded-xl border-border/60 bg-card/80 px-3 text-sm font-medium shadow-sm xl:h-11 xl:rounded-2xl xl:px-4"
+          >
             <ScanBarcode className="h-4 w-4 text-primary" />
-            <span className="hidden sm:inline">Scan Barcode</span>
+            <span className="hidden 2xl:inline">Scan</span>
           </Button>
-          <Button variant="secondary" size="sm" className="h-11 shrink-0 gap-2 rounded-xl px-4 font-semibold shadow-sm">
-            <QrCode className="h-4 w-4 text-primary" />
-            <span className="hidden sm:inline">Scan QR</span>
-          </Button>
+          {!hasCart && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="hidden h-10 shrink-0 gap-2 rounded-xl border-border/60 bg-card/80 px-3 text-sm font-medium shadow-sm sm:inline-flex xl:h-11 xl:rounded-2xl xl:px-4"
+                onClick={handleHold}
+                disabled
+              >
+                Hold
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 shrink-0 gap-2 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:text-foreground xl:h-11 xl:rounded-2xl xl:px-4"
+                onClick={() => setDraftsOpen(true)}
+              >
+                Drafts
+                {heldSales.length > 0 && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                    {heldSales.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          )}
+          {hasCart && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 shrink-0 gap-1.5 rounded-xl px-2.5 text-sm font-medium text-muted-foreground hover:text-foreground xl:h-11"
+              onClick={() => setDraftsOpen(true)}
+            >
+              Drafts
+              {heldSales.length > 0 && (
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  {heldSales.length}
+                </span>
+              )}
+            </Button>
+          )}
 
-          <div className="ml-auto hidden items-center gap-2 md:flex">
+          <div className="ml-auto hidden items-center gap-1.5 xl:flex">
             <span
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm",
+                "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium",
                 isOnline
-                  ? "bg-success/10 text-success ring-1 ring-success/20"
-                  : "bg-destructive/10 text-destructive ring-1 ring-destructive/20"
+                  ? "bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/15 dark:text-emerald-400"
+                  : "bg-destructive/10 text-destructive ring-1 ring-destructive/15"
               )}
             >
               {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
               {isOnline ? "Online" : "Offline"}
             </span>
-            <span className="flex items-center gap-1.5 rounded-full bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
-              <RefreshCw className="h-3.5 w-3.5" />
-              {syncLabel}
-            </span>
             {user?.branch && (
-              <span className="flex items-center gap-1.5 rounded-full bg-primary/5 px-3 py-1.5 text-xs font-medium text-foreground">
+              <span className="flex items-center gap-1.5 rounded-full bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground ring-1 ring-border/60">
                 <MapPin className="h-3.5 w-3.5 text-primary" />
                 {user.branch.name}
               </span>
@@ -245,16 +353,18 @@ export function PosPage() {
         </div>
 
         {/* Category navigation */}
-        <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/50 bg-card/30 px-5 py-2.5 scrollbar-thin backdrop-blur-md">
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border/40 bg-background/40 px-3 py-2 scrollbar-thin backdrop-blur-md xl:gap-2 xl:px-5 xl:py-2.5">
           <button
             type="button"
             onClick={() => setCategoryId("all")}
             className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200",
-              categoryId === "all" ? "pos-category-active" : "bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 xl:px-4 xl:py-2 xl:text-[13px]",
+              categoryId === "all"
+                ? "pos-category-active"
+                : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
             )}
           >
-            All Products
+            All
           </button>
           {categories.map((cat) => (
             <button
@@ -262,19 +372,21 @@ export function PosPage() {
               type="button"
               onClick={() => setCategoryId(cat.id)}
               className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200",
-                categoryId === cat.id ? "pos-category-active" : "bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 xl:px-4 xl:py-2 xl:text-[13px]",
+                categoryId === cat.id
+                  ? "pos-category-active"
+                  : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
               )}
             >
               {cat.name}
             </button>
           ))}
-          <div className="ml-auto flex shrink-0 gap-2">
-            <Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-xl text-xs text-muted-foreground">
+          <div className="ml-auto hidden shrink-0 gap-1 lg:flex">
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-xl px-2.5 text-[11px] text-muted-foreground">
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Filters
             </Button>
-            <Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-xl text-xs text-muted-foreground">
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-xl px-2.5 text-[11px] text-muted-foreground">
               <ArrowUpDown className="h-3.5 w-3.5" />
               Sort
             </Button>
@@ -282,27 +394,29 @@ export function PosPage() {
         </div>
 
         {/* Product grid */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-3 scrollbar-thin">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <LayoutGrid className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-foreground">Product Catalog</span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {filtered.length}
-              </span>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-3 scrollbar-thin xl:px-5 xl:pb-5 xl:pt-4">
+          <div className="mb-3 flex items-end justify-between xl:mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4 text-primary/80" />
+                <span className="text-sm font-semibold tracking-tight text-foreground xl:text-base">Catalog</span>
+              </div>
+              <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+                Tap a product to add it to the sale
+              </p>
             </div>
             {totals.itemCount > 0 && (
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                Cart {formatCurrency(totals.grandTotal)}
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tabular-nums text-primary ring-1 ring-primary/15 xl:px-3.5 xl:py-1.5">
+                {formatCurrency(totals.grandTotal)}
               </span>
             )}
           </div>
           {loading ? (
-            <div className="grid grid-cols-3 gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="pos-product-grid">
               {[...Array(12)].map((_, i) => (
                 <div
                   key={i}
-                  className="aspect-[3/4] animate-pulse rounded-2xl bg-gradient-to-b from-muted/80 to-muted/30"
+                  className="aspect-[4/5] animate-pulse rounded-xl bg-gradient-to-b from-muted/70 to-muted/20 ring-1 ring-border/40 xl:rounded-[1.15rem]"
                 />
               ))}
             </div>
@@ -310,19 +424,16 @@ export function PosPage() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-24 text-center"
+              className="flex flex-col items-center justify-center py-16 text-center xl:py-28"
             >
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
-                <Search className="h-8 w-8 text-muted-foreground/50" />
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-sm ring-1 ring-border/60">
+                <Search className="h-7 w-7 text-muted-foreground/60" />
               </div>
-              <p className="text-base font-semibold">No products found</p>
-              <p className="mt-1 text-sm text-muted-foreground">Try a different search or category</p>
+              <p className="text-base font-semibold tracking-tight">No products found</p>
+              <p className="mt-1.5 text-sm text-muted-foreground">Try another search term or category</p>
             </motion.div>
           ) : (
-            <motion.div
-              layout
-              className="grid grid-cols-3 gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-            >
+            <motion.div layout className="pos-product-grid">
               <AnimatePresence mode="popLayout">
                 {filtered.map((p, i) => (
                   <PosProductCard
@@ -339,71 +450,25 @@ export function PosPage() {
           )}
         </div>
 
-        {/* Bottom widgets toggle + panel */}
-        <div className="pos-glass flex shrink-0 items-center justify-between border-t border-border/50 px-5 py-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Quick panels
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-xs text-muted-foreground"
-            onClick={() => setWidgetsCollapsed((v) => !v)}
-          >
-            {widgetsCollapsed ? (
-              <>
-                <ChevronUp className="h-3.5 w-3.5" /> Show
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-3.5 w-3.5" /> Hide
-              </>
-            )}
-          </Button>
-        </div>
-        <AnimatePresence initial={false}>
-          {!widgetsCollapsed && (
-            <PosBottomWidgets
-              key="pos-widgets"
-              recentSales={recentSales}
-              favoriteProducts={favoriteProducts}
-              heldSales={heldSales}
-              onAddProduct={handleAdd}
-              onHoldSale={handleHold}
-              onClearCart={clearCart}
-              onOpenDrafts={() => setDraftsOpen(true)}
-            />
-          )}
-        </AnimatePresence>
-
         <PosHeldSalesPanel
           open={draftsOpen}
           heldSales={heldSales}
+          customers={customers}
+          taxRate={taxRate}
+          branchName={user?.branch?.name}
+          branchId={user?.branch?.id}
           onClose={() => setDraftsOpen(false)}
           onResume={handleResumeHeld}
           onDelete={deleteHeldSale}
         />
 
-        {/* Keyboard shortcuts bar */}
-        <div className="flex shrink-0 items-center justify-between border-t border-border/70 bg-card/60 px-5 py-2 text-[10px] text-muted-foreground backdrop-blur-sm">
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-            {[
-              ["F2", "Search"],
-              ["F3", "Hold"],
-              ["F4", "New Sale"],
-              ["F5", "Checkout"],
-              ["⌘K", "Quick Search"],
-            ].map(([key, label]) => (
-              <span key={key} className="flex items-center gap-1">
-                <kbd className="rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 font-mono text-[9px]">{key}</kbd>
-                {label}
-              </span>
-            ))}
-          </div>
-          <span className="hidden sm:inline">
-            {user?.username ?? "Cashier"} · POS-001
-          </span>
-        </div>
+        <PosWaiterSalesPanel
+          open={waiterSalesOpen}
+          waiterId={waiterId}
+          waiterName={waiterName}
+          branchId={user?.branch?.id}
+          onClose={() => setWaiterSalesOpen(false)}
+        />
 
         {/* Checkout toast */}
         <AnimatePresence>
@@ -412,7 +477,7 @@ export function PosPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-success/30 bg-success/15 px-5 py-3 text-sm font-semibold text-success shadow-xl backdrop-blur-md"
+              className="absolute bottom-8 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-3 text-sm font-medium text-emerald-700 shadow-[0_12px_40px_hsl(var(--foreground)/0.12)] backdrop-blur-xl dark:text-emerald-400"
             >
               <CheckCircle2 className="h-4 w-4" />
               {checkoutMsg}
@@ -421,30 +486,52 @@ export function PosPage() {
         </AnimatePresence>
       </div>
 
-      {/* Right — cart panel (30%) */}
-      <div className="relative flex-[3] min-w-[300px] max-w-[420px] shrink-0">
-        <PosCartPanel
-          cart={cart}
-          itemCount={totals.itemCount}
-          subtotal={totals.subtotal}
-          discount={totals.discount}
-          discountPct={discountPct}
-          discountAmount={discountAmount}
-          onDiscountPctChange={setDiscountPct}
-          onDiscountAmountChange={setDiscountAmount}
-          tax={totals.tax}
-          taxRate={taxRate}
-          grandTotal={totals.grandTotal}
-          orderNotes={orderNotes}
-          onNotesChange={setOrderNotes}
-          customerId={customerId}
-          onCustomerChange={setCustomerId}
-          customers={customers}
-          onUpdateQty={updateQty}
-          onRemove={removeLine}
-          onOpenCheckout={() => setCheckoutOpen(true)}
-        />
-      </div>
+      {/* Right — cart panel (opens once an item is selected) */}
+      <AnimatePresence initial={false}>
+        {hasCart && (
+          <motion.div
+            key="pos-cart"
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 28 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="relative w-[min(100%,280px)] shrink-0 xl:w-[min(100%,320px)] 2xl:w-[min(100%,380px)]"
+          >
+          <PosCartPanel
+            cart={cart}
+            itemCount={totals.itemCount}
+            subtotal={totals.subtotal}
+            discount={totals.discount}
+            discountPct={discountPct}
+            discountAmount={discountAmount}
+            onDiscountPctChange={setDiscountPct}
+            onDiscountAmountChange={setDiscountAmount}
+            tax={totals.tax}
+            taxRate={taxRate}
+            grandTotal={totals.grandTotal}
+            orderNotes={orderNotes}
+            onNotesChange={setOrderNotes}
+            customerId={customerId}
+            customerName={customerName}
+            onCustomerChange={setCustomerId}
+            customers={customers}
+            waiters={waiters}
+            waiterId={waiterId}
+            onWaiterChange={setWaiterId}
+            branchName={user?.branch?.name}
+            branchCode={user?.branch?.code}
+            branchId={user?.branch?.id}
+            onCreateCustomer={handleCreateCustomer}
+            onCreateWaiter={handleCreateWaiter}
+            onUpdateQty={updateQty}
+            onRemove={removeLine}
+            onOpenCheckout={() => setCheckoutOpen(true)}
+            onHold={handleHold}
+            onViewWaiterSales={() => setWaiterSalesOpen(true)}
+          />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <PosCheckoutPanel
         open={checkoutOpen}
@@ -461,9 +548,10 @@ export function PosPage() {
         orderNotes={orderNotes}
         branchId={user?.branch?.id}
         branchName={user?.branch?.name ?? "Main Branch"}
-        branchCode={user?.branch?.code ?? "BR01"}
-        cashierName={user?.first_name || user?.username || "Cashier"}
-        cashierRole={user?.role?.name ?? "Staff"}
+        branchCode={user?.branch?.code}
+        waiterId={waiterId}
+        waiterName={waiterName}
+        waiters={waiters}
         onClose={() => setCheckoutOpen(false)}
         onSaveDraft={handleHold}
         onComplete={handleCheckoutComplete}

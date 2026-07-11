@@ -28,6 +28,9 @@ export interface HeldSale {
   heldAt: string;
   itemCount: number;
   subtotal: number;
+  customerId?: string;
+  waiterId?: string;
+  waiterName?: string;
 }
 
 const FAVORITES_KEY = "mda_pos_favorites";
@@ -160,30 +163,36 @@ export function usePosCart() {
     );
   }, []);
 
-  const holdSale = useCallback(() => {
-    if (!cart.length) return null;
-    const itemCount = cart.reduce((s, i) => s + i.qty, 0);
-    const discount = calcDiscount(subtotal, discountPct, discountAmount);
-    const held: HeldSale = {
-      id: crypto.randomUUID(),
-      label: cart.length === 1 ? cart[0].name : `${itemCount} items`,
-      cart: [...cart],
-      discountPct,
-      discountAmount: discount,
-      notes: orderNotes,
-      heldAt: new Date().toISOString(),
-      itemCount,
-      subtotal,
-    };
-    setHeldSales((prev) => [held, ...prev]);
-    clearCart();
-    return held;
-  }, [cart, discountPct, discountAmount, orderNotes, subtotal, clearCart]);
+  const holdSale = useCallback(
+    (extras?: { customerId?: string; waiterId?: string; waiterName?: string }) => {
+      if (!cart.length) return null;
+      const itemCount = cart.reduce((s, i) => s + i.qty, 0);
+      const discount = calcDiscount(subtotal, discountPct, discountAmount);
+      const held: HeldSale = {
+        id: crypto.randomUUID(),
+        label: cart.length === 1 ? cart[0].name : `${itemCount} items`,
+        cart: [...cart],
+        discountPct,
+        discountAmount: discount,
+        notes: orderNotes,
+        heldAt: new Date().toISOString(),
+        itemCount,
+        subtotal,
+        customerId: extras?.customerId,
+        waiterId: extras?.waiterId,
+        waiterName: extras?.waiterName,
+      };
+      setHeldSales((prev) => [held, ...prev]);
+      clearCart();
+      return held;
+    },
+    [cart, discountPct, discountAmount, orderNotes, subtotal, clearCart]
+  );
 
   const resumeHeldSale = useCallback(
     (id: string) => {
       const sale = heldSales.find((h) => h.id === id);
-      if (!sale) return false;
+      if (!sale) return null;
 
       let nextHeld = heldSales.filter((h) => h.id !== id);
 
@@ -211,7 +220,7 @@ export function usePosCart() {
       setDiscountPctState(sale.discountPct);
       setDiscountAmountState(sale.discountAmount ?? subtotal * (sale.discountPct / 100));
       setOrderNotes(sale.notes);
-      return true;
+      return { sale, restored: true };
     },
     [heldSales, cart, discountPct, discountAmount, orderNotes, subtotal]
   );

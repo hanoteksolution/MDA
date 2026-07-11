@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { posApi, type PosMerchant, type PosProfile } from "@/services/api/pos";
+import { posApi, type PosMerchant, type PosProfile, type PosWaiter } from "@/services/api/pos";
 
 const emptyMerchant = (): PosMerchant => ({
   id: crypto.randomUUID(),
@@ -16,9 +16,16 @@ const emptyMerchant = (): PosMerchant => ({
   is_default: false,
 });
 
+const emptyWaiter = (): PosWaiter => ({
+  id: crypto.randomUUID(),
+  name: "",
+  is_active: true,
+});
+
 export function PosProfileSettings() {
   const [profile, setProfile] = useState<PosProfile>({
     merchants: [],
+    waiters: [],
     default_payment_method: "cash",
     receipt_footer: "Thank you for your purchase!",
   });
@@ -61,6 +68,27 @@ export function PosProfileSettings() {
     }));
   };
 
+  const addWaiter = () => {
+    setProfile((p) => ({
+      ...p,
+      waiters: [...(p.waiters ?? []), emptyWaiter()],
+    }));
+  };
+
+  const updateWaiter = (id: string, patch: Partial<PosWaiter>) => {
+    setProfile((p) => ({
+      ...p,
+      waiters: (p.waiters ?? []).map((w) => (w.id === id ? { ...w, ...patch } : w)),
+    }));
+  };
+
+  const removeWaiter = (id: string) => {
+    setProfile((p) => ({
+      ...p,
+      waiters: (p.waiters ?? []).filter((w) => w.id !== id),
+    }));
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -98,6 +126,7 @@ export function PosProfileSettings() {
                 <SelectItem value="card">Card</SelectItem>
                 <SelectItem value="mobile">Mobile Money</SelectItem>
                 <SelectItem value="bank">Bank Transfer</SelectItem>
+                <SelectItem value="on_account">Pay Later / Account</SelectItem>
                 <SelectItem value="split">Split</SelectItem>
               </SelectContent>
             </Select>
@@ -171,6 +200,46 @@ export function PosProfileSettings() {
                     </Select>
                   </FormField>
                 </FormGrid>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="mt-8 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Waiters</p>
+            <p className="text-xs text-muted-foreground">
+              Staff who serve customers — tracked on receipts and pay-later sales
+            </p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={addWaiter}>
+            <Plus className="h-4 w-4" /> Add Waiter
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {(profile.waiters ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground rounded-xl border border-dashed border-border p-6 text-center">
+              No waiters yet. Add names for staff who serve tables or monthly customers.
+            </p>
+          ) : (
+            (profile.waiters ?? []).map((w) => (
+              <div key={w.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+                <Input
+                  value={w.name}
+                  onChange={(e) => updateWaiter(w.id, { name: e.target.value })}
+                  placeholder="Waiter name"
+                  className="flex-1 min-w-[160px]"
+                />
+                <Input
+                  value={w.user_id ?? ""}
+                  onChange={(e) => updateWaiter(w.id, { user_id: e.target.value || undefined })}
+                  placeholder="Staff user ID (optional)"
+                  className="font-mono text-xs flex-1 min-w-[200px]"
+                />
+                <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeWaiter(w.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))
           )}

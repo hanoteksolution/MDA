@@ -69,9 +69,12 @@ def build_frontend() -> None:
 
 
 def build_archive() -> Path:
+    # Always rebuild so cloud never ships a stale local dist (e.g. from desktop build).
+    build_frontend()
+
     dist = ROOT / "frontend" / "dist"
     if not dist.is_dir() or not any(dist.iterdir()):
-        build_frontend()
+        raise RuntimeError("frontend/dist is empty after build")
 
     tmp = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
     tmp.close()
@@ -92,10 +95,8 @@ def build_archive() -> Path:
                     continue
                 tar.add(file_path, arcname=str(rel).replace("\\", "/"))
 
-        for file_path in dist.rglob("*"):
-            if file_path.is_file():
-                rel = file_path.relative_to(ROOT)
-                tar.add(file_path, arcname=str(rel).replace("\\", "/"))
+        # Replace remote dist entirely — avoid leftover hashed assets from old builds
+        tar.add(dist, arcname="frontend/dist")
     return archive_path
 
 
@@ -103,6 +104,8 @@ def remote_deploy_commands() -> list[str]:
     compose = "docker compose -f docker-compose.yml -f docker-compose.vps.yml -f docker-compose.volumes.yml"
     return [
         f"cd {REMOTE_ROOT}",
+        # Clear old hashed assets so nginx only serves the new build
+        "rm -rf frontend/dist",
         "tar -xzf mda-deploy.tar.gz",
         "rm -f mda-deploy.tar.gz",
         f"python3 {REMOTE_ROOT}/infrastructure/scripts/patch_public_url_env.py",

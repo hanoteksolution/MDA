@@ -18,15 +18,22 @@ export function UserFormPage({ editId }: { editId?: string }) {
   const [saving, setSaving] = useState(false);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [allPermissions, setAllPermissions] = useState<Record<string, PermissionItem[]>>({});
+  const [selectedPermIds, setSelectedPermIds] = useState<string[]>([]);
   const [form, setForm] = useState({
     username: "", email: "", password: "", first_name: "", last_name: "",
     phone: "", role_id: "", branch_id: "", is_active: true,
   });
 
   useEffect(() => {
-    Promise.all([adminApi.roles(), settingsApi.branches()]).then(([r, b]) => {
+    Promise.all([
+      adminApi.roles(),
+      settingsApi.branches(),
+      adminApi.permissions(),
+    ]).then(([r, b, p]) => {
       setRoles(r.data);
       setBranches(b.data);
+      setAllPermissions(p.data);
     });
   }, []);
 
@@ -39,6 +46,9 @@ export function UserFormPage({ editId }: { editId?: string }) {
         first_name: u.first_name, last_name: u.last_name, phone: u.phone || "",
         role_id: u.role?.id || "", branch_id: u.branch?.id || "", is_active: u.is_active,
       });
+      setSelectedPermIds(
+        (u.permission_ids || u.direct_permissions?.map((p) => p.id) || []).map(String)
+      );
       setLoading(false);
     });
   }, [editId]);
@@ -56,6 +66,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
         role_id: form.role_id || null,
         branch_id: form.branch_id || null,
         is_active: form.is_active,
+        permission_ids: selectedPermIds,
       };
       if (form.password) payload.password = form.password;
       if (editId) await adminApi.updateUser(editId, payload);
@@ -83,68 +94,85 @@ export function UserFormPage({ editId }: { editId?: string }) {
     <PermissionGuard permission={editId ? "users.update" : "users.create"}>
       <PageLayout
         title={editId ? "Edit User" : "Add User"}
-        description="Create or update a system user account and assign role & branch."
+        description="Assign a role for the base access set, then grant extra permissions to this user only."
         breadcrumbs={["Home", "Administration", editId ? "Edit User" : "New User"]}
       >
         <form onSubmit={handleSubmit}>
           <FormPageLayout
             main={
-              <FormSection title="Account Details">
-                <FormGrid>
-                  <FormField label="Username" required>
-                    <Input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-                  </FormField>
-                  <FormField label="Email" required>
-                    <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                  </FormField>
-                  <FormField label={editId ? "New Password" : "Password"} required={!editId} hint={editId ? "Leave blank to keep current password" : undefined}>
-                    <Input type="password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                  </FormField>
-                  <FormField label="First Name">
-                    <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-                  </FormField>
-                  <FormField label="Last Name">
-                    <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
-                  </FormField>
-                  <FormField label="Phone">
-                    <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                  </FormField>
-                  <FormField label="Role" hint="Determines what the user can access">
-                    <Select value={form.role_id || "none"} onValueChange={(v) => setForm({ ...form, role_id: v === "none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                  <FormField label="Branch">
-                    <Select value={form.branch_id || "none"} onValueChange={(v) => setForm({ ...form, branch_id: v === "none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                </FormGrid>
-                <label className="mt-6 flex items-center gap-3 cursor-pointer">
-                  <Checkbox checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: !!v })} />
-                  <span className="text-sm font-medium">Active account</span>
-                </label>
-              </FormSection>
+              <>
+                <FormSection title="Account Details">
+                  <FormGrid>
+                    <FormField label="Username" required>
+                      <Input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+                    </FormField>
+                    <FormField label="Email" required>
+                      <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                    </FormField>
+                    <FormField label={editId ? "New Password" : "Password"} required={!editId} hint={editId ? "Leave blank to keep current password" : undefined}>
+                      <Input type="password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                    </FormField>
+                    <FormField label="First Name">
+                      <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+                    </FormField>
+                    <FormField label="Last Name">
+                      <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                    </FormField>
+                    <FormField label="Phone">
+                      <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    </FormField>
+                    <FormField label="Role" hint="Base permissions inherited from the role">
+                      <Select value={form.role_id || "none"} onValueChange={(v) => setForm({ ...form, role_id: v === "none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Branch">
+                      <Select value={form.branch_id || "none"} onValueChange={(v) => setForm({ ...form, branch_id: v === "none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                  </FormGrid>
+                  <label className="mt-6 flex items-center gap-3 cursor-pointer">
+                    <Checkbox checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: !!v })} />
+                    <span className="text-sm font-medium">Active account</span>
+                  </label>
+                </FormSection>
+
+                <FormSection
+                  title="Direct permissions"
+                  description={`${selectedPermIds.length} extra permission(s) for this user only (in addition to their role)`}
+                >
+                  <PermissionMatrix
+                    permissions={allPermissions}
+                    selected={selectedPermIds}
+                    onChange={setSelectedPermIds}
+                  />
+                </FormSection>
+              </>
             }
             aside={
               <div className="ds-card p-4 space-y-3">
                 <p className="text-sm font-semibold">Access control</p>
                 <p className="text-xs text-muted-foreground">
-                  Users inherit all permissions from their assigned role. Edit the role to change module access.
+                  Effective access = role permissions + direct grants below. Direct grants do not change the role for other users.
                 </p>
                 {form.role_id && (
                   <Badge variant="secondary">
-                    {roles.find((r) => r.id === form.role_id)?.name ?? "Role selected"}
+                    Role: {roles.find((r) => r.id === form.role_id)?.name ?? "Selected"}
                   </Badge>
                 )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Direct grants</span>
+                  <span className="font-semibold">{selectedPermIds.length}</span>
+                </div>
               </div>
             }
             actions={

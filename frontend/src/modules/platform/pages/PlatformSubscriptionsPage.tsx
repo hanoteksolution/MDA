@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CreditCard, Pencil, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, CreditCard, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export function PlatformSubscriptionsPage() {
   const [form, setForm] = useState<SubscriptionFormValues>(EMPTY_SUBSCRIPTION_FORM);
   const [durationDays, setDurationDays] = useState("30");
   const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PlatformSubscriptionRow | null>(null);
   const createUsers = useTenantUsers(form.tenant_id || undefined);
 
@@ -82,6 +83,24 @@ export function PlatformSubscriptionsPage() {
       load();
     } finally {
       setRenewingId(null);
+    }
+  };
+
+  const handleDelete = async (sub: PlatformSubscriptionRow) => {
+    const label = sub.tenant_name
+      ? `${sub.reference_code} (${sub.tenant_name})`
+      : sub.reference_code;
+    if (!confirm(`Delete subscription "${label}"?\n\nThis cannot be undone from here.`)) {
+      return;
+    }
+    setDeletingId(sub.id);
+    try {
+      await platformApi.deleteSubscription(sub.id);
+      load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete subscription.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -142,6 +161,16 @@ export function PlatformSubscriptionsPage() {
               Renew
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            loading={deletingId === r.id}
+            onClick={() => void handleDelete(r)}
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete
+          </Button>
         </div>
       ),
     },

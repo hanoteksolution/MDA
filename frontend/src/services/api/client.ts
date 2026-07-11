@@ -20,13 +20,21 @@ class ApiClient {
     );
   }
 
-  async desktopProvision(username: string, password: string, cloudAccessToken: string) {
+  async desktopProvision(
+    username: string,
+    password: string,
+    cloudAccessToken: string,
+    connection?: { cloud_api_base?: string; tenant_slug?: string; sync_secret?: string }
+  ) {
     return apiRequest<ApiResponse<AuthTokens & { user: User }>>("/auth/desktop-provision/", {
       method: "POST",
       body: JSON.stringify({
         username,
         password,
         cloud_access_token: cloudAccessToken,
+        cloud_api_base: connection?.cloud_api_base || "",
+        tenant_slug: connection?.tenant_slug || "",
+        sync_secret: connection?.sync_secret || "",
       }),
     });
   }

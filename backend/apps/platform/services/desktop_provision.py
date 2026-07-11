@@ -102,18 +102,19 @@ class DesktopProvisionService:
         password: str,
         cloud_access_token: str,
         request=None,
+        connection: dict | None = None,
     ) -> tuple[User, dict]:
         username = username.strip()
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters.")
 
-        cfg = ShopSyncService.get_config()
+        cfg = ShopSyncService.ensure_connection_config(overrides=connection)
         cloud = (cfg.get("cloud_api_base") or "").rstrip("/")
         slug = (cfg.get("tenant_slug") or "").strip()
         secret = (cfg.get("sync_secret") or "").strip()
         if not cloud or not slug or not secret:
             raise ValueError(
-                "Shop connection is not configured. Open Settings → Connection and save cloud URL, shop slug, and sync secret."
+                "Shop connection is not configured. Open Connection and save cloud URL, shop slug, and sync secret."
             )
 
         profile = DesktopProvisionService._fetch_cloud_profile(
@@ -138,11 +139,20 @@ class DesktopProvisionService:
         if not role:
             raise ValueError(f"Role '{role_slug}' is not available on this device. Run system bootstrap.")
 
+        shop_name = (
+            profile.get("shop_name")
+            or profile.get("company_name")
+            or Company.active_objects().values_list("name", flat=True).first()
+            or slug
+        )
         tenant, company, branch = DesktopProvisionService._ensure_shop_context(
             slug=slug,
             sync_secret=secret,
-            shop_name=Company.active_objects().values_list("name", flat=True).first() or slug,
+            shop_name=shop_name,
         )
+        if shop_name and company.name != shop_name:
+            company.name = shop_name
+            company.save(update_fields=["name", "updated_at"])
 
         user = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
         fields = {

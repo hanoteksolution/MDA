@@ -28,20 +28,18 @@ export function PosProductCard({
   return (
     <motion.article
       layout
-      initial={{ opacity: 0, y: 14, scale: 0.97 }}
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.35, delay: Math.min(index * 0.025, 0.25), ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -6, transition: { duration: 0.22 } }}
+      transition={{ duration: 0.28, delay: Math.min(index * 0.015, 0.15), ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -3, transition: { duration: 0.18 } }}
       onClick={() => !outOfStock && onAdd()}
       className={cn(
-        "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/90",
-        "shadow-sm ring-1 ring-transparent transition-all duration-300",
-        "hover:border-primary/40 hover:shadow-elevated hover:ring-primary/15",
-        outOfStock && "cursor-not-allowed opacity-50 grayscale-[0.25]"
+        "pos-product-card group relative flex cursor-pointer flex-col overflow-hidden",
+        "ring-1 ring-transparent transition-all duration-300",
+        "hover:border-primary/25 hover:shadow-[0_10px_28px_hsl(var(--primary)/0.12)] hover:ring-primary/10",
+        outOfStock && "cursor-not-allowed opacity-45 grayscale"
       )}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-
       <button
         type="button"
         onClick={(e) => {
@@ -49,24 +47,24 @@ export function PosProductCard({
           onToggleFavorite();
         }}
         className={cn(
-          "absolute right-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-full",
-          "border border-white/20 bg-black/20 shadow-lg backdrop-blur-md transition-all duration-200",
-          "hover:scale-110",
-          isFavorite ? "text-rose-400" : "text-white/90 hover:text-rose-400"
+          "absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full xl:h-8 xl:w-8",
+          "border border-white/25 bg-black/25 shadow-lg backdrop-blur-md transition-all duration-200",
+          "hover:scale-105",
+          isFavorite ? "text-rose-400" : "text-white/90 hover:text-rose-300"
         )}
         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
       >
-        <Heart className={cn("h-4 w-4 drop-shadow", isFavorite && "fill-current")} />
+        <Heart className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
       </button>
 
-      <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-muted/50 via-muted/20 to-primary/5">
-        <ProductImage product={product} className="transition-transform duration-500 group-hover:scale-105" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent" />
+      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-muted/40 via-background to-primary/5 xl:aspect-square">
+        <ProductImage product={product} className="transition-transform duration-500 group-hover:scale-[1.03]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
 
         <div className="absolute left-2 top-2 z-20">
           <Badge
             variant={status.variant}
-            className="border-0 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-lg backdrop-blur-sm"
+            className="border-0 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] shadow-md backdrop-blur-sm xl:px-2 xl:text-[9px]"
           >
             {status.label}
           </Badge>
@@ -75,55 +73,35 @@ export function PosProductCard({
         <div className="absolute bottom-2 right-2 z-20">
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold tabular-nums shadow-lg backdrop-blur-md",
-              outOfStock ? "bg-destructive/90 text-white" : "bg-black/50 text-white"
+              "inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold tabular-nums shadow-md backdrop-blur-md xl:px-2 xl:py-1",
+              outOfStock ? "bg-destructive/90 text-white" : "bg-black/45 text-white"
             )}
           >
             <Package className="h-3 w-3" />
             {stock}
           </span>
         </div>
-
-        {!outOfStock && (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex translate-y-full justify-center p-3 transition-transform duration-300 group-hover:translate-y-0">
-            <Button
-              type="button"
-              size="sm"
-              className="h-9 w-full gap-1.5 border-0 bg-white/95 text-xs font-bold text-primary shadow-xl hover:bg-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAdd();
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add to cart
-            </Button>
-          </div>
-        )}
       </div>
 
-      <div className="flex flex-1 flex-col p-3.5">
+      <div className="flex flex-1 flex-col px-2.5 pb-2.5 pt-2 xl:px-3 xl:pb-3 xl:pt-2.5">
         {product.category_name && (
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-primary/80">
+          <p className="mb-0.5 truncate text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground xl:text-[10px]">
             {product.category_name}
           </p>
         )}
-        <p className="line-clamp-2 min-h-[2.4rem] text-sm font-bold leading-snug text-foreground">
+        <p className="line-clamp-2 text-xs font-semibold leading-snug tracking-tight text-foreground xl:text-[13px]">
           {product.name}
         </p>
-        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{product.sku}</p>
 
-        <div className="mt-auto flex items-center justify-between gap-2 pt-3">
-          <div>
-            <span className="text-xl font-extrabold tabular-nums tracking-tight text-primary">
-              {formatCurrency(product.selling_price)}
-            </span>
-          </div>
+        <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
+          <span className="truncate text-sm font-bold tabular-nums tracking-tight text-primary xl:text-base">
+            {formatCurrency(product.selling_price)}
+          </span>
           <Button
             type="button"
             size="sm"
             className={cn(
-              "h-9 gap-1 rounded-xl px-3 text-xs font-bold shadow-md",
+              "h-7 shrink-0 gap-0.5 rounded-lg px-2 text-[10px] font-semibold shadow-sm xl:h-8 xl:rounded-xl xl:px-2.5 xl:text-[11px]",
               outOfStock && "opacity-60"
             )}
             disabled={outOfStock}
@@ -133,11 +111,11 @@ export function PosProductCard({
             }}
           >
             {outOfStock ? (
-              <ShoppingBag className="h-3.5 w-3.5" />
+              <ShoppingBag className="h-3 w-3" />
             ) : (
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3 w-3 xl:h-3.5 xl:w-3.5" />
             )}
-            {outOfStock ? "Sold out" : "Add"}
+            <span className="hidden sm:inline">{outOfStock ? "Out" : "Add"}</span>
           </Button>
         </div>
       </div>
