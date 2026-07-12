@@ -51,3 +51,7 @@ def save_product_image(*, uploaded_file) -> str:
 
 def save_company_logo(*, uploaded_file) -> str:
     return _save_image(uploaded_file=uploaded_file, folder="company")
+
+
+def save_subscription_qr(*, uploaded_file) -> str:
+    return _save_image(uploaded_file=uploaded_file, folder="subscription_qr")

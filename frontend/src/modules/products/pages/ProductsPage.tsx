@@ -18,7 +18,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { productsApi, inventoryApi } from "@/services/api/catalog";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
-import type { Product } from "@/types/models/catalog";
+import type { Product, ProductFormData } from "@/types/models/catalog";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function ProductsPage() {
   const navigate = useNavigate();
@@ -264,7 +265,8 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         unit_id: p.unit_id, cost_price: String(p.cost_price),
         selling_price: String(p.selling_price), minimum_stock: String(p.minimum_stock),
         description: p.description, image: p.image || "", is_active: p.is_active,
-        initial_stock: "0", warehouse_id: "",
+        initial_stock: String(p.total_stock ?? 0),
+        warehouse_id: p.warehouse_id || "",
       });
       setImagePreview(null);
       setLoading(false);
@@ -275,7 +277,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = {
+      const payload: ProductFormData = {
         sku: form.sku.trim() || undefined,
         barcode: form.barcode || undefined,
         name: form.name,
@@ -288,19 +290,18 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         description: form.description,
         image: form.image || undefined,
         is_active: form.is_active,
-        ...(!editId && {
-          initial_stock: parseFloat(form.initial_stock) || 0,
-          warehouse_id: form.warehouse_id || undefined,
-        }),
+        warehouse_id: form.warehouse_id || undefined,
+        initial_stock: parseFloat(form.initial_stock) || 0,
       };
       if (editId) {
+        payload.stock = parseFloat(form.initial_stock) || 0;
         await productsApi.update(editId, payload);
       } else {
         await productsApi.create(payload);
       }
       navigate("/products");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -321,7 +322,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
   return (
     <PageLayout
       title={editId ? "Edit Product" : "Add Product"}
-      description={editId ? "Update product details, pricing, and visibility." : "Create a polished catalog entry for POS, sales, and inventory."}
+      description={editId ? "Update product details, pricing, stock, and visibility." : "Create a polished catalog entry for POS, sales, and inventory."}
       breadcrumbs={["Home", "Products", editId ? "Edit" : "New"]}
       backTo="/products"
       backLabel="Back to products"
@@ -489,18 +490,55 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       className="h-11 rounded-xl tabular-nums"
                     />
                   </FormField>
-                  {!editId && (
+                  {!editId ? (
                     <>
-                      <FormField label="Initial Stock">
+                      <FormField label="Initial Stock" hint="Creates inventory at this quantity (0 is allowed)">
                         <Input
                           type="number"
                           min="0"
+                          step="any"
                           value={form.initial_stock}
                           onChange={(e) => setForm({ ...form, initial_stock: e.target.value })}
                           className="h-11 rounded-xl tabular-nums"
                         />
                       </FormField>
-                      <FormField label="Warehouse">
+                      <FormField label="Warehouse" hint="Where this stock is held">
+                        <CreatableSelect
+                          value={form.warehouse_id}
+                          onChange={(v) => setForm({ ...form, warehouse_id: v })}
+                          options={warehouses}
+                          placeholder={optionsLoading ? "Loading warehouses..." : "Select warehouse"}
+                          disabled={optionsLoading}
+                          createLabel="Create new warehouse..."
+                          onCreate={async (name) => {
+                            if (!defaultBranchId) throw new Error("No branch configured.");
+                            const code = name.replace(/\s+/g, "").slice(0, 6).toUpperCase() || "WH";
+                            const res = await inventoryApi.createWarehouse({
+                              name,
+                              code,
+                              branch_id: defaultBranchId,
+                              is_active: true,
+                            });
+                            const item = { id: res.data.id, name: res.data.name };
+                            setWarehouses((prev) => [...prev, item]);
+                            return item;
+                          }}
+                        />
+                      </FormField>
+                    </>
+                  ) : (
+                    <>
+                      <FormField label="Stock on hand" hint="Updates inventory for the selected warehouse">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={form.initial_stock}
+                          onChange={(e) => setForm({ ...form, initial_stock: e.target.value })}
+                          className="h-11 rounded-xl tabular-nums"
+                        />
+                      </FormField>
+                      <FormField label="Warehouse" hint="Where this stock is held">
                         <CreatableSelect
                           value={form.warehouse_id}
                           onChange={(v) => setForm({ ...form, warehouse_id: v })}

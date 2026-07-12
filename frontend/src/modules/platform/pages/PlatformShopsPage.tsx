@@ -20,6 +20,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/authStore";
 import { formatCurrency } from "@/utils/cn";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 type ShopSubscriptionMode = "plan" | "existing" | "none";
 type ShopGroupMode = "none" | "existing" | "new";
@@ -192,7 +193,7 @@ export function PlatformShopsPage() {
       await platformApi.deleteShop(shop.id);
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete shop.");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete shop.");
     } finally {
       setDeletingId(null);
     }
@@ -347,19 +348,27 @@ export function PlatformShopsPage() {
       setForm(EMPTY_FORM);
       load();
       if (owner?.username) {
-        alert(`Shop created. Owner can log in with username: ${owner.username}`);
+        await appDialog.alert(`Shop created. Owner can log in with username: ${owner.username}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create shop.";
       setFormError(message);
-      alert(message);
+      await appDialog.alert(message);
     } finally {
       setSaving(false);
     }
   };
 
   const columns: Column<PlatformTenantRow>[] = [
-    { key: "name", header: "Shop", cell: (r) => <span className="font-medium">{r.name}</span> },
+    {
+      key: "name",
+      header: "Shop",
+      cell: (r) => (
+        <Link to={`/platform/shops/${r.id}`} className="font-medium hover:underline">
+          {r.name}
+        </Link>
+      ),
+    },
     ...(isGroupManager || shopGroups.length
       ? [
           {

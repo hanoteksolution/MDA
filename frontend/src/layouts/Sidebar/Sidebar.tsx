@@ -80,6 +80,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Platform",
     items: [
+      { to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view" },
       { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view" },
       { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
     ],

@@ -20,6 +20,7 @@ import {
 import { type HeldSale } from "@/modules/pos/hooks/usePosCart";
 import { cn, formatCurrency } from "@/utils/cn";
 import { salesApi } from "@/services/api/sales";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const HELD_KEY = "mda_pos_held";
 
@@ -166,7 +167,7 @@ export function WaiterPerformancePage() {
       await load();
       if (selected) await loadReceipts(selected);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not mark as paid");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     } finally {
       setMarkingId(null);
     }

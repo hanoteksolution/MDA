@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Save, Plus, Pencil, Upload, X, Loader2 } from "lucide-react";
+import { Save, Plus, Pencil, Upload, X, Loader2, Trash2 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
 import { ContentSection } from "@/components/layout/ContentSection";
@@ -15,6 +15,8 @@ import { PosProfileSettings } from "@/modules/settings/components/PosProfileSett
 import { ConnectionSettings } from "@/modules/settings/components/ConnectionSettings";
 import { clearBrandingCache } from "@/documents/branding";
 import type { BranchDetail, Company } from "@/types/models/admin";
+import { appDialog } from "@/components/feedback/AppDialog";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -27,9 +29,10 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const [c, b] = await Promise.all([settingsApi.company(), settingsApi.branches()]);
       if (c.data) {
@@ -42,17 +45,19 @@ export function SettingsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
+
+  useAutoRefresh(() => load(false), { intervalMs: 60_000 });
 
   const displayLogo = logoPreview || resolveMediaUrl(company.logo) || null;
 
   const handleLogoFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Please select an image (JPEG, PNG, WebP, or GIF).");
+      await appDialog.alert("Please select an image (JPEG, PNG, WebP, or GIF).", { tone: "danger" });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert("Logo must be 5 MB or smaller.");
+      await appDialog.alert("Logo must be 5 MB or smaller.", { tone: "danger" });
       return;
     }
     const local = URL.createObjectURL(file);
@@ -67,7 +72,7 @@ export function SettingsPage() {
       window.dispatchEvent(new Event("mda:company-updated"));
     } catch (err) {
       setLogoPreview(null);
-      alert(err instanceof Error ? err.message : "Logo upload failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Logo upload failed", { tone: "danger" });
     } finally {
       setUploadingLogo(false);
     }
@@ -82,7 +87,7 @@ export function SettingsPage() {
       clearBrandingCache();
       window.dispatchEvent(new Event("mda:company-updated"));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not remove logo");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not remove logo", { tone: "danger" });
     }
   };
 
@@ -98,14 +103,43 @@ export function SettingsPage() {
       window.dispatchEvent(new Event("mda:company-updated"));
       setSaved(true);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed", { tone: "danger" });
     } finally {
       setSaving(false);
     }
   };
 
+  const handleDeleteBranch = async (branch: BranchDetail) => {
+    const companyLabel = branch.company_name ? ` (${branch.company_name})` : "";
+    const ok = await appDialog.confirm(
+      `Delete “${branch.name}”${companyLabel}? Users on this branch will be moved to another branch. This cannot be undone.`,
+      { title: "Delete branch", confirmLabel: "Delete", tone: "danger" }
+    );
+    if (!ok) return;
+    setDeletingId(branch.id);
+    try {
+      await settingsApi.deleteBranch(branch.id);
+      await load();
+    } catch (err) {
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete branch.", { tone: "danger" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const showCompanyCol = branches.some((b) => b.company_name && b.company_name !== company.name);
+
   const branchColumns: Column<BranchDetail>[] = [
     { key: "name", header: "Branch", cell: (r) => <span className="font-medium">{r.name}</span> },
+    ...(showCompanyCol
+      ? [{
+          key: "company",
+          header: "Shop / Company",
+          cell: (r: BranchDetail) => (
+            <span className="text-sm text-muted-foreground">{r.company_name || "—"}</span>
+          ),
+        } satisfies Column<BranchDetail>]
+      : []),
     { key: "code", header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code}</span> },
     { key: "phone", header: "Phone", cell: (r) => r.phone || "—" },
     {
@@ -133,13 +167,27 @@ export function SettingsPage() {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                await settingsApi.setDefaultBranch(r.id);
-                load();
+                try {
+                  await settingsApi.setDefaultBranch(r.id);
+                  await load();
+                } catch (err) {
+                  await appDialog.alert(err instanceof Error ? err.message : "Could not set default.", { tone: "danger" });
+                }
               }}
             >
               Set Default
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            loading={deletingId === r.id}
+            title="Delete branch"
+            onClick={() => handleDeleteBranch(r)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       ),
     },
@@ -279,7 +327,7 @@ export function SettingsPage() {
       {tab === "branches" && (
         <ContentSection
           title="Branch Locations"
-          description="Manage store branches and default location"
+          description="Each shop gets its own Main Branch when created. Delete unused duplicates here — you cannot delete a company’s only branch."
           action={
             <Button asChild size="sm">
               <Link to="/settings/branches/new"><Plus className="h-4 w-4" /> Add Branch</Link>

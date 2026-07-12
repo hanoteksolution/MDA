@@ -112,6 +112,8 @@ ROLE_PERMISSIONS = {
         "staff.performance.view", "staff.performance.evaluate",
         "platform.view", "platform.manage",
         "finance.view", "sales.view", "customers.view",
+        "users.view", "users.create", "users.update",
+        "products.view", "inventory.view",
     ],
 }
 

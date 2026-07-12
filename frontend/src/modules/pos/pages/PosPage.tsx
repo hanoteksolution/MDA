@@ -23,6 +23,7 @@ import { PosWaiterSalesPanel } from "../components/PosWaiterSalesPanel";
 import { posApi, type PosWaiter } from "@/services/api/pos";
 import { printHeldSaleSlip } from "../receipt/printCartSlip";
 import type { PosReceipt } from "@/services/api/pos";
+import { useAutoRefresh, requestDataRefresh } from "@/hooks/useAutoRefresh";
 
 export function PosPage() {
   useSetPageMeta({ title: "Point of Sale", breadcrumbs: ["Home", "POS"] });
@@ -70,6 +71,23 @@ export function PosPage() {
     posApi.profile().then((res) => setWaiters(res.data.waiters ?? [])).catch(() => {});
   }, []);
 
+  const refreshCatalog = useCallback(async () => {
+    try {
+      const [prodRes, catRes, custRes] = await Promise.all([
+        productsApi.list({ page_size: 200, is_active: "true" }),
+        productsApi.categories(),
+        customersApi.list({ page_size: 50, is_active: "true" }),
+      ]);
+      setProducts(prodRes.data.results);
+      setCategories(catRes.data.results.filter((c) => c.is_active));
+      setCustomers(custRes.data.results.map((c) => ({ id: c.id, name: c.full_name })));
+    } catch {
+      /* keep current catalog on background refresh failure */
+    }
+  }, []);
+
+  useAutoRefresh(refreshCatalog, { intervalMs: 45_000 });
+
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
     const onOffline = () => setIsOnline(false);
@@ -111,8 +129,10 @@ export function PosPage() {
       completeSale(receipt.payment_method, receipt.total_amount, receipt.invoice_number);
       setCheckoutMsg(`Sale ${receipt.invoice_number} completed`);
       setTimeout(() => setCheckoutMsg(null), 3000);
+      requestDataRefresh();
+      void refreshCatalog();
     },
-    [completeSale]
+    [completeSale, refreshCatalog]
   );
 
   const handleCreateCustomer = useCallback(

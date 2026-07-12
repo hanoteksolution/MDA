@@ -14,6 +14,7 @@ import { productsApi } from "@/services/api/catalog";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
 import type { Product } from "@/types/models/catalog";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 interface LineItem {
   product_id: string;
@@ -117,7 +118,7 @@ export function SaleFormPage({ type, editId }: SaleFormPageProps) {
       }
       navigate("/sales");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

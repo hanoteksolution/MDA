@@ -33,6 +33,9 @@ export const settingsApi = {
       method: "POST",
     }),
 
+  deleteBranch: (id: string) =>
+    apiRequest<ApiResponse<null>>(`/settings/branches/${id}/`, { method: "DELETE" }),
+
   list: (category?: string) =>
     apiRequest<ApiResponse<SystemSetting[]>>(
       `/settings/${category ? `?category=${category}` : ""}`

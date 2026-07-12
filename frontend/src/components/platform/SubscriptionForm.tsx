@@ -12,6 +12,7 @@ import {
   type PlatformTenantRow,
   type PlatformUserOption,
 } from "@/services/api/platform";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export interface SubscriptionFormValues {
   plan_code: string;
@@ -107,7 +108,7 @@ export function PlanCreateInline({ onCreated }: { onCreated: (plan: PlatformPlan
       setPlanForm({ name: "", code: "", monthly_price: "", max_users: "10", max_branches: "3", description: "" });
       setOpen(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not create plan.");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not create plan.");
     } finally {
       setSaving(false);
     }

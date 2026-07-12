@@ -52,6 +52,8 @@ export interface Product {
   image: string;
   is_active: boolean;
   total_stock?: number;
+  warehouse_id?: string | null;
+  warehouse_name?: string | null;
   created_at: string;
 }
 
@@ -117,5 +119,6 @@ export interface ProductFormData {
   image?: string;
   is_active?: boolean;
   initial_stock?: number;
+  stock?: number;
   warehouse_id?: string;
 }

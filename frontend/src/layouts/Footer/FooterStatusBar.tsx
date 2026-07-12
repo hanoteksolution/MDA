@@ -42,11 +42,11 @@ export function FooterStatusBar() {
     <footer className="flex h-8 shrink-0 items-center justify-between border-t border-border bg-card px-6 text-[11px] text-muted-foreground">
       <span>MDA Retail ERP v0.1.0 · Enterprise Edition</span>
       <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5" title="Data refreshes every 30s and when you return to this tab">
           <span
             className={`h-1.5 w-1.5 rounded-full ${online ? "bg-success animate-pulse" : "bg-muted-foreground"}`}
           />
-          {online ? "Online" : "Offline — local DB active"}
+          {online ? "Online · Live" : "Offline — local DB active"}
         </span>
         {isTauri() && syncLine && <span>{syncLine}</span>}
         {branch && (

@@ -21,6 +21,7 @@ import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
 import type { PurchaseOrder, PurchaseSummary } from "@/types/models/partners";
 import type { Product } from "@/types/models/catalog";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const STATUS_VARIANT: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary",
@@ -60,7 +61,7 @@ export function PurchasesPage() {
       reload();
       purchasesApi.summary().then((sum) => setSummary(sum.data)).catch(() => {});
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete purchase order.");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete purchase order.");
     } finally {
       setDeletingId(null);
     }
@@ -282,7 +283,7 @@ export function PurchaseFormPage({ editId }: { editId?: string }) {
       else await purchasesApi.create(payload);
       navigate("/purchases");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

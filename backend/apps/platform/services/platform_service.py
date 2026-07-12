@@ -5,12 +5,40 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from apps.platform.models import SubscriptionPlan, ShopGroup, Tenant, TenantSubscription
+from apps.platform.models import (
+    SubscriptionPayment,
+    SubscriptionPlan,
+    ShopGroup,
+    Tenant,
+    TenantSubscription,
+)
 from apps.platform.services.sync_service import CloudShopSyncService
 from apps.settings_app.models import Branch, Company
+from apps.settings_app.services.settings_service import SettingsService
 from apps.authentication.models import Role, User
 from apps.inventory.models import Warehouse
 from core.services.analytics_service import AnalyticsService
+
+SUBSCRIPTION_PAYMENT_KEY = "platform.subscription_payment"
+
+DEFAULT_SUBSCRIPTION_PAYMENT = {
+    "company_name": "SAFARI TECHNOLOGY SOLUTIONS",
+    "merchant_number": "608833",
+    "ussd_template": "*789*{merchant}*{amount}#",
+    "qr_image_url": "",
+    "qr_payload_template": "tel:*789*{merchant}*{amount}%23",
+    "provider_label": "Waafi / EVC Plus",
+    "instructions_title": "Pay with Waafi or EVC Plus",
+    "instructions": [
+        "Scan the QR code — your phone dials *789*merchant*amount# automatically",
+        "Confirm the USSD payment in Waafi / EVC Plus",
+        "Or dial the USSD code shown below manually",
+    ],
+    "contact_phone": "Call 141 | 101",
+    "dialog_title_override": "",
+    "dialog_message_override": "",
+    "auto_renew_enabled": True,
+}
 
 
 def _unique_slug(base: str) -> str:
@@ -137,6 +165,15 @@ class PlatformService:
     @staticmethod
     def shop_group_payload(group: ShopGroup) -> dict:
         tenant_count = group.tenants.filter(deleted_at__isnull=True).count()
+        managers = list(
+            User.objects.filter(
+                managed_shop_group=group,
+                deleted_at__isnull=True,
+                is_active=True,
+            )
+            .select_related("role")
+            .order_by("username")[:20]
+        )
         return {
             "id": str(group.id),
             "name": group.name,
@@ -146,7 +183,76 @@ class PlatformService:
             "is_active": group.is_active,
             "tenant_count": tenant_count,
             "shop_count": tenant_count,
+            "managers": [
+                {
+                    "id": str(m.id),
+                    "username": m.username,
+                    "full_name": m.get_full_name() or m.username,
+                    "email": m.email,
+                    "role": m.role.name if m.role_id else "Multi-Shop Manager",
+                }
+                for m in managers
+            ],
         }
+
+    @staticmethod
+    def user_can_access_shop_group(user, group: ShopGroup) -> bool:
+        if PlatformService.is_global_platform_admin(user):
+            return True
+        if user.managed_shop_group_id and str(user.managed_shop_group_id) == str(group.id):
+            return True
+        if PlatformService.is_platform_superuser(user):
+            return True
+        return False
+
+    @staticmethod
+    def shop_group_overview(group: ShopGroup, *, period: str = "month") -> dict:
+        """Tenant-org profile: group meta + member shops with KPIs."""
+        shops = list(
+            Tenant.objects.filter(shop_group=group, deleted_at__isnull=True)
+            .select_related("subscription__plan")
+            .order_by("name")
+        )
+        shop_rows = []
+        totals = {
+            "shops": len(shops),
+            "active_shops": 0,
+            "total_sales": 0,
+            "revenue": 0.0,
+            "users": 0,
+        }
+        for tenant in shops:
+            overview = PlatformService.tenant_overview(tenant, period=period)
+            kpis = overview.get("kpis") or {}
+            users_count = len(overview.get("users") or [])
+            if tenant.is_active:
+                totals["active_shops"] += 1
+            totals["total_sales"] += int(kpis.get("total_sales") or 0)
+            totals["revenue"] += float(kpis.get("revenue") or 0)
+            totals["users"] += users_count
+            shop_rows.append(
+                {
+                    **overview["tenant"],
+                    "subscription": overview.get("subscription"),
+                    "kpis": {
+                        "total_sales": kpis.get("total_sales") or 0,
+                        "revenue": kpis.get("revenue") or 0,
+                        "cash_collected": kpis.get("cash_collected") or 0,
+                        "profit": kpis.get("profit") or 0,
+                    },
+                    "users_count": users_count,
+                    "catalog": {
+                        "products_count": (overview.get("catalog") or {}).get("products_count") or 0,
+                        "low_stock": (overview.get("catalog") or {}).get("low_stock") or 0,
+                    },
+                }
+            )
+
+        payload = PlatformService.shop_group_payload(group)
+        payload["period"] = period
+        payload["totals"] = totals
+        payload["shops"] = shop_rows
+        return payload
 
     @staticmethod
     def list_shop_groups(*, active_only=False):
@@ -297,7 +403,6 @@ class PlatformService:
                 branch = Branch.active_objects().filter(company=company).first()
             if branch:
                 from apps.inventory.models import Warehouse, Inventory
-                from apps.products.models import Product
                 from django.db.models import Sum, F
 
                 warehouse = (
@@ -316,19 +421,65 @@ class PlatformService:
         group = tenant.shop_group
 
         users = list(PlatformService.list_tenant_users(tenant)[:50])
-        catalog = {"products_count": 0, "stock_units": 0, "stock_value": 0.0, "low_stock": 0}
+        catalog = {
+            "products_count": 0,
+            "stock_units": 0,
+            "stock_value": 0.0,
+            "low_stock": 0,
+            "products": [],
+        }
         if warehouse:
+            from apps.inventory.services.inventory_service import InventoryService
+
+            InventoryService.backfill_missing_inventory(warehouse=warehouse)
             inv_qs = Inventory.active_objects().filter(warehouse=warehouse)
             agg = inv_qs.aggregate(
                 units=Sum("quantity"),
                 value=Sum(F("quantity") * F("product__cost_price")),
             )
-            catalog["products_count"] = Product.active_objects().count()
+            catalog["products_count"] = inv_qs.values("product_id").distinct().count()
             catalog["stock_units"] = float(agg["units"] or 0)
             catalog["stock_value"] = float(agg["value"] or 0)
             catalog["low_stock"] = (
                 inv_qs.filter(quantity__lte=F("product__minimum_stock")).count()
             )
+            catalog["products"] = [
+                {
+                    "id": str(row.product_id),
+                    "name": row.product.name if row.product_id else "",
+                    "sku": getattr(row.product, "sku", "") or "",
+                    "quantity": float(row.quantity or 0),
+                    "unit_price": float(getattr(row.product, "selling_price", 0) or 0),
+                }
+                for row in inv_qs.select_related("product").order_by("product__name")[:100]
+            ]
+        else:
+            catalog["products"] = []
+
+        recent_sales = []
+        if branch:
+            from apps.sales.models import Invoice
+
+            for inv in (
+                Invoice.objects.filter(branch=branch, deleted_at__isnull=True)
+                .select_related("customer", "created_by_user")
+                .order_by("-issue_date", "-created_at")[:40]
+            ):
+                recent_sales.append(
+                    {
+                        "id": str(inv.id),
+                        "invoice_number": inv.invoice_number,
+                        "customer_name": inv.customer.full_name if inv.customer_id else "Walk-in",
+                        "status": inv.status,
+                        "total_amount": float(inv.total_amount or 0),
+                        "issue_date": inv.issue_date.isoformat() if inv.issue_date else None,
+                        "cashier": (
+                            inv.created_by_user.get_full_name() or inv.created_by_user.username
+                            if inv.created_by_user_id
+                            else ""
+                        ),
+                    }
+                )
 
         waiters = []
         from apps.settings_app.services.settings_service import SettingsService
@@ -364,14 +515,17 @@ class PlatformService:
             },
             "subscription": PlatformService._subscription_payload(tenant),
             "company": {"id": str(company.id), "name": company.name} if company else None,
+            "branch": {"id": str(branch.id), "name": branch.name, "code": branch.code} if branch else None,
             "kpis": kpis,
-            "staff_performance": staff[:5],
+            "staff_performance": staff[:20],
             "catalog": catalog,
+            "recent_sales": recent_sales,
             "users": [
                 {
                     "id": str(u.id),
                     "username": u.username,
                     "full_name": u.get_full_name() or u.username,
+                    "email": u.email,
                     "role": u.role.name if u.role_id else "",
                     "is_active": u.is_active,
                 }
@@ -658,7 +812,7 @@ class PlatformService:
         alerts = []
         for sub in qs:
             if sub.needs_payment_alert:
-                alerts.append(sub.alert_payload())
+                alerts.append(PlatformService.enrich_alert_payload(sub, user=user))
         return alerts
 
     @staticmethod
@@ -672,7 +826,7 @@ class PlatformService:
         if sub.contact_user_id and sub.contact_user_id != user.id:
             if not (user.is_platform_admin or user.has_permission("platform.view")):
                 return None
-        return sub.alert_payload()
+        return PlatformService.enrich_alert_payload(sub, user=user)
 
     @staticmethod
     def _shop_owner_role_slugs():
@@ -888,3 +1042,383 @@ class PlatformService:
             is_active=True,
             created_by=user,
         )
+
+    # ── Subscription payment (Waafi / EVC) ──────────────────────────────
+
+    @staticmethod
+    def get_subscription_payment_config() -> dict:
+        row = SettingsService.get_by_key(key=SUBSCRIPTION_PAYMENT_KEY)
+        raw = row.value if row else None
+        cfg = dict(DEFAULT_SUBSCRIPTION_PAYMENT)
+        if isinstance(raw, dict):
+            cfg.update({k: v for k, v in raw.items() if v is not None})
+        elif isinstance(raw, str) and raw.strip():
+            import json
+
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    cfg.update({k: v for k, v in parsed.items() if v is not None})
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if not isinstance(cfg.get("instructions"), list):
+            cfg["instructions"] = list(DEFAULT_SUBSCRIPTION_PAYMENT["instructions"])
+        return cfg
+
+    @staticmethod
+    def ensure_subscription_payment_assets() -> dict:
+        """Copy bundled merchant QR/placard into MEDIA and seed payment settings."""
+        from pathlib import Path
+        from shutil import copy2
+
+        from django.conf import settings
+
+        assets = Path(__file__).resolve().parents[1] / "assets"
+        media_root = Path(settings.MEDIA_ROOT)
+        dest_dir = media_root / "subscription_qr"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("merchant-608833.png", "merchant-payment-placard.png"):
+            src = assets / name
+            if src.is_file():
+                copy2(src, dest_dir / name)
+
+        cfg = PlatformService.get_subscription_payment_config()
+        changed = False
+        if not (cfg.get("qr_image_url") or "").strip():
+            cfg["qr_image_url"] = "/media/subscription_qr/merchant-payment-placard.png"
+            changed = True
+        # Prefer dialable USSD QR with plan amount
+        if (cfg.get("qr_payload_template") or "").strip() in ("", "{merchant}"):
+            cfg["qr_payload_template"] = DEFAULT_SUBSCRIPTION_PAYMENT["qr_payload_template"]
+            changed = True
+        if not (cfg.get("ussd_template") or "").strip():
+            cfg["ussd_template"] = DEFAULT_SUBSCRIPTION_PAYMENT["ussd_template"]
+            changed = True
+        if not (cfg.get("merchant_number") or "").strip():
+            cfg["merchant_number"] = DEFAULT_SUBSCRIPTION_PAYMENT["merchant_number"]
+            changed = True
+        if not (cfg.get("instructions") or []):
+            cfg["instructions"] = list(DEFAULT_SUBSCRIPTION_PAYMENT["instructions"])
+            changed = True
+        # Migrate old "scan then enter amount" copy to dial instructions
+        old_steps = [
+            "Start WAAFI app / Fur Waafi App",
+            "Tap on Scan QR icon / Ku Sawir QR-ka",
+            "Enter amount to Pay / Gali lacagta kadibna dir",
+        ]
+        if cfg.get("instructions") == old_steps:
+            cfg["instructions"] = list(DEFAULT_SUBSCRIPTION_PAYMENT["instructions"])
+            changed = True
+        if changed:
+            SettingsService.upsert(
+                key=SUBSCRIPTION_PAYMENT_KEY,
+                value=cfg,
+                category="platform",
+            )
+        return cfg
+
+    @staticmethod
+    @transaction.atomic
+    def save_subscription_payment_config(*, data: dict, user=None) -> dict:
+        cfg = PlatformService.get_subscription_payment_config()
+        for key in DEFAULT_SUBSCRIPTION_PAYMENT:
+            if key in data:
+                cfg[key] = data[key]
+        if "instructions" in data:
+            instructions = data["instructions"]
+            if isinstance(instructions, str):
+                instructions = [line.strip() for line in instructions.splitlines() if line.strip()]
+            cfg["instructions"] = instructions or list(DEFAULT_SUBSCRIPTION_PAYMENT["instructions"])
+        cfg["merchant_number"] = str(cfg.get("merchant_number") or "").strip()
+        cfg["company_name"] = str(cfg.get("company_name") or "").strip()
+        cfg["auto_renew_enabled"] = bool(cfg.get("auto_renew_enabled", True))
+        SettingsService.upsert(
+            key=SUBSCRIPTION_PAYMENT_KEY,
+            value=cfg,
+            category="platform",
+            user=user,
+        )
+        return cfg
+
+    @staticmethod
+    def _format_payment_template(template: str, *, merchant: str, amount, reference: str) -> str:
+        amount_str = f"{float(amount):.0f}" if float(amount) == int(float(amount)) else f"{float(amount):.2f}"
+        try:
+            return template.format(merchant=merchant, amount=amount_str, reference=reference)
+        except (KeyError, ValueError):
+            return (
+                template.replace("{merchant}", merchant)
+                .replace("{amount}", amount_str)
+                .replace("{reference}", reference)
+            )
+
+    @staticmethod
+    def ussd_to_dial_qr_payload(ussd: str) -> str:
+        """Encode USSD so scanning the QR opens the phone dialer (auto-dials on most phones)."""
+        code = (ussd or "").strip()
+        if not code:
+            return ""
+        if code.lower().startswith("tel:"):
+            return code
+        if code.endswith("#"):
+            return f"tel:{code[:-1]}%23"
+        return f"tel:{code}"
+
+    @staticmethod
+    def ensure_pending_payment(*, subscription: TenantSubscription, user=None) -> SubscriptionPayment:
+        cfg = PlatformService.get_subscription_payment_config()
+        period_key = subscription.payment_period_key()
+        amount = subscription.effective_monthly_fee
+        merchant = cfg.get("merchant_number") or ""
+        existing = (
+            SubscriptionPayment.active_objects()
+            .filter(
+                subscription=subscription,
+                period_key=period_key,
+                status=SubscriptionPayment.STATUS_PENDING,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if existing:
+            # Keep pending row in sync with current plan fee / merchant
+            updates = []
+            if existing.amount != amount:
+                existing.amount = amount
+                updates.append("amount")
+            if merchant and existing.merchant_number != merchant:
+                existing.merchant_number = merchant
+                updates.append("merchant_number")
+            if updates:
+                existing.updated_by = user
+                updates.extend(["updated_at", "updated_by"])
+                existing.save(update_fields=updates)
+            return existing
+
+        reference = f"{subscription.reference_code}-{period_key.replace('-', '')}"
+        # Keep reference unique if recreated after expiry of old pending
+        base_ref = reference[:60]
+        reference = base_ref
+        n = 1
+        while SubscriptionPayment.objects.filter(payment_reference=reference).exists():
+            reference = f"{base_ref}-{n}"[:64]
+            n += 1
+
+        return SubscriptionPayment.objects.create(
+            subscription=subscription,
+            payment_reference=reference,
+            amount=amount,
+            merchant_number=merchant,
+            period_key=period_key,
+            status=SubscriptionPayment.STATUS_PENDING,
+            created_by=user,
+        )
+
+    @staticmethod
+    def payment_instructions_for_subscription(subscription: TenantSubscription, *, user=None) -> dict:
+        cfg = PlatformService.get_subscription_payment_config()
+        payment = PlatformService.ensure_pending_payment(subscription=subscription, user=user)
+        merchant = payment.merchant_number or cfg.get("merchant_number") or ""
+        amount = payment.amount
+        reference = payment.payment_reference
+        ussd = PlatformService._format_payment_template(
+            cfg.get("ussd_template") or DEFAULT_SUBSCRIPTION_PAYMENT["ussd_template"],
+            merchant=merchant,
+            amount=amount,
+            reference=reference,
+        )
+        # Prefer dialable USSD QR (plan amount) so scan → phone dialer opens *789*merchant*amount#
+        qr_template = (cfg.get("qr_payload_template") or "").strip()
+        if qr_template and "{amount}" in qr_template:
+            qr_payload = PlatformService._format_payment_template(
+                qr_template,
+                merchant=merchant,
+                amount=amount,
+                reference=reference,
+            )
+            if not qr_payload.lower().startswith("tel:"):
+                qr_payload = PlatformService.ussd_to_dial_qr_payload(qr_payload)
+        else:
+            qr_payload = PlatformService.ussd_to_dial_qr_payload(ussd)
+        title_override = (cfg.get("dialog_title_override") or "").strip()
+        message_override = (cfg.get("dialog_message_override") or "").strip()
+        return {
+            "payment_id": str(payment.id),
+            "payment_reference": reference,
+            "payment_status": payment.status,
+            "amount": float(amount),
+            "merchant_number": merchant,
+            "company_name": cfg.get("company_name") or "",
+            "provider_label": cfg.get("provider_label") or "Waafi / EVC Plus",
+            "ussd_code": ussd,
+            "qr_payload": qr_payload,
+            # Dynamic dial QR is authoritative; static placard image is optional branding only
+            "qr_image_url": "",
+            "qr_branding_image_url": cfg.get("qr_image_url") or "",
+            "instructions_title": cfg.get("instructions_title") or "",
+            "instructions": cfg.get("instructions") or [],
+            "contact_phone": cfg.get("contact_phone") or "",
+            "auto_renew_enabled": bool(cfg.get("auto_renew_enabled", True)),
+            "dialog_title_override": title_override,
+            "dialog_message_override": message_override,
+        }
+
+    @staticmethod
+    def enrich_alert_payload(subscription: TenantSubscription, *, user=None) -> dict:
+        payload = subscription.alert_payload()
+        payment = PlatformService.payment_instructions_for_subscription(subscription, user=user)
+        if payment.get("dialog_title_override"):
+            payload["title"] = payment["dialog_title_override"]
+        if payment.get("dialog_message_override"):
+            try:
+                payload["message"] = payment["dialog_message_override"].format(**subscription.alert_context())
+            except (KeyError, ValueError):
+                payload["message"] = payment["dialog_message_override"]
+        payload["payment"] = payment
+        return payload
+
+    @staticmethod
+    def serialize_payment(payment: SubscriptionPayment) -> dict:
+        return {
+            "id": str(payment.id),
+            "subscription_id": str(payment.subscription_id),
+            "payment_reference": payment.payment_reference,
+            "amount": float(payment.amount),
+            "merchant_number": payment.merchant_number,
+            "payer_phone": payment.payer_phone,
+            "external_transaction_id": payment.external_transaction_id,
+            "status": payment.status,
+            "period_key": payment.period_key,
+            "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
+            "auto_renewed": payment.auto_renewed,
+            "notes": payment.notes,
+            "tenant_name": payment.subscription.tenant.name if payment.subscription.tenant_id else None,
+            "reference_code": payment.subscription.reference_code,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def report_subscription_payment(
+        *,
+        subscription: TenantSubscription,
+        payer_phone: str = "",
+        notes: str = "",
+        user=None,
+    ) -> SubscriptionPayment:
+        payment = PlatformService.ensure_pending_payment(subscription=subscription, user=user)
+        if payment.status == SubscriptionPayment.STATUS_CONFIRMED:
+            return payment
+        payment.payer_phone = (payer_phone or "").strip()
+        if notes:
+            payment.notes = notes
+        payment.reported_by = user
+        payment.updated_by = user
+        payment.save()
+        return payment
+
+    @staticmethod
+    @transaction.atomic
+    def confirm_subscription_payment(
+        *,
+        payment: SubscriptionPayment,
+        external_transaction_id: str = "",
+        payer_phone: str = "",
+        notes: str = "",
+        user=None,
+        auto: bool = False,
+    ) -> SubscriptionPayment:
+        if payment.status == SubscriptionPayment.STATUS_CONFIRMED:
+            return payment
+
+        cfg = PlatformService.get_subscription_payment_config()
+        payment.status = SubscriptionPayment.STATUS_CONFIRMED
+        payment.confirmed_at = timezone.now()
+        if external_transaction_id:
+            payment.external_transaction_id = external_transaction_id.strip()
+        if payer_phone:
+            payment.payer_phone = payer_phone.strip()
+        if notes:
+            payment.notes = ((payment.notes + "\n") if payment.notes else "") + notes
+        payment.updated_by = user
+        payment.save()
+
+        if cfg.get("auto_renew_enabled", True) and not payment.auto_renewed:
+            PlatformService.renew_subscription(
+                subscription=payment.subscription,
+                user=user,
+                notes=f"Auto-renewed via payment {payment.payment_reference}",
+            )
+            payment.auto_renewed = True
+            payment.save(update_fields=["auto_renewed", "updated_at"])
+
+        return payment
+
+    @staticmethod
+    @transaction.atomic
+    def process_waafi_callback(*, data: dict) -> SubscriptionPayment:
+        """Match an incoming Waafi/EVC payment notification and auto-renew."""
+        reference = (
+            str(data.get("reference") or data.get("payment_reference") or data.get("desc") or "")
+            .strip()
+        )
+        transaction_id = str(
+            data.get("transaction_id") or data.get("trx_id") or data.get("id") or ""
+        ).strip()
+        payer_phone = str(data.get("payer_phone") or data.get("phone") or data.get("msisdn") or "").strip()
+        amount_raw = data.get("amount") or data.get("paid_amount")
+        merchant = str(data.get("merchant_number") or data.get("merchant") or "").strip()
+
+        payment = None
+        if reference:
+            payment = SubscriptionPayment.active_objects().filter(payment_reference__iexact=reference).first()
+            if not payment:
+                payment = (
+                    SubscriptionPayment.active_objects()
+                    .filter(payment_reference__icontains=reference, status=SubscriptionPayment.STATUS_PENDING)
+                    .order_by("-created_at")
+                    .first()
+                )
+        if not payment and transaction_id:
+            payment = SubscriptionPayment.active_objects().filter(
+                external_transaction_id=transaction_id
+            ).first()
+
+        if not payment and amount_raw is not None and merchant:
+            from decimal import Decimal
+
+            amount = Decimal(str(amount_raw))
+            payment = (
+                SubscriptionPayment.active_objects()
+                .filter(
+                    status=SubscriptionPayment.STATUS_PENDING,
+                    merchant_number=merchant,
+                    amount=amount,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+        if not payment:
+            raise ValueError("No matching pending subscription payment found.")
+
+        return PlatformService.confirm_subscription_payment(
+            payment=payment,
+            external_transaction_id=transaction_id,
+            payer_phone=payer_phone,
+            notes="Confirmed via Waafi/EVC callback",
+            auto=True,
+        )
+
+    @staticmethod
+    def list_pending_payments(*, user=None, limit=50):
+        qs = (
+            SubscriptionPayment.active_objects()
+            .select_related("subscription", "subscription__tenant", "subscription__plan")
+            .filter(status=SubscriptionPayment.STATUS_PENDING)
+            .order_by("-created_at")
+        )
+        if user is not None:
+            ids = PlatformService.accessible_tenant_ids(user)
+            qs = qs.filter(subscription__tenant_id__in=ids)
+        return [PlatformService.serialize_payment(p) for p in qs[:limit]]
+

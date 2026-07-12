@@ -14,7 +14,7 @@ class BranchListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("branches.view")]
 
     def get(self, request):
-        branches = BranchService.list_branches()
+        branches = BranchService.list_branches(user=request.user)
         return success_response(data=BranchSerializer(branches, many=True).data)
 
     def post(self, request):
@@ -22,9 +22,12 @@ class BranchListCreateView(APIView):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         serializer = BranchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        branch = BranchService.create_branch(
-            data=serializer.validated_data, created_by=request.user
-        )
+        try:
+            branch = BranchService.create_branch(
+                data=serializer.validated_data, created_by=request.user
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=BranchSerializer(branch).data,
             message="Branch created.",
@@ -36,13 +39,13 @@ class BranchDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("branches.view")]
 
     def get(self, request, pk):
-        branch = BranchService.list_branches().get(pk=pk)
+        branch = BranchService.list_branches(user=request.user).get(pk=pk)
         return success_response(data=BranchSerializer(branch).data)
 
     def put(self, request, pk):
         if not request.user.has_permission("branches.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        branch = BranchService.list_branches().get(pk=pk)
+        branch = BranchService.list_branches(user=request.user).get(pk=pk)
         serializer = BranchSerializer(branch, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         branch = BranchService.update_branch(
@@ -53,8 +56,11 @@ class BranchDetailView(APIView):
     def delete(self, request, pk):
         if not request.user.has_permission("branches.delete"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        branch = BranchService.list_branches().get(pk=pk)
-        branch.soft_delete(user=request.user)
+        branch = BranchService.list_branches(user=request.user).get(pk=pk)
+        try:
+            BranchService.delete_branch(branch=branch, user=request.user)
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(message="Branch deleted.")
 
 
@@ -62,7 +68,7 @@ class BranchSetDefaultView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("branches.update")]
 
     def post(self, request, pk):
-        branch = BranchService.list_branches().get(pk=pk)
+        branch = BranchService.list_branches(user=request.user).get(pk=pk)
         branch = BranchService.set_default(branch=branch, updated_by=request.user)
         return success_response(data=BranchSerializer(branch).data, message="Default branch set.")
 

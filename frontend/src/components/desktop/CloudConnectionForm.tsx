@@ -13,6 +13,7 @@ import {
 } from "@/config/connection";
 import { DEFAULT_CLOUD_API_BASE } from "@/config/publicCloudUrl";
 import { isTauri } from "@/utils/platform";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const EMPTY: HybridConnectionConfig = {
   cloud_api_base: "",
@@ -58,7 +59,7 @@ export function CloudConnectionForm({ onSaved, showBackLink = false }: CloudConn
       setSaved(true);
       onSaved?.(normalized);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not save settings.");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not save settings.");
     } finally {
       setSaving(false);
     }

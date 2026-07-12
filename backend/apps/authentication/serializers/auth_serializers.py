@@ -141,15 +141,16 @@ class RoleSerializer(serializers.ModelSerializer):
 
 
 class BranchSerializer(serializers.ModelSerializer):
-    company_id = serializers.UUIDField(write_only=True)
+    company_id = serializers.UUIDField(required=False)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Branch
         fields = [
-            "id", "company_id", "name", "code", "address", "phone", "email",
+            "id", "company_id", "company_name", "name", "code", "address", "phone", "email",
             "is_active", "is_default", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "company_name", "created_at", "updated_at"]
 
 
 class CompanySerializer(serializers.ModelSerializer):

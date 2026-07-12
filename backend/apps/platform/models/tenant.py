@@ -240,3 +240,54 @@ class TenantSubscription(BaseModel):
             "alert_title": self.alert_title,
             "alert_message_template": self.alert_message_template,
         }
+
+    def payment_period_key(self) -> str:
+        if self.expires_at:
+            return self.expires_at.isoformat()
+        return timezone.localdate().isoformat()
+
+
+class SubscriptionPayment(BaseModel):
+    """Tracks Waafi/EVC subscription payments for automatic renewal."""
+
+    STATUS_PENDING = "pending"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_FAILED = "failed"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_CONFIRMED, "Confirmed"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_EXPIRED, "Expired"),
+    ]
+
+    subscription = models.ForeignKey(
+        TenantSubscription,
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    payment_reference = models.CharField(max_length=64, unique=True, db_index=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    merchant_number = models.CharField(max_length=32, blank=True)
+    payer_phone = models.CharField(max_length=32, blank=True)
+    external_transaction_id = models.CharField(max_length=100, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
+    period_key = models.CharField(max_length=32, blank=True, db_index=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    auto_renewed = models.BooleanField(default=False)
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reported_subscription_payments",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "subscription_payments"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.payment_reference} ({self.status})"
+

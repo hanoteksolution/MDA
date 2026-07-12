@@ -130,9 +130,12 @@ class ProductListCreateView(APIView):
         if warehouse_id:
             from apps.inventory.models import Warehouse
             warehouse = Warehouse.active_objects().get(id=warehouse_id)
-        product = ProductService.create(
-            data=data, user=request.user, initial_stock=initial_stock, warehouse=warehouse
-        )
+        try:
+            product = ProductService.create(
+                data=data, user=request.user, initial_stock=initial_stock, warehouse=warehouse
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=serialize_product(product, include_stock=True, request=request),
             message="Product created.",
@@ -151,7 +154,23 @@ class ProductDetailView(APIView):
         if not request.user.has_permission("products.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         product = ProductService.list().get(pk=pk)
-        product = ProductService.update(product=product, data=request.data, user=request.user)
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        stock = data.pop("stock", data.pop("initial_stock", None))
+        warehouse_id = data.pop("warehouse_id", None)
+        warehouse = None
+        if warehouse_id:
+            from apps.inventory.models import Warehouse
+            warehouse = Warehouse.active_objects().get(id=warehouse_id)
+        try:
+            product = ProductService.update(
+                product=product,
+                data=data,
+                user=request.user,
+                stock=stock,
+                warehouse=warehouse,
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=serialize_product(product, include_stock=True, request=request),
             message="Product updated.",

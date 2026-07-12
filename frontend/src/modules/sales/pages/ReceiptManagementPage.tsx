@@ -19,6 +19,7 @@ import { salesApi, type Invoice } from "@/services/api/sales";
 import type { PosReceipt } from "@/services/api/pos";
 import { cn, formatCurrency } from "@/utils/cn";
 import { useSalesReceipt } from "../hooks/useSalesReceipt";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 type PaymentTab = "all" | "paid" | "unpaid";
 
@@ -138,7 +139,7 @@ export function ReceiptManagementPage() {
       list.reload();
       await loadPreview(selected.id);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not mark as paid");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     } finally {
       setMarking(false);
     }

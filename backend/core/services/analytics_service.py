@@ -97,32 +97,29 @@ class AnalyticsService:
 
     @staticmethod
     def get_low_stock(*, branch_id=None, limit=20):
+        """One alert row per product (stock summed), no out-of-stock double-listing."""
+        # Consolidate split stock before reading alerts
+        InventoryService.dedupe_inventory(preferred_branch_id=branch_id)
         qs = InventoryService.get_low_stock()
         if branch_id:
             qs = qs.filter(warehouse__branch_id=branch_id)
-        results = []
-        for inv in qs[:limit]:
-            results.append({
-                "id": str(inv.id),
-                "product": inv.product.name,
-                "sku": inv.product.sku,
-                "current": float(inv.quantity),
-                "minimum": inv.product.minimum_stock,
-                "warehouse": inv.warehouse.name,
-            })
-        out_qs = InventoryService.get_out_of_stock()
-        if branch_id:
-            out_qs = out_qs.filter(warehouse__branch_id=branch_id)
-        for inv in out_qs[: max(0, limit - len(results))]:
-            results.append({
-                "id": str(inv.id),
-                "product": inv.product.name,
-                "sku": inv.product.sku,
-                "current": 0,
-                "minimum": inv.product.minimum_stock,
-                "warehouse": inv.warehouse.name,
-            })
-        return results
+
+        by_product: dict = {}
+        for inv in qs:
+            pid = str(inv.product_id)
+            if pid not in by_product:
+                by_product[pid] = {
+                    "id": str(inv.id),
+                    "product": inv.product.name,
+                    "sku": inv.product.sku,
+                    "current": float(inv.quantity),
+                    "minimum": inv.product.minimum_stock,
+                    "warehouse": inv.warehouse.name,
+                }
+            else:
+                by_product[pid]["current"] += float(inv.quantity)
+
+        return list(by_product.values())[:limit]
 
     @staticmethod
     def get_top_products(*, branch_id=None, period="month", limit=10):

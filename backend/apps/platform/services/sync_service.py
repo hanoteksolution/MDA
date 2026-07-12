@@ -331,10 +331,14 @@ class ShopSyncService:
         }
         if locked:
             alert["title"] = "Subscription expired — app locked"
+            merchant = (payload.get("payment") or {}).get("merchant_number") or ""
             alert["message"] = (
                 f"This shop's subscription ended on {expires_at.isoformat() if expires_at else '—'}. "
-                "Connect to the internet, ask the owner to renew payment on the cloud, "
-                "then tap Sync now to unlock."
+                + (
+                    f"Pay merchant {merchant} via Waafi/EVC (scan QR below), then tap Sync now to unlock."
+                    if merchant
+                    else "Pay via Waafi/EVC using the QR below, then tap Sync now to unlock."
+                )
             )
 
         return {
@@ -364,6 +368,44 @@ class ShopSyncService:
             tenant.sync_secret = secrets.token_urlsafe(24)
             tenant.save(update_fields=["sync_secret", "updated_at"])
         return tenant.sync_secret
+
+    @staticmethod
+    def report_subscription_payment(*, payer_phone: str = "", notes: str = "") -> dict:
+        """Forward 'I paid' from desktop shop → cloud (sync secret auth)."""
+        cfg = ShopSyncService.ensure_connection_config()
+        cloud = (cfg.get("cloud_api_base") or "").rstrip("/")
+        if not cloud:
+            raise ValueError("Cloud API base URL is not configured.")
+        headers = ShopSyncService._sync_headers(cfg)
+        url = f"{cloud}/sync/shop-report-payment/"
+        response = ShopSyncService._http_json(
+            "POST",
+            url,
+            headers,
+            {"payer_phone": payer_phone or "", "notes": notes or "Reported from desktop shop"},
+        )
+        data = response.get("data", response)
+        # Refresh local subscription alert cache if cloud returned updated alert
+        alert = data.get("alert")
+        if isinstance(alert, dict):
+            ShopSyncService._set_setting(SYNC_KEYS["subscription_alert"], alert, None)
+        return data
+
+    @staticmethod
+    def cloud_payment_status() -> dict:
+        """Poll cloud for payment confirmation / auto-renew status."""
+        cfg = ShopSyncService.ensure_connection_config()
+        cloud = (cfg.get("cloud_api_base") or "").rstrip("/")
+        if not cloud:
+            raise ValueError("Cloud API base URL is not configured.")
+        headers = ShopSyncService._sync_headers(cfg)
+        url = f"{cloud}/sync/shop-payment-status/"
+        response = ShopSyncService._http_json("GET", url, headers)
+        data = response.get("data", response)
+        alert = data.get("alert")
+        if isinstance(alert, dict):
+            ShopSyncService._set_setting(SYNC_KEYS["subscription_alert"], alert, None)
+        return data
 
 
 class CloudShopSyncService:
@@ -399,3 +441,57 @@ class CloudShopSyncService:
             return None
         month = snap.kpis.get("month") if isinstance(snap.kpis, dict) else None
         return month or snap.kpis
+
+    @staticmethod
+    def _tenant_from_sync(*, tenant_slug: str, sync_secret: str) -> Tenant:
+        return Tenant.objects.select_related("subscription__plan").get(
+            slug=tenant_slug, sync_secret=sync_secret, is_active=True
+        )
+
+    @staticmethod
+    def report_payment(*, tenant_slug: str, sync_secret: str, payer_phone: str = "", notes: str = "") -> dict:
+        from apps.platform.services.platform_service import PlatformService
+
+        tenant = CloudShopSyncService._tenant_from_sync(
+            tenant_slug=tenant_slug, sync_secret=sync_secret
+        )
+        sub = getattr(tenant, "subscription", None)
+        if not sub:
+            raise ValueError("Shop has no subscription.")
+        payment = PlatformService.report_subscription_payment(
+            subscription=sub,
+            payer_phone=payer_phone,
+            notes=notes or "Reported via shop sync",
+        )
+        alert = PlatformService.enrich_alert_payload(sub)
+        return {
+            "payment": PlatformService.serialize_payment(payment),
+            "alert": alert,
+            "subscription_usable": sub.is_usable,
+            "is_payment_current": sub.is_payment_current,
+        }
+
+    @staticmethod
+    def payment_status(*, tenant_slug: str, sync_secret: str) -> dict:
+        from apps.platform.services.platform_service import PlatformService
+        from apps.platform.models import SubscriptionPayment
+
+        tenant = CloudShopSyncService._tenant_from_sync(
+            tenant_slug=tenant_slug, sync_secret=sync_secret
+        )
+        sub = getattr(tenant, "subscription", None)
+        if not sub:
+            raise ValueError("Shop has no subscription.")
+        payment = (
+            SubscriptionPayment.active_objects()
+            .filter(subscription=sub)
+            .order_by("-created_at")
+            .first()
+        )
+        alert = PlatformService.enrich_alert_payload(sub)
+        return {
+            "payment": PlatformService.serialize_payment(payment) if payment else None,
+            "alert": alert,
+            "subscription_usable": sub.is_usable,
+            "is_payment_current": sub.is_payment_current,
+        }

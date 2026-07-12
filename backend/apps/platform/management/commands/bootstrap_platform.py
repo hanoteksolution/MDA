@@ -21,6 +21,7 @@ class Command(BaseCommand):
             reset_role_permissions=options["reset_role_permissions"],
         )
         PlatformService.ensure_default_plans()
+        PlatformService.ensure_subscription_payment_assets()
         linked = 0
         for company in Company.active_objects().filter(tenant__isnull=True):
             PlatformService.create_tenant_for_company(company=company, contact_email=company.email)

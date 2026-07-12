@@ -29,6 +29,7 @@ import { formatCurrency } from "@/utils/cn";
 import type { Invoice, Quotation, SalesSummary } from "@/services/api/sales";
 import { SalesReceiptDialog } from "../components/SalesReceiptDialog";
 import { useSalesReceipt } from "../hooks/useSalesReceipt";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const INVOICE_STATUS: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary", sent: "warning", paid: "success", overdue: "destructive", cancelled: "destructive",
@@ -85,7 +86,7 @@ export function SalesPage() {
       invoiceList.reload();
       refreshSummary();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not mark as paid");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     }
   };
 
@@ -99,7 +100,7 @@ export function SalesPage() {
       invoiceList.reload();
       refreshSummary();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not mark as paid");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     }
   };
 

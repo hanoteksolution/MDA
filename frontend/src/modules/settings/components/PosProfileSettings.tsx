@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { posApi, type PosMerchant, type PosProfile, type PosWaiter } from "@/services/api/pos";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const emptyMerchant = (): PosMerchant => ({
   id: crypto.randomUUID(),
@@ -96,7 +97,7 @@ export function PosProfileSettings() {
       const res = await posApi.saveProfile(profile);
       setProfile(res.data);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

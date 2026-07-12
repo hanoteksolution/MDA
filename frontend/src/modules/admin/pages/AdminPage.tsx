@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { adminApi } from "@/services/api/admin";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { AdminUser, RoleDetail } from "@/types/models/admin";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -77,7 +78,7 @@ export function AdminPage() {
       await adminApi.deactivateUser(id);
       loadUsers();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to deactivate user");
+      await appDialog.alert(err instanceof Error ? err.message : "Failed to deactivate user");
     }
   };
 

@@ -1,10 +1,12 @@
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.platform.models import SubscriptionPlan, Tenant, TenantSubscription
+from apps.platform.models import SubscriptionPayment, SubscriptionPlan, Tenant, TenantSubscription
 from apps.platform.services.platform_service import PlatformService
 from core.responses.api_response import error_response, success_response
+from core.utils.media import save_subscription_qr
+from permissions.base import HasPermission
 
 
 def _platform_user(user):
@@ -304,9 +306,15 @@ class PlatformShopGroupListCreateView(APIView):
             groups = PlatformService.list_shop_groups()
         else:
             groups = PlatformService.list_shop_groups().none()
-        return success_response(
-            data=[PlatformService.shop_group_payload(g) for g in groups]
-        )
+        period = request.query_params.get("period", "month")
+        enrich = request.query_params.get("enrich") in ("1", "true", "yes")
+        data = []
+        for g in groups:
+            if enrich:
+                data.append(PlatformService.shop_group_overview(g, period=period))
+            else:
+                data.append(PlatformService.shop_group_payload(g))
+        return success_response(data=data)
 
     def post(self, request):
         if not _platform_global(request.user):
@@ -319,4 +327,188 @@ class PlatformShopGroupListCreateView(APIView):
             data=PlatformService.shop_group_payload(group),
             message="Shop group created.",
             status=status.HTTP_201_CREATED,
+        )
+
+
+class PlatformShopGroupDetailView(APIView):
+    """Tenant (org) profile — shops, managers, aggregate KPIs."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        from apps.platform.models import ShopGroup
+
+        group = ShopGroup.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not group:
+            return error_response(message="Tenant not found.", status=status.HTTP_404_NOT_FOUND)
+        if not PlatformService.user_can_access_shop_group(request.user, group):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        period = request.query_params.get("period", "month")
+        return success_response(data=PlatformService.shop_group_overview(group, period=period))
+
+
+class PlatformSubscriptionPaymentConfigView(APIView):
+    """Get/update Waafi merchant QR + payment instructions shown on expiry alerts."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _subscriptions_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        return success_response(data=PlatformService.get_subscription_payment_config())
+
+    def put(self, request):
+        if not _subscriptions_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        cfg = PlatformService.save_subscription_payment_config(data=request.data, user=request.user)
+        return success_response(data=cfg, message="Subscription payment settings saved.")
+
+
+class PlatformSubscriptionQrUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _subscriptions_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        uploaded = request.FILES.get("image")
+        if not uploaded:
+            return error_response(message="No image file provided.", status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = save_subscription_qr(uploaded_file=uploaded)
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        cfg = PlatformService.save_subscription_payment_config(
+            data={"qr_image_url": url},
+            user=request.user,
+        )
+        return success_response(
+            data={"url": url, "config": cfg},
+            message="QR image uploaded.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PlatformSubscriptionReportPaymentView(APIView):
+    """Shop owner reports that they paid via Waafi/EVC — starts online tracking."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        sub = TenantSubscription.objects.filter(pk=pk, deleted_at__isnull=True).select_related(
+            "tenant", "plan"
+        ).first()
+        if not sub:
+            return error_response(message="Subscription not found.", status=status.HTTP_404_NOT_FOUND)
+        # Shop contact / tenant user / platform admin may report
+        tenant = PlatformService.resolve_user_tenant(request.user)
+        allowed = (
+            _subscriptions_user(request.user)
+            or (tenant and sub.tenant_id == tenant.id)
+            or (sub.contact_user_id and sub.contact_user_id == request.user.id)
+        )
+        if not allowed:
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        payment = PlatformService.report_subscription_payment(
+            subscription=sub,
+            payer_phone=request.data.get("payer_phone", ""),
+            notes=request.data.get("notes", "Reported by shop"),
+            user=request.user,
+        )
+        return success_response(
+            data={
+                "payment": PlatformService.serialize_payment(payment),
+                "alert": PlatformService.enrich_alert_payload(sub, user=request.user),
+            },
+            message="Payment reported. Waiting for confirmation.",
+        )
+
+
+class PlatformSubscriptionPaymentStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        sub = TenantSubscription.objects.filter(pk=pk, deleted_at__isnull=True).select_related(
+            "tenant", "plan"
+        ).first()
+        if not sub:
+            return error_response(message="Subscription not found.", status=status.HTTP_404_NOT_FOUND)
+        tenant = PlatformService.resolve_user_tenant(request.user)
+        allowed = (
+            _subscriptions_user(request.user)
+            or (tenant and sub.tenant_id == tenant.id)
+            or (sub.contact_user_id and sub.contact_user_id == request.user.id)
+        )
+        if not allowed:
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        payment = (
+            SubscriptionPayment.active_objects()
+            .filter(subscription=sub)
+            .order_by("-created_at")
+            .first()
+        )
+        return success_response(
+            data={
+                "payment": PlatformService.serialize_payment(payment) if payment else None,
+                "subscription": PlatformService.subscription_payload(sub),
+                "alert": PlatformService.enrich_alert_payload(sub, user=request.user)
+                if sub.needs_payment_alert
+                else None,
+            }
+        )
+
+
+class PlatformSubscriptionConfirmPaymentView(APIView):
+    """Admin manually confirms a pending Waafi/EVC payment → auto-renews."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not _subscriptions_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        payment = SubscriptionPayment.active_objects().filter(pk=pk).select_related(
+            "subscription", "subscription__plan", "subscription__tenant"
+        ).first()
+        if not payment:
+            return error_response(message="Payment not found.", status=status.HTTP_404_NOT_FOUND)
+        payment = PlatformService.confirm_subscription_payment(
+            payment=payment,
+            external_transaction_id=request.data.get("external_transaction_id", ""),
+            payer_phone=request.data.get("payer_phone", ""),
+            notes=request.data.get("notes", "Manually confirmed by admin"),
+            user=request.user,
+        )
+        return success_response(
+            data={
+                "payment": PlatformService.serialize_payment(payment),
+                "subscription": PlatformService.subscription_payload(payment.subscription),
+            },
+            message="Payment confirmed and subscription renewed.",
+        )
+
+
+class PlatformPendingPaymentsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _subscriptions_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        return success_response(data=PlatformService.list_pending_payments(user=request.user))
+
+
+class PlatformWaafiPaymentCallbackView(APIView):
+    """Public webhook for Waafi/EVC payment notifications → auto-renew subscription."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            payment = PlatformService.process_waafi_callback(data=request.data)
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
+        return success_response(
+            data=PlatformService.serialize_payment(payment),
+            message="Payment confirmed.",
         )

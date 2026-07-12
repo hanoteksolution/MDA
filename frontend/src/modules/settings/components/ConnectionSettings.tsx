@@ -9,6 +9,7 @@ import { cloudLogin, clearCloudSession, hasCloudSession } from "@/services/api/c
 import { syncApi } from "@/services/api/sync";
 import { requestCloudSync } from "@/components/desktop/syncEvents";
 import { isTauri } from "@/utils/platform";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function ConnectionSettings() {
   const [syncing, setSyncing] = useState(false);
@@ -50,7 +51,7 @@ export function ConnectionSettings() {
       setCloudLoggedIn(true);
       setCloudPass("");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Cloud login failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Cloud login failed");
     }
   };
 

@@ -39,7 +39,85 @@ export interface PlatformShopGroupRow {
   shop_count: number;
   tenant_count?: number;
   is_active: boolean;
+  managers?: {
+    id: string;
+    username: string;
+    full_name: string;
+    email: string;
+    role: string;
+  }[];
+  totals?: {
+    shops: number;
+    active_shops: number;
+    total_sales: number;
+    revenue: number;
+    users: number;
+  };
+  shops?: PlatformTenantRow[];
+  period?: string;
 }
+
+export interface PlatformShopProduct {
+  id: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface PlatformShopSale {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+  status: string;
+  total_amount: number;
+  issue_date: string | null;
+  cashier: string;
+}
+
+export interface PlatformShopOverview {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: boolean;
+    contact_email: string;
+    contact_phone?: string;
+    shop_group_id?: string | null;
+    shop_group_name?: string | null;
+    last_synced_at?: string | null;
+    sync_secret?: string;
+  };
+  subscription: PlatformTenantRow["subscription"];
+  company?: { id: string; name: string } | null;
+  branch?: { id: string; name: string; code: string } | null;
+  kpis: {
+    total_sales?: number;
+    revenue?: number;
+    cash_collected?: number;
+    profit?: number;
+    [key: string]: unknown;
+  };
+  staff_performance: StaffPerformanceRow[];
+  catalog: {
+    products_count: number;
+    stock_units: number;
+    stock_value: number;
+    low_stock: number;
+    products?: PlatformShopProduct[];
+  };
+  recent_sales?: PlatformShopSale[];
+  users: {
+    id: string;
+    username: string;
+    full_name: string;
+    email?: string;
+    role: string;
+    is_active: boolean;
+  }[];
+  waiters?: { id: string; name: string; user_id?: string | null; is_active?: boolean }[];
+}
+
 
 export interface PlatformUserOption {
   id: string;
@@ -86,6 +164,57 @@ export interface PlatformSubscriptionRow {
   notes: string;
 }
 
+export interface SubscriptionPaymentInfo {
+  payment_id: string;
+  payment_reference: string;
+  payment_status: string;
+  amount: number;
+  merchant_number: string;
+  company_name: string;
+  provider_label: string;
+  ussd_code: string;
+  qr_payload: string;
+  qr_image_url: string;
+  instructions_title: string;
+  instructions: string[];
+  contact_phone: string;
+  auto_renew_enabled: boolean;
+  dialog_title_override?: string;
+  dialog_message_override?: string;
+}
+
+export interface SubscriptionPaymentConfig {
+  company_name: string;
+  merchant_number: string;
+  ussd_template: string;
+  qr_image_url: string;
+  qr_payload_template: string;
+  provider_label: string;
+  instructions_title: string;
+  instructions: string[];
+  contact_phone: string;
+  dialog_title_override: string;
+  dialog_message_override: string;
+  auto_renew_enabled: boolean;
+}
+
+export interface SubscriptionPaymentRow {
+  id: string;
+  subscription_id: string;
+  payment_reference: string;
+  amount: number;
+  merchant_number: string;
+  payer_phone: string;
+  external_transaction_id: string;
+  status: string;
+  period_key: string;
+  confirmed_at: string | null;
+  auto_renewed: boolean;
+  notes: string;
+  tenant_name: string | null;
+  reference_code: string;
+}
+
 export interface SubscriptionAlert {
   subscription_id: string;
   reference_code: string;
@@ -109,6 +238,7 @@ export interface SubscriptionAlert {
   message: string;
   alert_title?: string;
   alert_message_template?: string;
+  payment?: SubscriptionPaymentInfo;
 }
 
 export interface PlatformTenantRow {
@@ -233,16 +363,113 @@ export const platformApi = {
   mySubscriptionAlert: () =>
     apiRequest<ApiResponse<SubscriptionAlert | null>>("/platform/subscriptions/my-alert/"),
 
-  shopGroups: () =>
-    platformCloudRequest<ApiResponse<PlatformShopGroupRow[]>>("/platform/shop-groups/"),
+  getSubscriptionPaymentConfig: () =>
+    platformCloudRequest<ApiResponse<SubscriptionPaymentConfig>>(
+      "/platform/subscriptions/payment-config/"
+    ),
+
+  saveSubscriptionPaymentConfig: (data: Partial<SubscriptionPaymentConfig>) =>
+    platformCloudRequest<ApiResponse<SubscriptionPaymentConfig>>(
+      "/platform/subscriptions/payment-config/",
+      { method: "PUT", body: JSON.stringify(data) }
+    ),
+
+  uploadSubscriptionQr: async (file: File) => {
+    const { ensureConnectionLoaded, getCloudApiBase } = await import("@/config/connection");
+    const { hasCloudSession } = await import("./cloudHttp");
+    const { isTauri } = await import("@/utils/platform");
+    const { apiUpload } = await import("./http");
+
+    if (isTauri()) {
+      await ensureConnectionLoaded();
+      const base = getCloudApiBase();
+      if (base && hasCloudSession()) {
+        const { getCloudAccessToken } = await import("./cloudHttp");
+        const token = getCloudAccessToken();
+        const formData = new FormData();
+        formData.append("image", file);
+        const res = await fetch(`${base.replace(/\/$/, "")}/platform/subscriptions/payment-config/upload-qr/`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "QR upload failed");
+        }
+        return res.json() as Promise<
+          ApiResponse<{ url: string; config: SubscriptionPaymentConfig }>
+        >;
+      }
+    }
+    return apiUpload<ApiResponse<{ url: string; config: SubscriptionPaymentConfig }>>(
+      "/platform/subscriptions/payment-config/upload-qr/",
+      file
+    );
+  },
+
+  reportSubscriptionPayment: (
+    subscriptionId: string,
+    data: { payer_phone?: string; notes?: string } = {}
+  ) =>
+    platformCloudRequest<
+      ApiResponse<{ payment: SubscriptionPaymentRow; alert: SubscriptionAlert }>
+    >(`/platform/subscriptions/${subscriptionId}/report-payment/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  subscriptionPaymentStatus: (subscriptionId: string) =>
+    platformCloudRequest<
+      ApiResponse<{
+        payment: SubscriptionPaymentRow | null;
+        subscription: PlatformSubscriptionRow;
+        alert: SubscriptionAlert | null;
+      }>
+    >(`/platform/subscriptions/${subscriptionId}/payment-status/`),
+
+  pendingSubscriptionPayments: () =>
+    platformCloudRequest<ApiResponse<SubscriptionPaymentRow[]>>(
+      "/platform/subscriptions/pending-payments/"
+    ),
+
+  confirmSubscriptionPayment: (
+    paymentId: string,
+    data: { external_transaction_id?: string; payer_phone?: string; notes?: string } = {}
+  ) =>
+    platformCloudRequest<
+      ApiResponse<{ payment: SubscriptionPaymentRow; subscription: PlatformSubscriptionRow }>
+    >(`/platform/payments/${paymentId}/confirm/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  shopGroups: (params: { enrich?: boolean; period?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.enrich) q.set("enrich", "1");
+    if (params.period) q.set("period", params.period);
+    const qs = q.toString();
+    return platformCloudRequest<ApiResponse<PlatformShopGroupRow[]>>(
+      `/platform/shop-groups/${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  shopGroup: (id: string, period = "month") =>
+    platformCloudRequest<ApiResponse<PlatformShopGroupRow>>(
+      `/platform/shop-groups/${id}/?period=${period}`
+    ),
 
   createShopGroup: (data: { name: string; contact_email?: string; contact_phone?: string }) =>
     platformCloudRequest<ApiResponse<PlatformShopGroupRow>>("/platform/shop-groups/", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-};
 
+  tenantDetail: (id: string, period = "month") =>
+    platformCloudRequest<ApiResponse<PlatformShopOverview>>(
+      `/platform/tenants/${id}/?period=${period}`
+    ),
+};
 export const staffPerformanceApi = {
   list: (params: {
     period?: string;

@@ -121,7 +121,9 @@ class CatalogSyncEngine:
       subscription = None
       sub = getattr(tenant, "subscription", None)
       if sub:
-          subscription = sub.alert_payload()
+          from apps.platform.services.platform_service import PlatformService
+
+          subscription = PlatformService.enrich_alert_payload(sub)
 
       customers_qs = Customer.active_objects().select_related("branch")
       if branch:

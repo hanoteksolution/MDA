@@ -111,18 +111,59 @@ class ProductService:
         return Product.active_objects().select_related("category", "brand", "unit").get(barcode=barcode)
 
     @staticmethod
+    def _resolve_warehouse(warehouse=None, user=None):
+        if warehouse is not None:
+            return warehouse
+        branch_id = getattr(user, "branch_id", None) if user is not None else None
+        if branch_id:
+            wh = (
+                Warehouse.active_objects().filter(branch_id=branch_id, is_default=True).first()
+                or Warehouse.active_objects().filter(branch_id=branch_id).first()
+            )
+            if wh:
+                return wh
+        return (
+            Warehouse.active_objects().filter(is_default=True).first()
+            or Warehouse.active_objects().first()
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def set_stock(*, product, quantity, warehouse=None, user=None):
+        """Ensure an inventory row exists and set on-hand quantity (0 is valid)."""
+        from decimal import Decimal
+
+        # Pull any stock that landed on duplicate same-named warehouses onto this branch
+        branch_id = getattr(user, "branch_id", None) if user is not None else None
+        InventoryService.dedupe_inventory(user=user, preferred_branch_id=branch_id)
+
+        wh = ProductService._resolve_warehouse(warehouse, user=user)
+        if not wh:
+            raise ValueError("No warehouse available. Create a warehouse before setting stock.")
+        qty = Decimal(str(quantity if quantity is not None else 0))
+        if qty < 0:
+            raise ValueError("Stock quantity cannot be negative.")
+        inv = InventoryService.ensure_inventory_record(product=product, warehouse=wh, user=user)
+        inv.quantity = qty
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+        return inv
+
+    @staticmethod
     @transaction.atomic
     def create(*, data, user=None, initial_stock=0, warehouse=None):
         product = Product.objects.create(
             **ProductService._prepare_product_data(data, for_create=True),
             created_by=user,
         )
-        if warehouse and initial_stock:
-            inv = InventoryService.ensure_inventory_record(
-                product=product, warehouse=warehouse, user=user
+        wh = ProductService._resolve_warehouse(warehouse, user=user)
+        if wh is not None:
+            ProductService.set_stock(
+                product=product,
+                quantity=initial_stock if initial_stock is not None else 0,
+                warehouse=wh,
+                user=user,
             )
-            inv.quantity = initial_stock
-            inv.save(update_fields=["quantity", "updated_at"])
         AuditRepository.create(
             user=user, action="create", module="products",
             entity_type="Product", entity_id=product.id,
@@ -132,7 +173,7 @@ class ProductService:
 
     @staticmethod
     @transaction.atomic
-    def update(*, product, data, user=None):
+    def update(*, product, data, user=None, stock=None, warehouse=None):
         prepared = ProductService._prepare_product_data(data, for_create=False)
         if not (data.get("sku") or "").strip():
             prepared.pop("sku", None)
@@ -142,6 +183,13 @@ class ProductService:
             setattr(product, key, value)
         product.updated_by = user
         product.save()
+        if stock is not None:
+            ProductService.set_stock(
+                product=product,
+                quantity=stock,
+                warehouse=warehouse,
+                user=user,
+            )
         AuditRepository.create(
             user=user, action="update", module="products",
             entity_type="Product", entity_id=product.id,

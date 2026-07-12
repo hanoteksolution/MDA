@@ -8,6 +8,10 @@ export function hasCloudSession(): boolean {
   return !!localStorage.getItem(CLOUD_ACCESS_KEY);
 }
 
+export function getCloudAccessToken(): string | null {
+  return localStorage.getItem(CLOUD_ACCESS_KEY);
+}
+
 export function clearCloudSession(): void {
   localStorage.removeItem(CLOUD_ACCESS_KEY);
   localStorage.removeItem(CLOUD_REFRESH_KEY);

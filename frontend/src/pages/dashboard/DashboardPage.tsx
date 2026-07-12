@@ -37,6 +37,7 @@ import {
   type DashboardTopProduct,
   type DashboardTransaction,
 } from "@/services/api/dashboard";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatCurrency } from "@/utils/cn";
 import type { DashboardKPIs } from "@/types/models";
 
@@ -94,31 +95,41 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("month");
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      dashboardApi.kpis(period),
-      dashboardApi.recentSales(),
-      dashboardApi.lowStock(),
-      dashboardApi.topProducts(period),
-      dashboardApi.charts(),
-    ])
-      .then(([kpiRes, txRes, stockRes, topRes, chartRes]) => {
-        setKpis(kpiRes.data);
-        setTransactions(txRes.data.results);
-        setLowStock(stockRes.data.results);
-        setTopProducts(topRes.data);
-        setCharts(chartRes.data);
-      })
-      .catch(() => {
+  const loadDashboard = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const [kpiRes, txRes, stockRes, topRes, chartRes] = await Promise.all([
+        dashboardApi.kpis(period),
+        dashboardApi.recentSales(),
+        dashboardApi.lowStock(),
+        dashboardApi.topProducts(period),
+        dashboardApi.charts(),
+      ]);
+      setKpis(kpiRes.data);
+      setTransactions(txRes.data.results);
+      setLowStock(stockRes.data.results);
+      setTopProducts(topRes.data);
+      setCharts(chartRes.data);
+    } catch {
+      if (showSpinner) {
         setKpis(null);
         setTransactions([]);
         setLowStock([]);
         setTopProducts([]);
         setCharts(null);
-      })
-      .finally(() => setLoading(false));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadDashboard(true);
+    // period change should show spinner; loadDashboard closes over period
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
+
+  useAutoRefresh(() => loadDashboard(false), { intervalMs: 30_000 });
 
   const displayKpis = {
     total_sales: kpis?.total_sales ?? 0,

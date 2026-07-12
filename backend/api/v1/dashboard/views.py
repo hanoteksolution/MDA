@@ -58,8 +58,8 @@ class DashboardAlertsView(APIView):
     def get(self, request):
         from apps.inventory.services.inventory_service import InventoryService
 
-        low = list(InventoryService.get_low_stock()[:10])
-        out = list(InventoryService.get_out_of_stock()[:10])
+        low = list(InventoryService.get_low_stock(branch_id=getattr(request.user.branch, "id", None))[:10])
+        out = list(InventoryService.get_out_of_stock(branch_id=getattr(request.user.branch, "id", None))[:10])
         out_ids = {inv.id for inv in out}
         alerts = []
         for inv in out:

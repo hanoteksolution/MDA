@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Link } from "react-router-dom";
 import {
-  Package, AlertTriangle, XCircle, Warehouse, ArrowRightLeft, Plus,
+  Package, AlertTriangle, XCircle, Warehouse, ArrowRightLeft, Plus, PackagePlus,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -11,23 +13,199 @@ import { DataTable, type Column } from "@/components/data/DataTable";
 import { QuickActions } from "@/components/data/QuickActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { inventoryApi } from "@/services/api/catalog";
 import { formatCurrency } from "@/utils/cn";
+import { cn } from "@/utils/cn";
 import type { InventoryItem, InventorySummary } from "@/types/models/catalog";
+import { appDialog } from "@/components/feedback/AppDialog";
+
+interface RestockTarget {
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  quantity: number;
+  minimum_stock: number;
+}
+
+function RestockDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: RestockTarget | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [mode, setMode] = useState<"add" | "set">("add");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!target) return;
+    setMode("add");
+    setAmount("");
+    setError(null);
+  }, [target]);
+
+  if (!target) return null;
+
+  const parsed = parseFloat(amount);
+  const nextQty =
+    mode === "add"
+      ? target.quantity + (Number.isFinite(parsed) ? parsed : 0)
+      : Number.isFinite(parsed)
+        ? parsed
+        : target.quantity;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setError("Enter a valid quantity.");
+      return;
+    }
+    if (mode === "add" && parsed <= 0) {
+      setError("Add a quantity greater than zero.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await inventoryApi.createAdjustment({
+        warehouse_id: target.warehouse_id,
+        reason: mode === "add" ? "Quick restock" : "Stock set via restock",
+        items: [
+          {
+            product_id: target.product_id,
+            quantity_after: mode === "add" ? target.quantity + parsed : parsed,
+          },
+        ],
+      });
+      onDone();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restock failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className={cn(
+          "w-full max-w-md overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl",
+          "animate-in fade-in slide-in-from-bottom-4 duration-200"
+        )}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-labelledby="restock-title"
+      >
+        <div className="border-b border-border/50 px-5 py-4">
+          <h2 id="restock-title" className="text-lg font-semibold tracking-tight">
+            Restock {target.product_name}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {target.product_sku} · {target.warehouse_name} · on hand {target.quantity}
+            {target.minimum_stock > 0 ? ` · min ${target.minimum_stock}` : ""}
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "add" ? "default" : "secondary"}
+              onClick={() => setMode("add")}
+            >
+              Add stock
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "set" ? "default" : "secondary"}
+              onClick={() => setMode("set")}
+            >
+              Set quantity
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              {mode === "add" ? "Quantity to add" : "New on-hand quantity"}
+            </label>
+            <Input
+              autoFocus
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={mode === "add" ? "e.g. 50" : String(target.quantity)}
+            />
+            {Number.isFinite(parsed) && (
+              <p className="text-xs text-muted-foreground">
+                New on-hand: <span className="font-medium text-foreground">{nextQty}</span>
+              </p>
+            )}
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={saving}>
+              <PackagePlus className="h-4 w-4" />
+              Confirm restock
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function toRestockTarget(item: InventoryItem): RestockTarget {
+  return {
+    product_id: item.product_id,
+    product_name: item.product_name,
+    product_sku: item.product_sku,
+    warehouse_id: item.warehouse_id,
+    warehouse_name: item.warehouse_name,
+    quantity: item.quantity,
+    minimum_stock: item.minimum_stock,
+  };
+}
 
 export function InventoryDashboardPage() {
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [lowStock, setLowStock] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [restockTarget, setRestockTarget] = useState<RestockTarget | null>(null);
+  const { hasPermission } = usePermissions();
+  const canAdjust = hasPermission("inventory.adjust");
 
-  useEffect(() => {
+  const load = (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     Promise.all([inventoryApi.summary(), inventoryApi.lowStock()])
       .then(([s, l]) => {
         setSummary(s.data);
         setLowStock(l.data.results.slice(0, 10));
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(true);
   }, []);
+
+  useAutoRefresh(() => load(false), { intervalMs: 30_000 });
 
   const columns: Column<InventoryItem>[] = [
     { key: "product", header: "Product", cell: (r) => <span className="font-medium">{r.product_name}</span> },
@@ -42,6 +220,20 @@ export function InventoryDashboardPage() {
         </Badge>
       ),
     },
+    ...(canAdjust
+      ? [
+          {
+            key: "actions",
+            header: "",
+            cell: (r: InventoryItem) => (
+              <Button size="sm" variant="secondary" onClick={() => setRestockTarget(toRestockTarget(r))}>
+                <PackagePlus className="h-3.5 w-3.5" />
+                Restock
+              </Button>
+            ),
+          } satisfies Column<InventoryItem>,
+        ]
+      : []),
   ];
 
   return (
@@ -76,9 +268,15 @@ export function InventoryDashboardPage() {
         />
       </ContentSection>
 
-      <ContentSection title="Low Stock Alerts" description="Products at or below minimum stock level" noPadding>
-        <DataTable embedded columns={columns} data={lowStock} loading={loading} emptyMessage="No low stock alerts." />
+      <ContentSection
+        title="Stock Alerts"
+        description="Products at or below minimum stock level (includes out of stock)."
+        noPadding
+      >
+        <DataTable embedded columns={columns} data={lowStock} loading={loading} emptyMessage="No stock alerts." />
       </ContentSection>
+
+      <RestockDialog target={restockTarget} onClose={() => setRestockTarget(null)} onDone={load} />
     </PageLayout>
   );
 }
@@ -86,8 +284,11 @@ export function InventoryDashboardPage() {
 export function StockPage() {
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState("");
+  const [restockTarget, setRestockTarget] = useState<RestockTarget | null>(null);
+  const { hasPermission } = usePermissions();
+  const canAdjust = hasPermission("inventory.adjust");
 
-  const { data: items, loading, page, setPage, pageSize, setPageSize, total } = usePaginatedList(
+  const { data: items, loading, page, setPage, pageSize, setPageSize, total, reload } = usePaginatedList(
     inventoryApi.list,
     { search, low_stock: lowOnly === "true" ? "true" : undefined }
   );
@@ -109,6 +310,20 @@ export function StockPage() {
       ),
       exportValue: (r) => (r.is_out_of_stock ? "Out of Stock" : r.is_low_stock ? "Low Stock" : "OK"),
     },
+    ...(canAdjust
+      ? [
+          {
+            key: "actions",
+            header: "Actions",
+            cell: (r: InventoryItem) => (
+              <Button size="sm" variant="secondary" onClick={() => setRestockTarget(toRestockTarget(r))}>
+                <PackagePlus className="h-3.5 w-3.5" />
+                Restock
+              </Button>
+            ),
+          } satisfies Column<InventoryItem>,
+        ]
+      : []),
   ];
 
   return (
@@ -136,9 +351,14 @@ export function StockPage() {
           key: "low", label: "Filter", value: lowOnly, onChange: setLowOnly,
           options: [
             { label: "All Stock", value: "" },
-            { label: "Low Stock Only", value: "true" },
+            { label: "Low / Out of Stock", value: "true" },
           ],
         }]}
+      />
+      <RestockDialog
+        target={restockTarget}
+        onClose={() => setRestockTarget(null)}
+        onDone={reload}
       />
     </PageLayout>
   );
@@ -178,7 +398,7 @@ export function AdjustmentsPage() {
       setForm({ warehouse_id: "", reason: "", product_id: "", quantity_after: "" });
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Failed");
     } finally {
       setSaving(false);
     }

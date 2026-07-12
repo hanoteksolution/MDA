@@ -17,6 +17,7 @@ import { customersApi } from "@/services/api/partners";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
 import type { Customer, CustomerSummary } from "@/types/models/partners";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function CustomersPage() {
   const navigate = useNavigate();
@@ -236,7 +237,7 @@ export function CustomerFormPage({ editId }: { editId?: string }) {
       else await customersApi.create(payload);
       navigate("/customers");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

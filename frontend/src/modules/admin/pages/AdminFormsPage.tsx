@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { adminApi, settingsApi } from "@/services/api/admin";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function UserFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
@@ -76,7 +77,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
       }
       navigate("/admin");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -226,7 +227,7 @@ export function RoleFormPage({ editId }: { editId?: string }) {
       else await adminApi.createRole(payload);
       navigate("/admin");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

@@ -44,10 +44,12 @@ class InventoryListView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("inventory.view")]
 
     def get(self, request):
+        branch_id = getattr(request.user.branch, "id", None)
         qs = InventoryService.list_inventory(
             warehouse_id=request.query_params.get("warehouse"),
             search=request.query_params.get("search"),
             low_stock=request.query_params.get("low_stock") == "true",
+            branch_id=branch_id,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
 
@@ -64,7 +66,8 @@ class LowStockView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("inventory.view")]
 
     def get(self, request):
-        qs = InventoryService.get_low_stock()
+        branch_id = getattr(request.user.branch, "id", None)
+        qs = InventoryService.get_low_stock(branch_id=branch_id)
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
 
 
@@ -72,7 +75,8 @@ class OutOfStockView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("inventory.view")]
 
     def get(self, request):
-        qs = InventoryService.get_out_of_stock()
+        branch_id = getattr(request.user.branch, "id", None)
+        qs = InventoryService.get_out_of_stock(branch_id=branch_id)
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
 
 

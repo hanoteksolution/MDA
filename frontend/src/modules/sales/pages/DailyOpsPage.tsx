@@ -35,6 +35,7 @@ import {
   type DailyOpsProduct,
   type DailyOpsUnpaid,
 } from "@/services/api/sales";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const EXPENSE_CATEGORIES = [
   { value: "utilities", label: "Utilities" },
@@ -161,7 +162,7 @@ export function DailyOpsPage() {
       await loadOps();
       if (tab === "monthly") await loadMonthly();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not mark as paid");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     } finally {
       setMarkingId(null);
     }
@@ -171,7 +172,7 @@ export function DailyOpsPage() {
     e.preventDefault();
     const amount = parseFloat(expenseForm.amount);
     if (!expenseForm.description.trim() || !(amount > 0)) {
-      alert("Enter a description and amount.");
+      await appDialog.alert("Enter a description and amount.");
       return;
     }
     setSavingExpense(true);
@@ -186,7 +187,7 @@ export function DailyOpsPage() {
       setExpenseForm({ description: "", amount: "", category: "other", notes: "" });
       await loadOps();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not save expense");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not save expense");
     } finally {
       setSavingExpense(false);
     }
@@ -198,7 +199,7 @@ export function DailyOpsPage() {
       await salesApi.deleteExpense(id);
       await loadOps();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete");
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete");
     }
   };
 

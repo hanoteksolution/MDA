@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppRouter } from "@/app/router";
 import { DesktopBootGate } from "@/components/desktop/DesktopBootGate";
+import { AppDialogHost } from "@/components/feedback/AppDialog";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { startSessionMonitor } from "@/services/api/http";
@@ -23,6 +24,7 @@ export function App() {
 
   return (
     <DesktopBootGate>
+      <AppDialogHost />
       <AppRouter />
     </DesktopBootGate>
   );

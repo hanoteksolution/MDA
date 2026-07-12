@@ -43,6 +43,22 @@ export interface SubscriptionStatusAlert {
   severity: "warning" | "critical";
   title: string;
   message: string;
+  payment?: {
+    payment_id: string;
+    payment_reference: string;
+    payment_status: string;
+    amount: number;
+    merchant_number: string;
+    company_name: string;
+    provider_label: string;
+    ussd_code: string;
+    qr_payload: string;
+    qr_image_url: string;
+    instructions_title: string;
+    instructions: string[];
+    contact_phone: string;
+    auto_renew_enabled: boolean;
+  };
 }
 
 export interface SubscriptionStatus {
@@ -72,6 +88,39 @@ export const syncApi = {
 
   subscriptionStatus: () =>
     apiRequest<ApiResponse<SubscriptionStatus>>("/sync/subscription-status/"),
+
+  reportPayment: (data: { payer_phone?: string; notes?: string } = {}) =>
+    apiRequest<
+      ApiResponse<{
+        payment: {
+          id: string;
+          status: string;
+          payment_reference: string;
+          auto_renewed?: boolean;
+        };
+        alert?: SubscriptionStatusAlert;
+        is_payment_current?: boolean;
+        subscription_usable?: boolean;
+      }>
+    >("/sync/report-payment/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  paymentStatus: () =>
+    apiRequest<
+      ApiResponse<{
+        payment: {
+          id: string;
+          status: string;
+          payment_reference: string;
+          auto_renewed?: boolean;
+        } | null;
+        alert?: SubscriptionStatusAlert;
+        is_payment_current?: boolean;
+        subscription_usable?: boolean;
+      }>
+    >("/sync/payment-status/"),
 };
 
 /** Platform APIs: browser uses same-origin API; desktop uses cloud when configured. */

@@ -18,6 +18,8 @@ export interface BranchDetail {
   email: string;
   is_active: boolean;
   is_default: boolean;
+  company_id?: string;
+  company_name?: string;
   created_at: string;
   updated_at: string;
 }

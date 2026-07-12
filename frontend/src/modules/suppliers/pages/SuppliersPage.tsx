@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { suppliersApi } from "@/services/api/partners";
 import { formatCurrency } from "@/utils/cn";
 import type { Supplier, SupplierSummary } from "@/types/models/partners";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 export function SuppliersPage() {
   const navigate = useNavigate();
@@ -157,7 +158,7 @@ export function SupplierFormPage({ editId }: { editId?: string }) {
       else await suppliersApi.create(payload);
       navigate("/suppliers");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

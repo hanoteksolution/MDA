@@ -46,6 +46,14 @@ def serialize_product(p: Product, include_stock=False, request=None) -> dict:
     if include_stock:
         from apps.inventory.models import Inventory
 
-        stock = Inventory.active_objects().filter(product=p).aggregate(total=Sum("quantity"))
-        data["total_stock"] = float(stock["total"] or 0)
+        inv_rows = list(
+            Inventory.active_objects()
+            .filter(product=p)
+            .select_related("warehouse")
+            .order_by("-quantity")
+        )
+        data["total_stock"] = float(sum((row.quantity or 0) for row in inv_rows))
+        primary = inv_rows[0] if inv_rows else None
+        data["warehouse_id"] = str(primary.warehouse_id) if primary else None
+        data["warehouse_name"] = primary.warehouse.name if primary else None
     return data

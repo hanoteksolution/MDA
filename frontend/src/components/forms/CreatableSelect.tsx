@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { appDialog } from "@/components/feedback/AppDialog";
 
 const CREATE_VALUE = "__create_new__";
 const NONE_VALUE = "__none__";
@@ -69,7 +70,7 @@ export function CreatableSelect({
       setCreating(false);
       setNewName("");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Create failed");
+      await appDialog.alert(err instanceof Error ? err.message : "Create failed");
     } finally {
       setSaving(false);
     }

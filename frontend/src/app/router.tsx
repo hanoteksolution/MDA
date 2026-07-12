@@ -33,6 +33,9 @@ import {
   StaffPerformancePage,
   PlatformShopsPage,
   PlatformSubscriptionsPage,
+  PlatformTenantsPage,
+  PlatformTenantDetailPage,
+  PlatformShopDetailPage,
   FutsalPage,
 } from "@/app/routes/modules";
 import {
@@ -313,6 +316,30 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="staff.performance.view">
                 <StaffPerformancePage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/tenants"
+            element={
+              <PermissionGuard permission="platform.view">
+                <PlatformTenantsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/tenants/:groupId"
+            element={
+              <PermissionGuard permission="platform.view">
+                <PlatformTenantDetailPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/shops/:shopId"
+            element={
+              <PermissionGuard permission="platform.view">
+                <PlatformShopDetailPage />
               </PermissionGuard>
             }
           />

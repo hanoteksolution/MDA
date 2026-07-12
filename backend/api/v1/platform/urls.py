@@ -2,17 +2,25 @@ from django.urls import path
 
 from api.v1.platform.views import (
     PlatformMySubscriptionAlertView,
+    PlatformPendingPaymentsView,
     PlatformPlansView,
+    PlatformShopGroupDetailView,
     PlatformShopGroupListCreateView,
     PlatformSubscriptionAlertsView,
     PlatformSubscriptionAssignView,
+    PlatformSubscriptionConfirmPaymentView,
     PlatformSubscriptionDetailView,
     PlatformSubscriptionListCreateView,
+    PlatformSubscriptionPaymentConfigView,
+    PlatformSubscriptionPaymentStatusView,
+    PlatformSubscriptionQrUploadView,
     PlatformSubscriptionRenewView,
+    PlatformSubscriptionReportPaymentView,
     PlatformSubscriptionUpdateView,
     PlatformTenantDetailView,
     PlatformTenantListCreateView,
     PlatformTenantUsersView,
+    PlatformWaafiPaymentCallbackView,
 )
 
 urlpatterns = [
@@ -23,9 +31,45 @@ urlpatterns = [
     path("subscriptions/", PlatformSubscriptionListCreateView.as_view(), name="platform-subscriptions"),
     path("subscriptions/alerts/", PlatformSubscriptionAlertsView.as_view(), name="platform-subscription-alerts"),
     path("subscriptions/my-alert/", PlatformMySubscriptionAlertView.as_view(), name="platform-my-subscription-alert"),
+    path(
+        "subscriptions/payment-config/",
+        PlatformSubscriptionPaymentConfigView.as_view(),
+        name="platform-subscription-payment-config",
+    ),
+    path(
+        "subscriptions/payment-config/upload-qr/",
+        PlatformSubscriptionQrUploadView.as_view(),
+        name="platform-subscription-payment-qr",
+    ),
+    path(
+        "subscriptions/pending-payments/",
+        PlatformPendingPaymentsView.as_view(),
+        name="platform-pending-payments",
+    ),
     path("subscriptions/<uuid:pk>/", PlatformSubscriptionDetailView.as_view(), name="platform-subscription-detail"),
     path("subscriptions/<uuid:pk>/assign/", PlatformSubscriptionAssignView.as_view(), name="platform-subscription-assign"),
     path("subscriptions/<uuid:pk>/renew/", PlatformSubscriptionRenewView.as_view(), name="platform-subscription-renew"),
+    path(
+        "subscriptions/<uuid:pk>/report-payment/",
+        PlatformSubscriptionReportPaymentView.as_view(),
+        name="platform-subscription-report-payment",
+    ),
+    path(
+        "subscriptions/<uuid:pk>/payment-status/",
+        PlatformSubscriptionPaymentStatusView.as_view(),
+        name="platform-subscription-payment-status",
+    ),
+    path(
+        "payments/<uuid:pk>/confirm/",
+        PlatformSubscriptionConfirmPaymentView.as_view(),
+        name="platform-payment-confirm",
+    ),
+    path(
+        "payments/waafi-callback/",
+        PlatformWaafiPaymentCallbackView.as_view(),
+        name="platform-waafi-callback",
+    ),
     path("shop-groups/", PlatformShopGroupListCreateView.as_view(), name="platform-shop-groups"),
+    path("shop-groups/<uuid:pk>/", PlatformShopGroupDetailView.as_view(), name="platform-shop-group-detail"),
     path("plans/", PlatformPlansView.as_view(), name="platform-plans"),
 ]
