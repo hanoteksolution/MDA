@@ -1,4 +1,3 @@
-import { formatCurrency } from "@/utils/cn";
 import type { PosReceipt } from "@/services/api/pos";
 import type { DocumentBranding } from "../types";
 import {
@@ -37,7 +36,7 @@ export function formatMerchantCode(raw: string, amount: number): string {
   const amountStr = fmtMoney(amount);
   let n = (raw || "").trim();
   if (!n) return "";
-  if (n.includes("{amount}")) return n.replaceAll("{amount}", amountStr);
+  if (n.includes("{amount}")) return n.split("{amount}").join(amountStr);
   // *789*607822*12.00# → replace amount segment
   if (/^\*\d+\*\d+\*[\d.]+#$/.test(n)) {
     return n.replace(/\*[\d.]+#$/, `*${amountStr}#`);
