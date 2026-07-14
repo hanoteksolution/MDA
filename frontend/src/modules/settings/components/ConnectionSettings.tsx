@@ -75,12 +75,22 @@ export function ConnectionSettings() {
       <div className="mt-6">
         <FormSection
           title="Sync status"
-          description="Automatic sync runs when online. Use this button for a manual upload."
+          description="Pulls products, prices, customers, and users from the cloud, then uploads local sales, stock, and waiters. Runs automatically when online."
         >
-          {syncStatus && <p className="mb-3 text-sm text-muted-foreground">Last sync: {syncStatus}</p>}
+          {syncStatus && (
+            <p
+              className={`mb-3 text-sm ${
+                syncStatus.startsWith("error") || syncStatus.toLowerCase().includes("fail")
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Last sync: {syncStatus}
+            </p>
+          )}
           <Button type="button" variant="secondary" loading={syncing} onClick={runSync}>
             <Upload className="h-4 w-4" />
-            Sync now (optional)
+            Sync now
           </Button>
         </FormSection>
       </div>

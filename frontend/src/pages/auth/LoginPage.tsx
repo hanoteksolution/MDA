@@ -216,7 +216,8 @@ export function LoginPage() {
                 {isLocalApiBase(apiTarget) && (
                   <span className="block mt-1 text-amber-600">
                     First shop sign-in verifies your account on the live server, copies your role and
-                    permissions locally, then downloads shop data. Later sign-ins use this PC only.
+                    permissions locally, then downloads shop data. Use a shop user (Admin / Cashier),
+                    not a multi-shop manager. Later sign-ins use this PC only; Sync keeps both sides updated.
                   </span>
                 )}
               </motion.p>

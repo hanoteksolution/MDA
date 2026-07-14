@@ -224,6 +224,24 @@ export function DailyOpsPage() {
       { key: "cust", header: "Customer", cell: (r) => r.customer_name, exportValue: (r) => r.customer_name },
       { key: "waiter", header: "Waiter", cell: (r) => r.waiter_name || "—", exportValue: (r) => r.waiter_name },
       {
+        key: "products",
+        header: "Products taken",
+        cell: (r) =>
+          r.items?.length ? (
+            <ul className="max-w-[220px] space-y-0.5 text-xs">
+              {r.items.map((item, i) => (
+                <li key={i} className="truncate">
+                  <span className="font-semibold tabular-nums">{item.quantity}×</span> {item.name}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            "—"
+          ),
+        exportValue: (r) =>
+          (r.items || []).map((i) => `${i.quantity}x ${i.name}`).join("; "),
+      },
+      {
         key: "status",
         header: "Status",
         cell: (r) => (

@@ -7,12 +7,22 @@ from urllib import error, request
 
 from django.db import transaction
 
+from apps.authentication.bootstrap import bootstrap_roles_and_permissions
 from apps.authentication.models import Role, User
 from apps.authentication.services.auth_service import AuthService
 from apps.inventory.models import Warehouse
 from apps.platform.models import Tenant
 from apps.platform.services.sync_service import ShopSyncService
 from apps.settings_app.models import Branch, Company
+
+# These accounts manage the cloud console — not a single shop desktop POS.
+CLOUD_ONLY_ROLE_SLUGS = frozenset(
+    {
+        "shop_group_manager",
+        "platform_admin",
+        "super_admin",
+    }
+)
 
 
 def _http_get_json(url: str, headers: dict) -> dict:
@@ -135,10 +145,22 @@ class DesktopProvisionService:
         role_slug = role_data.get("slug")
         if not role_slug:
             raise ValueError("Cloud account has no role assigned. Ask your platform admin to set a role.")
+
+        if role_slug in CLOUD_ONLY_ROLE_SLUGS or profile.get("is_platform_admin"):
+            raise ValueError(
+                "This account is for the cloud console (multi-shop / platform), not shop desktop. "
+                "Open https://erp.safaritechno.com in a browser, or sign in here with a shop user "
+                "(Admin, Cashier, etc.) created for this shop."
+            )
+
+        # Ensure local roles exist even if this PC was installed before they were added.
+        bootstrap_roles_and_permissions()
         role = Role.objects.filter(slug=role_slug, deleted_at__isnull=True).first()
         if not role:
-            raise ValueError(f"Role '{role_slug}' is not available on this device. Run system bootstrap.")
-
+            raise ValueError(
+                f"Role '{role_slug}' is not available on this device. "
+                "Restart the desktop app, then try again. If it still fails, ask support to run system bootstrap."
+            )
         shop_name = (
             profile.get("shop_name")
             or profile.get("company_name")

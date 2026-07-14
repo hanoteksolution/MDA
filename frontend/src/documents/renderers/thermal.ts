@@ -2,9 +2,9 @@ import { formatCurrency } from "@/utils/cn";
 import type { PosReceipt } from "@/services/api/pos";
 import type { DocumentBranding } from "../types";
 import {
-  formatThermalReceiptDate,
   getCompanyLogoUrl,
   getPaymentLabel,
+  getTaxRateLabel,
   type ThermalWidth,
 } from "@/modules/pos/receipt/receiptFormat";
 import { esc } from "../utils";
@@ -32,20 +32,51 @@ function fmtMoney(n: number): string {
   return n.toFixed(2);
 }
 
-function brandHeader(company: string, phone: string, logoUrl?: string): string {
-  const brand = logoUrl
-    ? `<img class="th-brand-logo" src="${esc(logoUrl)}" alt="${esc(company)}" />`
-    : `<h1 class="th-company">${esc(company)}</h1>`;
-  return `
-    <div class="th-kisima-head">
-      ${brand}
-      ${phone ? `<p class="th-tel">Tel: ${esc(phone)}</p>` : ""}
-    </div>`;
+/** Inject receipt total into Waafi/EVC-style USSD merchant codes. */
+export function formatMerchantCode(raw: string, amount: number): string {
+  const amountStr = fmtMoney(amount);
+  let n = (raw || "").trim();
+  if (!n) return "";
+  if (n.includes("{amount}")) return n.replaceAll("{amount}", amountStr);
+  // *789*607822*12.00# → replace amount segment
+  if (/^\*\d+\*\d+\*[\d.]+#$/.test(n)) {
+    return n.replace(/\*[\d.]+#$/, `*${amountStr}#`);
+  }
+  // *789*607822# or *789*607822*# → insert amount before #
+  if (n.startsWith("*") && n.endsWith("#")) {
+    const core = n.slice(0, -1);
+    return core.endsWith("*") ? `${core}${amountStr}#` : `${core}*${amountStr}#`;
+  }
+  // *789*607822 or *789*607822*
+  if (n.startsWith("*") && !n.includes("#")) {
+    return n.endsWith("*") ? `${n}${amountStr}#` : `${n}*${amountStr}#`;
+  }
+  return n;
+}
+
+function splitDateTime(receipt: PosReceipt): { date: string; time: string } {
+  try {
+    const d = new Date(`${receipt.date}T${receipt.time || "00:00"}`);
+    if (!Number.isNaN(d.getTime())) {
+      return {
+        date: d.toLocaleDateString("en-US"),
+        time: d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }),
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+  return { date: receipt.date, time: receipt.time || "" };
 }
 
 /**
- * Short Kisima-style thermal receipt:
- * logo or company name + tel → payment guide → receipt no → items → totals → paid/unpaid
+ * Compact thermal receipt matching shop roll layout:
+ * company + address + merchants → meta → borderless items → totals → contact
  */
 export function renderPremiumThermalReceipt(
   receipt: PosReceipt,
@@ -53,36 +84,33 @@ export function renderPremiumThermalReceipt(
   width: ThermalWidth = "80mm"
 ): string {
   const isNarrow = width === "58mm";
-  const company = (receipt.company.name || "Store").toUpperCase();
-  const phone = receipt.company.phone || receipt.branch?.phone || "";
+  const company = receipt.company.name || "Store";
+  const address =
+    (receipt.company.address || "").trim() ||
+    (receipt.branch?.address || "").trim();
+  const phone = (receipt.company.phone || receipt.branch?.phone || "").trim();
   const logoUrl = getCompanyLogoUrl(receipt);
   const paymentLabel = getPaymentLabel(receipt);
-  const paid =
-    receipt.is_paid === true ||
-    receipt.status === "paid" ||
-    (receipt.is_paid == null &&
-      receipt.status == null &&
-      receipt.payment_method !== "on_account" &&
-      receipt.payment_method !== "invoice");
+  const { date, time } = splitDateTime(receipt);
+  const taxLabel = getTaxRateLabel(receipt).replace("Tax", "VAT");
 
   const guide = (receipt.payment_guide || []).slice(0, 4);
-  const guideBlock =
+  const merchantsBlock =
     guide.length > 0
-      ? `<div class="th-guide">
+      ? `<div class="th-merchants">
           ${guide
-            .map(
-              (g) =>
-                `<div class="th-guide-row"><span>${esc(g.label.toUpperCase())}</span><span>${esc(g.number)}</span></div>`
-            )
+            .map((g) => {
+              const code = formatMerchantCode(g.number, receipt.total_amount);
+              return `<div class="th-merchant-row"><span class="m-label">${esc(g.label)}:</span> <span class="m-code">${esc(code)}</span></div>`;
+            })
             .join("")}
         </div>`
       : "";
 
   const items = receipt.items
-    .map((item, idx) => {
+    .map((item) => {
       const qty = fmtQty(item.quantity);
       return `<tr>
-        <td class="idx">${idx + 1}</td>
         <td class="item-name">${esc(item.name)}</td>
         <td class="qty">${qty}</td>
         <td class="num">${fmtMoney(item.unit_price)}</td>
@@ -91,41 +119,33 @@ export function renderPremiumThermalReceipt(
     })
     .join("");
 
-  const merchantLine =
-    receipt.merchant?.merchant_number || receipt.merchant_reference
-      ? metaRow(
-          "Received via",
-          `${receipt.merchant?.label || receipt.merchant?.company_name || paymentLabel} — ${
-            receipt.merchant?.merchant_number || receipt.merchant_reference
-          }`
-        )
-      : "";
-
   const cashLines =
     receipt.payment_method === "cash" && receipt.amount_tendered != null
-      ? `${metaRow("Tendered", formatCurrency(receipt.amount_tendered))}${
+      ? `${totalRow("Tendered", `$${fmtMoney(receipt.amount_tendered)}`)}${
           receipt.change != null && receipt.change > 0
-            ? metaRow("Change", formatCurrency(receipt.change))
+            ? totalRow("Change", `$${fmtMoney(receipt.change)}`)
             : ""
         }`
       : "";
 
-  const waiterRow = receipt.waiter ? metaRow("Waiter", receipt.waiter) : "";
+  const servedBy = receipt.waiter || receipt.cashier || "—";
 
   return `
-    <div class="mda-thermal kisima${isNarrow ? " narrow" : ""}">
-      ${brandHeader(company, phone, logoUrl)}
+    <div class="mda-thermal kisima compact${isNarrow ? " narrow" : ""}">
+      <div class="th-kisima-head">
+        ${logoUrl ? `<img class="th-brand-logo" src="${esc(logoUrl)}" alt="" />` : ""}
+        <h1 class="th-company">${esc(company)}</h1>
+        ${address ? `<p class="th-address">${esc(address)}</p>` : ""}
+        ${!address && phone ? `<p class="th-address">Tel: ${esc(phone)}</p>` : ""}
+      </div>
 
-      ${guideBlock}
-
-      <div class="th-sep th-sep-dbl"></div>
+      ${merchantsBlock}
 
       <div class="th-meta">
-        ${metaRow("Receipt No", receipt.invoice_number)}
-        ${metaRow("Date", formatThermalReceiptDate(receipt))}
-        ${metaRow("Cashier", receipt.cashier || "—")}
-        ${metaRow("Customer", receipt.customer_name || "Guest")}
-        ${waiterRow}
+        ${metaRow("Date", date)}
+        ${metaRow("Time", time)}
+        ${metaRow("Ref No", receipt.invoice_number)}
+        ${metaRow("Served By", servedBy)}
       </div>
 
       <div class="th-sep"></div>
@@ -133,11 +153,10 @@ export function renderPremiumThermalReceipt(
       <table class="th-table th-table-kisima">
         <thead>
           <tr>
-            <th class="left" style="width:12px">#</th>
-            <th class="left">Item</th>
-            <th class="center" style="width:26px">Qty</th>
-            <th class="right" style="width:38px">Price</th>
-            <th class="right" style="width:42px">Total</th>
+            <th class="left">ItemName</th>
+            <th class="center">QTY</th>
+            <th class="right">Price</th>
+            <th class="right">Amount</th>
           </tr>
         </thead>
         <tbody>${items}</tbody>
@@ -146,30 +165,23 @@ export function renderPremiumThermalReceipt(
       <div class="th-sep"></div>
 
       <div class="th-totals">
-        ${totalRow("Subtotal", fmtMoney(receipt.subtotal))}
-        ${receipt.discount_amount > 0 ? totalRow("Discount", `-${fmtMoney(receipt.discount_amount)}`) : ""}
-        ${receipt.tax_amount > 0 ? totalRow("Tax", fmtMoney(receipt.tax_amount)) : ""}
-        ${totalRow("TOTAL", `$${fmtMoney(receipt.total_amount)}`, true)}
-      </div>
-
-      <div class="th-sep th-sep-dbl"></div>
-
-      <div class="th-meta">
-        ${metaRow("Method", paymentLabel)}
-        ${merchantLine}
+        ${totalRow("Discount", `$${fmtMoney(receipt.discount_amount)}`)}
+        ${receipt.tax_amount > 0 || (receipt.tax_rate ?? 0) > 0 ? totalRow(taxLabel, `$${fmtMoney(receipt.tax_amount)}`) : ""}
+        ${totalRow("Total", `$${fmtMoney(receipt.total_amount)}`, true)}
         ${cashLines}
-        ${metaRow(paid ? "Paid" : "Due", `$${fmtMoney(receipt.total_amount)}`)}
-      </div>
-
-      <div class="th-paid-banner ${paid ? "paid" : "unpaid"}">
-        ${paid ? "★ PAID IN FULL ★" : "○ UNPAID — PAY LATER ○"}
+        ${
+          receipt.payment_method && receipt.payment_method !== "cash"
+            ? totalRow("Method", paymentLabel)
+            : ""
+        }
       </div>
 
       <div class="th-sep"></div>
 
-      <p class="th-thanks">${esc(receipt.footer || "Thank you for your purchase!")}</p>
-      <p class="th-credit">Please come again</p>
-      <p class="th-receipt-ref">${esc(receipt.invoice_number)}</p>
+      <div class="th-footer-block">
+        ${phone ? `<p class="th-contact">Contact Us Here:${esc(phone)}</p>` : ""}
+        <p class="th-thanks">${esc(receipt.footer || "Take care & see you later,")}</p>
+      </div>
     </div>`;
 }
 
@@ -202,14 +214,20 @@ export interface ThermalSlipInput {
   isHold?: boolean;
 }
 
-function formatSlipDateTime(): string {
+function formatSlipDateTime(): { date: string; time: string } {
   const d = new Date();
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  return `${date} ${time}`;
+  return {
+    date: d.toLocaleDateString("en-US"),
+    time: d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }),
+  };
 }
 
-/** Compact order / hold slip — same visual language, no payment guide. */
+/** Compact order / hold slip — same tight layout, no merchant block. */
 export function renderPremiumThermalSlip(
   slip: ThermalSlipInput,
   _assets: ThermalAssets,
@@ -217,17 +235,20 @@ export function renderPremiumThermalSlip(
 ): string {
   const isNarrow = width === "58mm";
   const b = slip.branding;
-  const company = (b.companyName || "Your Company").toUpperCase();
+  const company = b.companyName || "Your Company";
+  const address = (b.address || "").trim();
   const phone = b.phone || "";
   const logoUrl = b.logoUrl || undefined;
-  const when = slip.heldAt || formatSlipDateTime();
+  const when = slip.heldAt
+    ? { date: slip.heldAt, time: "" }
+    : formatSlipDateTime();
   const title = slip.isHold ? "ON HOLD" : (slip.title || "ORDER").toUpperCase();
+  const vatPct = Math.round((slip.taxRate || 0) * 100);
 
   const items = slip.items
-    .map((item, idx) => {
+    .map((item) => {
       const qty = fmtQty(item.quantity);
       return `<tr>
-        <td class="idx">${idx + 1}</td>
         <td class="item-name">${esc(item.name)}</td>
         <td class="qty">${qty}</td>
         <td class="num">${fmtMoney(item.unit_price)}</td>
@@ -237,30 +258,31 @@ export function renderPremiumThermalSlip(
     .join("");
 
   return `
-    <div class="mda-thermal kisima${isNarrow ? " narrow" : ""}">
-      ${brandHeader(company, phone, logoUrl)}
-
-      <div class="th-sep th-sep-dbl"></div>
-
-      <div class="th-meta">
-        ${metaRow("Receipt No", slip.slipNumber)}
-        ${metaRow("Date", when)}
-        ${metaRow("Customer", slip.customerName || "Guest")}
-        ${slip.waiterName ? metaRow("Waiter", slip.waiterName) : ""}
+    <div class="mda-thermal kisima compact${isNarrow ? " narrow" : ""}">
+      <div class="th-kisima-head">
+        ${logoUrl ? `<img class="th-brand-logo" src="${esc(logoUrl)}" alt="" />` : ""}
+        <h1 class="th-company">${esc(company)}</h1>
+        ${address ? `<p class="th-address">${esc(address)}</p>` : ""}
       </div>
 
-      <div class="th-paid-banner unpaid" style="margin-top:6px">${esc(title)}</div>
+      <div class="th-meta">
+        ${metaRow("Date", when.date)}
+        ${when.time ? metaRow("Time", when.time) : ""}
+        ${metaRow("Ref No", slip.slipNumber)}
+        ${metaRow("Served By", slip.waiterName || slip.cashierName || "—")}
+        ${metaRow("Customer", slip.customerName || "Guest")}
+        ${metaRow("Status", title)}
+      </div>
 
       <div class="th-sep"></div>
 
       <table class="th-table th-table-kisima">
         <thead>
           <tr>
-            <th class="left" style="width:12px">#</th>
-            <th class="left">Item</th>
-            <th class="center" style="width:26px">Qty</th>
-            <th class="right" style="width:38px">Price</th>
-            <th class="right" style="width:42px">Total</th>
+            <th class="left">ItemName</th>
+            <th class="center">QTY</th>
+            <th class="right">Price</th>
+            <th class="right">Amount</th>
           </tr>
         </thead>
         <tbody>${items}</tbody>
@@ -269,27 +291,27 @@ export function renderPremiumThermalSlip(
       <div class="th-sep"></div>
 
       <div class="th-totals">
-        ${totalRow("Subtotal", fmtMoney(slip.subtotal))}
-        ${slip.discount > 0 ? totalRow("Discount", `-${fmtMoney(slip.discount)}`) : ""}
-        ${slip.tax > 0 ? totalRow("Tax", fmtMoney(slip.tax)) : ""}
-        ${totalRow("TOTAL", `$${fmtMoney(slip.grandTotal)}`, true)}
+        ${totalRow("Discount", `$${fmtMoney(slip.discount)}`)}
+        ${slip.tax > 0 ? totalRow(vatPct ? `VAT ${vatPct}%` : "VAT", `$${fmtMoney(slip.tax)}`) : ""}
+        ${totalRow("Total", `$${fmtMoney(slip.grandTotal)}`, true)}
       </div>
 
       ${slip.notes?.trim() ? `<p class="th-notes-inline">${esc(slip.notes.trim())}</p>` : ""}
 
       <div class="th-sep"></div>
-      <p class="th-thanks">${slip.isHold ? "Present this slip when paying." : "Thank you!"}</p>
-      <p class="th-receipt-ref">${esc(slip.slipNumber)}</p>
+      <div class="th-footer-block">
+        ${phone ? `<p class="th-contact">Contact Us Here:${esc(phone)}</p>` : ""}
+        <p class="th-thanks">${slip.isHold ? "Present this slip when paying." : "Thank you!"}</p>
+      </div>
     </div>`;
 }
 
 export function getThermalPageCss(width: ThermalWidth): string {
-  const pad = width === "58mm" ? "3mm 5mm" : "4mm 6mm";
   return `
     ${THERMAL_RECEIPT_CSS}
     @page { size: ${width} auto; margin: 0; }
-    body { margin: 0; background: #fff; padding: ${pad}; }
-    #pos-receipt-print-root { width: 100%; max-width: ${width}; padding: 0 2mm; background: #fff; }
+    body { margin: 0; background: #fff; padding: 0; }
+    #pos-receipt-print-root { width: 100%; max-width: ${width}; padding: 0; background: #fff; }
   `;
 }
 

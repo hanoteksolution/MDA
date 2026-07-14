@@ -181,6 +181,9 @@ class PosService:
         if payment_method == "on_account" and (not customer_id or customer_id == "walkin"):
             raise ValueError("Select a registered customer for pay-later / account sales.")
 
+        if not waiter_id and not waiter_name:
+            raise ValueError("Select a waiter before checkout.")
+
         parsed_items = [
             {
                 "product_id": item["product_id"],
@@ -531,13 +534,29 @@ class PosService:
             computed_tax_rate = float(invoice.tax_amount / after_discount)
 
         payment_guide = []
-        for m in (profile.get("merchants") or [])[:4]:
-            if m.get("provider") != "mobile":
-                continue
-            label = (m.get("label") or m.get("company_name") or "Mobile").strip()
+        amount_str = f"{float(invoice.total_amount):.2f}"
+        for m in (profile.get("merchants") or [])[:6]:
+            label = (m.get("label") or m.get("company_name") or "").strip()
             number = (m.get("merchant_number") or "").strip()
-            if label and number:
-                payment_guide.append({"label": label, "number": number})
+            if not label or not number:
+                continue
+            if "{amount}" in number:
+                number = number.replace("{amount}", amount_str)
+            elif number.startswith("*") and number.endswith("#"):
+                core = number[:-1]
+                if core.endswith("*"):
+                    number = f"{core}{amount_str}#"
+                elif not re.search(r"\*[\d.]+$", core):
+                    number = f"{core}*{amount_str}#"
+                else:
+                    number = re.sub(r"\*[\d.]+$", f"*{amount_str}", core) + "#"
+            elif number.startswith("*") and "#" not in number:
+                number = (
+                    f"{number}{amount_str}#"
+                    if number.endswith("*")
+                    else f"{number}*{amount_str}#"
+                )
+            payment_guide.append({"label": label, "number": number})
 
         is_paid = invoice.status == Invoice.STATUS_PAID
 

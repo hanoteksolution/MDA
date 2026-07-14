@@ -15,8 +15,8 @@ export function printThermalDocument(bodyHtml: string, options: PrintThermalOpti
     const existing = document.getElementById(FRAME_ID);
     if (existing) existing.remove();
 
-    const pad = options.width === "58mm" ? "3mm 4mm" : "4mm 6mm";
-    const baseFont = options.width === "58mm" ? "10px" : "12px";
+    const pad = options.width === "58mm" ? "0.5mm 1mm" : "1mm 1.5mm";
+    const baseFont = options.width === "58mm" ? "10px" : "11px";
 
     const frame = document.createElement("iframe");
     frame.id = FRAME_ID;
@@ -65,19 +65,20 @@ export function printThermalDocument(bodyHtml: string, options: PrintThermalOpti
     .mda-thermal {
       width: 100% !important;
       max-width: 100% !important;
-      margin: 0 auto;
-      padding: 0 2mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
       overflow: hidden;
     }
-    .th-table { width: 100%; table-layout: fixed; }
+    .th-table { width: 100%; table-layout: fixed; border: none !important; }
+    .th-table td, .th-table th { border: none !important; }
+    .th-table thead th { border-bottom: 1px solid #000 !important; }
     .th-table .item-name { word-break: break-word; overflow-wrap: anywhere; }
     .th-meta .row,
     .th-totals .row,
-    .th-guide-row {
-      gap: 4px;
-      padding: 0 1px;
+    .th-merchant-row {
+      gap: 2px;
+      padding: 0;
     }
-    .th-barcode img { width: 100%; max-width: 100%; height: auto; min-height: 36px; }
   </style>
 </head>
 <body class="thermal-print thermal-${options.width.replace("mm", "")}">

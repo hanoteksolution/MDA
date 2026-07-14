@@ -177,9 +177,14 @@ export function PosPage() {
   );
 
   const handleHold = useCallback(async () => {
+    if (!waiterId) {
+      setCheckoutMsg("Select a waiter first");
+      setTimeout(() => setCheckoutMsg(null), 2500);
+      return;
+    }
     const held = holdSale({
       customerId,
-      waiterId: waiterId || undefined,
+      waiterId,
       waiterName: waiterName || undefined,
     });
     if (held) {

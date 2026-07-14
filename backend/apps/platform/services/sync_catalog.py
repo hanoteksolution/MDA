@@ -309,6 +309,10 @@ class CatalogSyncEngine:
   @staticmethod
   @transaction.atomic
   def apply_pull_bundle(data: dict, *, user=None) -> dict:
+      from apps.authentication.bootstrap import bootstrap_roles_and_permissions
+
+      bootstrap_roles_and_permissions()
+
       stats = {
           "units": 0,
           "brands": 0,
@@ -415,7 +419,14 @@ class CatalogSyncEngine:
           return False
       existing = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
       role_slug = (row.get("role_slug") or "cashier").strip()
-      role = Role.objects.filter(slug=role_slug).first() or Role.objects.filter(slug="cashier").first()
+      # Cloud-only roles on a shop PC fall back to admin so the synced user can still work locally.
+      if role_slug in ("shop_group_manager", "platform_admin", "super_admin"):
+          role_slug = "admin"
+      role = (
+          Role.objects.filter(slug=role_slug, deleted_at__isnull=True).first()
+          or Role.objects.filter(slug="admin", deleted_at__isnull=True).first()
+          or Role.objects.filter(slug="cashier", deleted_at__isnull=True).first()
+      )
       branch = CatalogSyncEngine._default_branch(CatalogSyncEngine._local_company())
       company = CatalogSyncEngine._local_company()
       tenant = company.tenant if company else None

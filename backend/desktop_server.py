@@ -42,9 +42,12 @@ def _ensure_initialized(data_dir: Path) -> None:
 
     call_command("migrate", "--noinput", verbosity=0)
 
+    # Always run additive bootstrap so new system roles (e.g. shop_group_manager)
+    # appear on devices that were first set up with an older build.
+    call_command("bootstrap_system", verbosity=0)
+
     marker = data_dir / ".bootstrapped"
     if not marker.exists():
-        call_command("bootstrap_system", verbosity=0)
         marker.write_text("ok", encoding="utf-8")
 
 

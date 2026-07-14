@@ -144,7 +144,9 @@ export function PosProfileSettings() {
         <div className="mt-8 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold">Merchant Accounts</p>
-            <p className="text-xs text-muted-foreground">Company names and merchant numbers for card/mobile payments</p>
+            <p className="text-xs text-muted-foreground">
+              Shown on thermal receipts. For USSD use *789*607822* — receipt total is inserted automatically.
+            </p>
           </div>
           <Button type="button" variant="secondary" size="sm" onClick={addMerchant}>
             <Plus className="h-4 w-4" /> Add Merchant
@@ -182,11 +184,15 @@ export function PosProfileSettings() {
                   <FormField label="Company Name">
                     <Input value={m.company_name} onChange={(e) => updateMerchant(m.id, { company_name: e.target.value })} />
                   </FormField>
-                  <FormField label="Merchant Number">
+                  <FormField
+                    label="Merchant Number"
+                    hint="USSD: *789*607822* — or wallet digits: 000005"
+                  >
                     <Input
                       value={m.merchant_number}
                       onChange={(e) => updateMerchant(m.id, { merchant_number: e.target.value })}
                       className="font-mono"
+                      placeholder="*789*607822*"
                     />
                   </FormField>
                   <FormField label="Provider">

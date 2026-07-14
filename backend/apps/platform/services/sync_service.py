@@ -190,74 +190,80 @@ class ShopSyncService:
         if not initial_done and ShopSyncService._get_setting(SYNC_KEYS["last_at"]):
             initial_done = True
 
-        # Always pull catalog from cloud when online (products, prices, users, waiters).
-        since_pull = None if not initial_done else parse_since(cfg.get("last_pull_at"))
-        pull_url = f"{cloud}/sync/shop-pull/"
-        if since_pull:
-            pull_url = f"{pull_url}?since={since_pull.isoformat()}"
-        pull_response = ShopSyncService._http_json("GET", pull_url, headers)
-        pull_data = pull_response.get("data", pull_response)
-        pulled_stats = CatalogSyncEngine.apply_pull_bundle(pull_data, user=user)
+        try:
+            # Always pull catalog from cloud when online (products, prices, users, waiters).
+            since_pull = None if not initial_done else parse_since(cfg.get("last_pull_at"))
+            pull_url = f"{cloud}/sync/shop-pull/"
+            if since_pull:
+                pull_url = f"{pull_url}?since={since_pull.isoformat()}"
+            pull_response = ShopSyncService._http_json("GET", pull_url, headers)
+            pull_data = pull_response.get("data", pull_response)
+            pulled_stats = CatalogSyncEngine.apply_pull_bundle(pull_data, user=user)
 
-        now = timezone.now().isoformat()
-        ShopSyncService._set_setting(SYNC_KEYS["initial_pull_done"], "1", user)
-        ShopSyncService._set_setting(
-            SYNC_KEYS["last_pull_at"], pull_data.get("server_time", now), user
-        )
+            now = timezone.now().isoformat()
+            ShopSyncService._set_setting(SYNC_KEYS["initial_pull_done"], "1", user)
+            ShopSyncService._set_setting(
+                SYNC_KEYS["last_pull_at"], pull_data.get("server_time", now), user
+            )
 
-        if not initial_done:
+            if not initial_done:
+                ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
+                ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
+                msg = (
+                    f"Initial download from cloud: {pulled_stats.get('products', 0)} products, "
+                    f"{pulled_stats.get('customers', 0)} customers, "
+                    f"{pulled_stats.get('users', 0)} users."
+                )
+                ShopSyncService._set_setting(SYNC_KEYS["last_message"], msg, user)
+                return {
+                    "status": "success",
+                    "mode": "initial_pull",
+                    "synced_at": now,
+                    "pulled": pulled_stats,
+                    "message": msg,
+                }
+
+            # Then push local sales / customers / stock / waiters to cloud.
+            since_push = parse_since(cfg.get("last_sync_at") or cfg.get("last_at"))
+            push_payload = ShopSyncService._collect_payload(since=since_push)
+            push_result = ShopSyncService._http_json(
+                "POST",
+                f"{cloud}/sync/shop-push/",
+                headers,
+                push_payload,
+            )
+
             ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
             ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
+
+            pushed_invoices = len(push_payload.get("invoices", []))
+            pushed_customers = len(push_payload.get("customers", []))
             msg = (
-                f"Initial download from cloud: {pulled_stats.get('products', 0)} products, "
-                f"{pulled_stats.get('customers', 0)} customers, "
-                f"{pulled_stats.get('users', 0)} users."
+                f"Synced — pulled {pulled_stats.get('products', 0)} products, "
+                f"{pulled_stats.get('users', 0)} users; "
+                f"uploaded {pushed_invoices} invoices, {pushed_customers} customers."
             )
             ShopSyncService._set_setting(SYNC_KEYS["last_message"], msg, user)
+
             return {
                 "status": "success",
-                "mode": "initial_pull",
+                "mode": "bidirectional",
                 "synced_at": now,
                 "pulled": pulled_stats,
+                "pushed": {
+                    "invoices": pushed_invoices,
+                    "customers": pushed_customers,
+                    "inventory": len(push_payload.get("inventory", [])),
+                    "waiters": len(push_payload.get("waiters", [])),
+                },
+                "cloud": push_result.get("data", {}),
                 "message": msg,
             }
-
-        # Then push local sales / customers / stock / waiters to cloud.
-        since_push = parse_since(cfg.get("last_sync_at") or cfg.get("last_at"))
-        push_payload = ShopSyncService._collect_payload(since=since_push)
-        push_result = ShopSyncService._http_json(
-            "POST",
-            f"{cloud}/sync/shop-push/",
-            headers,
-            push_payload,
-        )
-
-        ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
-        ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
-
-        pushed_invoices = len(push_payload.get("invoices", []))
-        pushed_customers = len(push_payload.get("customers", []))
-        msg = (
-            f"Synced — pulled {pulled_stats.get('products', 0)} products, "
-            f"{pulled_stats.get('users', 0)} users; "
-            f"uploaded {pushed_invoices} invoices, {pushed_customers} customers."
-        )
-        ShopSyncService._set_setting(SYNC_KEYS["last_message"], msg, user)
-
-        return {
-            "status": "success",
-            "mode": "bidirectional",
-            "synced_at": now,
-            "pulled": pulled_stats,
-            "pushed": {
-                "invoices": pushed_invoices,
-                "customers": pushed_customers,
-                "inventory": len(push_payload.get("inventory", [])),
-                "waiters": len(push_payload.get("waiters", [])),
-            },
-            "cloud": push_result.get("data", {}),
-            "message": msg,
-        }
+        except Exception as exc:
+            err_msg = str(exc)[:500]
+            ShopSyncService._set_setting(SYNC_KEYS["last_status"], "error", user)
+            ShopSyncService._set_setting(SYNC_KEYS["last_message"], err_msg, user)
+            raise
 
     @staticmethod
     def get_subscription_status() -> dict:

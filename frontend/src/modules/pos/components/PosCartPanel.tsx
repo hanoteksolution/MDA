@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { resolveMediaUrl } from "@/config/api";
 import { cn, formatCurrency } from "@/utils/cn";
+import { appDialog } from "@/components/feedback/AppDialog";
 import type { PosWaiter } from "@/services/api/pos";
 import type { CartLine } from "../hooks/usePosCart";
 import { printOrderSlip } from "../receipt/printCartSlip";
@@ -98,11 +99,23 @@ export function PosCartPanel({
   onViewWaiterSales,
 }: PosCartPanelProps) {
   const hasCart = cart.length > 0;
+  const hasWaiter = Boolean(waiterId);
+  const activeWaiters = waiters.filter((w) => w.is_active !== false);
   const [printing, setPrinting] = useState(false);
   const [quickCreate, setQuickCreate] = useState<PosQuickCreateMode | null>(null);
   const waiterName = waiters.find((w) => w.id === waiterId)?.name;
 
+  const requireWaiter = async (action: string) => {
+    if (hasWaiter) return true;
+    await appDialog.alert(`Select a waiter before you can ${action}.`, {
+      title: "Waiter required",
+      tone: "danger",
+    });
+    return false;
+  };
+
   const handlePrint = async () => {
+    if (!(await requireWaiter("print a receipt"))) return;
     setPrinting(true);
     try {
       await printOrderSlip({
@@ -122,6 +135,16 @@ export function PosCartPanel({
     } finally {
       setPrinting(false);
     }
+  };
+
+  const handleHold = async () => {
+    if (!(await requireWaiter("hold this sale"))) return;
+    onHold();
+  };
+
+  const handleCheckout = async () => {
+    if (!(await requireWaiter("checkout"))) return;
+    onOpenCheckout();
   };
 
   return (
@@ -177,48 +200,68 @@ export function PosCartPanel({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-background/70 px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
-              <UtensilsCrossed className="h-4 w-4" />
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex flex-1 items-center gap-3 rounded-2xl border bg-background/70 px-3 py-2",
+                hasWaiter ? "border-border/50" : "border-amber-500/40 ring-1 ring-amber-500/20"
+              )}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                <UtensilsCrossed className="h-4 w-4" />
+              </div>
+              <Select
+                value={waiterId || undefined}
+                onValueChange={(v) => onWaiterChange(v)}
+              >
+                <SelectTrigger className="h-9 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus:ring-0">
+                  <SelectValue placeholder="Select waiter (required)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeWaiters.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={waiterId || "none"} onValueChange={(v) => onWaiterChange(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-9 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus:ring-0">
-                <SelectValue placeholder="Select waiter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No waiter</SelectItem>
-                {waiters.filter((w) => w.is_active !== false).map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {onCreateWaiter && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-10 w-10 shrink-0 rounded-xl p-0"
+                onClick={() => setQuickCreate("waiter")}
+                title="Add waiter"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+            {onViewWaiterSales && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-10 shrink-0 rounded-xl px-2.5"
+                onClick={() => {
+                  if (!waiterId) {
+                    void requireWaiter("view unpaid products");
+                    return;
+                  }
+                  onViewWaiterSales();
+                }}
+                title="View waiter unpaid products"
+              >
+                <ClipboardList className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          {onCreateWaiter && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-10 w-10 shrink-0 rounded-xl p-0"
-              onClick={() => setQuickCreate("waiter")}
-              title="Add waiter"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          )}
-          {onViewWaiterSales && waiterId && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-10 shrink-0 rounded-xl px-2.5"
-              onClick={onViewWaiterSales}
-              title="View waiter sales"
-            >
-              <ClipboardList className="h-4 w-4" />
-            </Button>
+          {!hasWaiter && (
+            <p className="px-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              Waiter is required for print, hold, and checkout.
+            </p>
           )}
         </div>
       </div>
@@ -372,7 +415,7 @@ export function PosCartPanel({
             type="button"
             variant="secondary"
             className="h-10 gap-2 rounded-xl xl:h-11 xl:rounded-2xl"
-            disabled={!hasCart || printing}
+            disabled={!hasCart || printing || !hasWaiter}
             onClick={handlePrint}
           >
             <Printer className="h-4 w-4" />
@@ -382,8 +425,8 @@ export function PosCartPanel({
             type="button"
             variant="secondary"
             className="h-10 gap-2 rounded-xl border-amber-500/20 bg-amber-500/5 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400 xl:h-11 xl:rounded-2xl"
-            disabled={!hasCart}
-            onClick={onHold}
+            disabled={!hasCart || !hasWaiter}
+            onClick={() => void handleHold()}
           >
             <PauseCircle className="h-4 w-4" />
             Hold
@@ -397,8 +440,8 @@ export function PosCartPanel({
             "transition-all hover:shadow-[0_16px_40px_hsl(var(--primary)/0.34)] hover:brightness-[1.03]",
             "disabled:opacity-50 disabled:shadow-none"
           )}
-          disabled={!hasCart}
-          onClick={onOpenCheckout}
+          disabled={!hasCart || !hasWaiter}
+          onClick={() => void handleCheckout()}
         >
           <Lock className="h-4 w-4" />
           Checkout · {formatCurrency(grandTotal)}

@@ -166,9 +166,11 @@ export function PosCheckoutPanel({
   const needsCustomer = isOnAccount && customerId === "walkin";
   const canPayCash = paymentMethod !== "cash" || tenderedNum >= grandTotal;
   const needsMerchant = paymentMethod === "mobile";
+  const needsWaiter = !waiterId;
   const canSubmit =
     canPayCash &&
     !needsCustomer &&
+    !needsWaiter &&
     (!needsMerchant || mobileMerchants.length === 0 || !!selectedMerchantId);
 
   const activeOption = PAYMENT_OPTIONS.find((o) => o.id === paymentMethod)!;
@@ -182,6 +184,10 @@ export function PosCheckoutPanel({
   };
 
   const handlePay = async () => {
+    if (!waiterId) {
+      setError("Select a waiter in the cart before checkout.");
+      return;
+    }
     setProcessing(true);
     setError(null);
     try {
@@ -200,7 +206,7 @@ export function PosCheckoutPanel({
         merchant_id: paymentMethod === "mobile" ? selectedMerchantId || undefined : undefined,
         amount_tendered: paymentMethod === "cash" ? tenderedNum : undefined,
         payment_reference: paymentReference || undefined,
-        waiter_id: waiterId || undefined,
+        waiter_id: waiterId,
         waiter_name: waiterName || undefined,
         notes: buildNotes(),
       });
@@ -215,6 +221,10 @@ export function PosCheckoutPanel({
   };
 
   const handlePrintSlip = async () => {
+    if (!waiterId) {
+      setError("Select a waiter before printing.");
+      return;
+    }
     setPrinting(true);
     try {
       await printOrderSlip({
@@ -307,7 +317,7 @@ export function PosCheckoutPanel({
                 size="sm"
                 className="hidden gap-1.5 rounded-xl sm:inline-flex"
                 onClick={handlePrintSlip}
-                disabled={printing}
+                disabled={printing || needsWaiter}
               >
                 <Printer className="h-4 w-4" />
                 Print
@@ -337,9 +347,19 @@ export function PosCheckoutPanel({
               {/* Context chips */}
               <div className="flex flex-wrap gap-2">
                 <Chip label={customerName} />
-                {waiterName && <Chip label={`Waiter · ${waiterName}`} />}
+                {waiterName ? (
+                  <Chip label={`Waiter · ${waiterName}`} />
+                ) : (
+                  <Chip label="Waiter required" muted />
+                )}
                 <Chip label={branchName} muted />
               </div>
+
+              {needsWaiter && (
+                <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/20">
+                  Close checkout and select a waiter on the cart before you can print or pay.
+                </p>
+              )}
 
               {/* Payment picker */}
               <div className="rounded-[1.25rem] border border-border/60 bg-card p-1.5 shadow-[0_8px_30px_hsl(var(--foreground)/0.04)]">

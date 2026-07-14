@@ -155,7 +155,7 @@ export function PosReceiptView({
         />
       ) : (
         <div className="flex justify-center rounded-xl border border-dashed border-border bg-muted/20 py-6">
-          <ThermalReceiptPreview receipt={receipt} width="80mm" className="p-3 shadow-md" />
+          <ThermalReceiptPreview receipt={receipt} width="80mm" className="px-1 py-1 shadow-md" />
         </div>
       )}
 
