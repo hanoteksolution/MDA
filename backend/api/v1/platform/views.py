@@ -126,6 +126,29 @@ class PlatformTenantUsersView(APIView):
         ]
         return success_response(data=data)
 
+    def post(self, request, pk):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            tenant = Tenant.objects.get(pk=pk, deleted_at__isnull=True)
+        except Tenant.DoesNotExist:
+            return error_response(message="Shop not found.", status=status.HTTP_404_NOT_FOUND)
+        if not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = PlatformService.create_tenant_user(
+                tenant=tenant,
+                data=request.data,
+                created_by=request.user,
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=PlatformService.owner_payload(user),
+            message="User created. They can sign in on the desktop app with this username and password.",
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class PlatformSubscriptionListCreateView(APIView):
     permission_classes = [IsAuthenticated]

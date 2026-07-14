@@ -292,6 +292,23 @@ export const platformApi = {
   tenantUsers: (tenantId: string) =>
     platformCloudRequest<ApiResponse<PlatformUserOption[]>>(`/platform/tenants/${tenantId}/users/`),
 
+  createTenantUser: (
+    tenantId: string,
+    data: {
+      username: string;
+      password: string;
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      role_slug?: string;
+    }
+  ) =>
+    platformCloudRequest<ApiResponse<PlatformUserOption>>(`/platform/tenants/${tenantId}/users/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   createShop: (data: Record<string, unknown>) =>
     platformCloudRequest<ApiResponse<Record<string, unknown>>>("/platform/tenants/", {
       method: "POST",

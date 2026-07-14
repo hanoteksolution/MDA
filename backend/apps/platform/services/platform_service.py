@@ -830,7 +830,39 @@ class PlatformService:
 
     @staticmethod
     def _shop_owner_role_slugs():
-        return {"admin", "branch_manager", "accountant", "inventory_manager", "futsal_manager"}
+        return {
+            "admin",
+            "cashier",
+            "branch_manager",
+            "accountant",
+            "inventory_manager",
+            "futsal_manager",
+        }
+
+    @staticmethod
+    def default_branch_for_tenant(tenant: Tenant) -> Branch | None:
+        company = tenant.companies.filter(deleted_at__isnull=True).first()
+        if not company:
+            return None
+        return (
+            Branch.active_objects().filter(company=company, is_default=True).first()
+            or Branch.active_objects().filter(company=company).first()
+        )
+
+    @staticmethod
+    def create_tenant_user(*, tenant: Tenant, data: dict, created_by=None):
+        """Create a shop desktop/cloud user bound to this tenant."""
+        branch = PlatformService.default_branch_for_tenant(tenant)
+        if not branch:
+            raise ValueError("Shop has no branch. Recreate the shop or contact support.")
+        return PlatformService.create_shop_owner(
+            tenant=tenant,
+            branch=branch,
+            owner=data,
+            shop_group=None,
+            as_group_manager=False,
+            created_by=created_by,
+        )
 
     @staticmethod
     def create_shop_owner(

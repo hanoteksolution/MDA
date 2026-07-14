@@ -5,6 +5,7 @@ import {
   Clock3,
   MapPin,
   Package,
+  Plus,
   RefreshCw,
   ShoppingCart,
   Users,
@@ -17,8 +18,12 @@ import { DataTable, type Column } from "@/components/data/DataTable";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormField, FormGrid } from "@/components/forms/FormField";
 import { PlatformCloudNotice } from "@/components/platform/PlatformCloudNotice";
 import { PlatformProfileHero } from "@/components/platform/PlatformProfileHero";
+import { appDialog } from "@/components/feedback/AppDialog";
 import {
   platformApi,
   type PlatformShopOverview,
@@ -30,6 +35,24 @@ import { cn, formatCurrency } from "@/utils/cn";
 
 type Tab = "overview" | "products" | "sales" | "users" | "performance";
 
+const SHOP_USER_ROLES = [
+  { slug: "admin", name: "Shop Admin (desktop POS)" },
+  { slug: "cashier", name: "Cashier (desktop POS)" },
+  { slug: "branch_manager", name: "Branch Manager" },
+  { slug: "accountant", name: "Accountant" },
+  { slug: "inventory_manager", name: "Inventory Manager" },
+  { slug: "futsal_manager", name: "Futsal Manager" },
+];
+
+const EMPTY_USER_FORM = {
+  username: "",
+  password: "",
+  email: "",
+  first_name: "",
+  last_name: "",
+  role_slug: "admin",
+};
+
 export function PlatformShopDetailPage() {
   const { shopId } = useParams<{ shopId: string }>();
   const [data, setData] = useState<PlatformShopOverview | null>(null);
@@ -37,6 +60,10 @@ export function PlatformShopDetailPage() {
   const [period, setPeriod] = useState("month");
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
+  const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
+  const [userFormError, setUserFormError] = useState("");
 
   const load = () => {
     if (!shopId) return;
@@ -55,6 +82,42 @@ export function PlatformShopDetailPage() {
   useEffect(() => {
     load();
   }, [shopId, period]);
+
+  const createUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopId) return;
+    setUserFormError("");
+    if (!userForm.username.trim()) {
+      setUserFormError("Username is required.");
+      return;
+    }
+    if (userForm.password.length < 8) {
+      setUserFormError("Password must be at least 8 characters.");
+      return;
+    }
+    setSavingUser(true);
+    try {
+      const res = await platformApi.createTenantUser(shopId, {
+        username: userForm.username.trim(),
+        password: userForm.password,
+        email: userForm.email.trim() || undefined,
+        first_name: userForm.first_name.trim() || undefined,
+        last_name: userForm.last_name.trim() || undefined,
+        role_slug: userForm.role_slug,
+      });
+      setUserForm(EMPTY_USER_FORM);
+      setShowAddUser(false);
+      load();
+      await appDialog.alert(
+        `User created. Desktop login: ${res.data.username}. Use Settings → Connection (shop slug + sync secret), then sign in once online.`,
+        { tone: "success", title: "Shop user ready" }
+      );
+    } catch (err) {
+      setUserFormError(err instanceof Error ? err.message : "Could not create user.");
+    } finally {
+      setSavingUser(false);
+    }
+  };
 
   const tenant = data?.tenant;
   const groupId = tenant?.shop_group_id;
@@ -367,13 +430,122 @@ export function PlatformShopDetailPage() {
             )}
 
             {tab === "users" && (
-              <DataTable
-                columns={userCols}
-                data={users}
-                loading={loading}
-                exportTitle={`${tenant?.name || "Shop"} users`}
-                searchPlaceholder="Search users..."
-              />
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Create a Shop Admin or Cashier for the desktop app (offline POS). Share username and password securely.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowAddUser((v) => !v);
+                      setUserFormError("");
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {showAddUser ? "Cancel" : "Add user"}
+                  </Button>
+                </div>
+
+                {showAddUser && (
+                  <form
+                    onSubmit={createUser}
+                    className="platform-panel space-y-4 p-5"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">New shop user</p>
+                      <p className="text-xs text-muted-foreground">
+                        After creating, connect the desktop app with this shop&apos;s slug and sync secret, then sign in online once.
+                      </p>
+                    </div>
+                    {userFormError && (
+                      <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                        {userFormError}
+                      </p>
+                    )}
+                    <FormGrid>
+                      <FormField label="Username" required>
+                        <Input
+                          required
+                          value={userForm.username}
+                          onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                          placeholder="e.g. somfutsal_admin"
+                          autoComplete="off"
+                        />
+                      </FormField>
+                      <FormField label="Password" required hint="Minimum 8 characters">
+                        <Input
+                          required
+                          type="password"
+                          minLength={8}
+                          value={userForm.password}
+                          onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                          autoComplete="new-password"
+                        />
+                      </FormField>
+                      <FormField label="First name">
+                        <Input
+                          value={userForm.first_name}
+                          onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
+                        />
+                      </FormField>
+                      <FormField label="Last name">
+                        <Input
+                          value={userForm.last_name}
+                          onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })}
+                        />
+                      </FormField>
+                      <FormField label="Email">
+                        <Input
+                          type="email"
+                          value={userForm.email}
+                          onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                        />
+                      </FormField>
+                      <FormField label="Role" required>
+                        <Select
+                          value={userForm.role_slug}
+                          onValueChange={(v) => setUserForm({ ...userForm, role_slug: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SHOP_USER_ROLES.map((role) => (
+                              <SelectItem key={role.slug} value={role.slug}>
+                                {role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormField>
+                    </FormGrid>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setShowAddUser(false);
+                          setUserFormError("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" loading={savingUser}>
+                        Create user
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                <DataTable
+                  columns={userCols}
+                  data={users}
+                  loading={loading}
+                  exportTitle={`${tenant?.name || "Shop"} users`}
+                  searchPlaceholder="Search users..."
+                />
+              </div>
             )}
 
             {tab === "performance" && (
