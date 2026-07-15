@@ -330,6 +330,128 @@ class InventoryService:
         return adjustment
 
     @staticmethod
+    def resolve_warehouse_for_branch(*, branch=None, branch_id=None):
+        """Default warehouse for a sales branch (falls back to any default warehouse)."""
+        bid = branch_id or (getattr(branch, "id", None) if branch is not None else None)
+        if bid:
+            wh = (
+                Warehouse.active_objects().filter(branch_id=bid, is_default=True).first()
+                or Warehouse.active_objects().filter(branch_id=bid).first()
+            )
+            if wh:
+                return wh
+        return (
+            Warehouse.active_objects().filter(is_default=True).first()
+            or Warehouse.active_objects().first()
+        )
+
+    @staticmethod
+    def invoice_stock_tracked(*, invoice_id) -> bool:
+        return StockMovement.objects.filter(
+            reference_type="invoice",
+            reference_id=invoice_id,
+            deleted_at__isnull=True,
+        ).exists()
+
+    @staticmethod
+    @transaction.atomic
+    def apply_sale_delta(
+        *,
+        product,
+        warehouse,
+        quantity_delta,
+        reference_id=None,
+        user=None,
+        notes="",
+    ):
+        """
+        Apply a sale-related stock change.
+
+        quantity_delta < 0 → units sold (movement_type=sale)
+        quantity_delta > 0 → units returned / sale reversed (movement_type=return)
+        quantity_delta == 0 → no-op
+        """
+        delta = Decimal(str(quantity_delta))
+        if delta == 0:
+            return None
+        if warehouse is None:
+            raise ValueError("No warehouse available to update stock for this sale.")
+
+        inv = InventoryService.ensure_inventory_record(
+            product=product, warehouse=warehouse, user=user
+        )
+        inv = (
+            Inventory.objects.select_for_update()
+            .filter(pk=inv.pk)
+            .first()
+        )
+        qty_before = inv.quantity
+        qty_after = qty_before + delta
+        inv.quantity = qty_after
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        movement_type = "sale" if delta < 0 else "return"
+        txn_type = "out" if delta < 0 else "return"
+
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type=movement_type,
+            quantity=delta,
+            reference_type="invoice",
+            reference_id=reference_id,
+            notes=notes,
+            created_by=user,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type=txn_type,
+            quantity_before=qty_before,
+            quantity_after=qty_after,
+            quantity_change=delta,
+            reference_type="invoice",
+            reference_id=reference_id,
+            created_by=user,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def apply_invoice_quantity_deltas(
+        *,
+        warehouse,
+        quantity_by_product: dict,
+        reference_id,
+        user=None,
+        notes="",
+    ):
+        """
+        quantity_by_product maps product_id → signed inventory delta
+        (negative = sold more / reduce stock, positive = return / increase stock).
+        """
+        if not warehouse or not quantity_by_product:
+            return
+        for product_id, delta in quantity_by_product.items():
+            delta = Decimal(str(delta))
+            if delta == 0:
+                continue
+            product = Product.active_objects().filter(pk=product_id).first()
+            if product is None:
+                # Soft-deleted catalog item — still adjust stock if inventory row exists.
+                product = Product.objects.filter(pk=product_id).first()
+            if product is None:
+                continue
+            InventoryService.apply_sale_delta(
+                product=product,
+                warehouse=warehouse,
+                quantity_delta=delta,
+                reference_id=reference_id,
+                user=user,
+                notes=notes,
+            )
+
+    @staticmethod
     def list_adjustments():
         return (
             InventoryAdjustment.active_objects()

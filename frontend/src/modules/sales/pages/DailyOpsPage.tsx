@@ -36,6 +36,7 @@ import {
   type DailyOpsUnpaid,
 } from "@/services/api/sales";
 import { appDialog } from "@/components/feedback/AppDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const EXPENSE_CATEGORIES = [
   { value: "utilities", label: "Utilities" },
@@ -81,6 +82,8 @@ function formatDisplayDate(iso: string) {
 }
 
 export function DailyOpsPage() {
+  const { hasPermission } = usePermissions();
+  const canUpdate = hasPermission("sales.update");
   const [tab, setTab] = useState("products");
   const [date, setDate] = useState(todayIso);
   const [ops, setOps] = useState<DailyOpsData | null>(null);
@@ -256,25 +259,26 @@ export function DailyOpsPage() {
         key: "actions",
         header: "",
         exportable: false,
-        cell: (r) => (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-8 gap-1 text-emerald-700"
-            disabled={markingId === r.invoice_id}
-            onClick={() => handleMarkPaid(r.invoice_id, r.invoice_number, r.balance_due)}
-          >
-            {markingId === r.invoice_id ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CircleCheck className="h-3.5 w-3.5" />
-            )}
-            Mark paid
-          </Button>
-        ),
+        cell: (r) =>
+          canUpdate ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 gap-1 text-emerald-700"
+              disabled={markingId === r.invoice_id}
+              onClick={() => handleMarkPaid(r.invoice_id, r.invoice_number, r.balance_due)}
+            >
+              {markingId === r.invoice_id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CircleCheck className="h-3.5 w-3.5" />
+              )}
+              Mark paid
+            </Button>
+          ) : null,
       },
     ],
-    [markingId]
+    [markingId, canUpdate]
   );
 
   const expenseColumns: Column<DailyExpense>[] = useMemo(
@@ -555,7 +559,7 @@ export function DailyOpsPage() {
                       header: "",
                       exportable: false,
                       cell: (r) =>
-                        r.status !== "paid" && r.balance_due > 0 ? (
+                        canUpdate && r.status !== "paid" && r.balance_due > 0 ? (
                           <Button
                             size="sm"
                             variant="secondary"

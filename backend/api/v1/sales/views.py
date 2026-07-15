@@ -70,7 +70,7 @@ class QuotationDetailView(APIView):
         return success_response(data=serialize_quotation(q, include_items=True))
 
     def put(self, request, pk):
-        if not request.user.has_permission("sales.create"):
+        if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         q = QuotationService.list().get(pk=pk)
         data = dict(request.data)
@@ -82,8 +82,18 @@ class QuotationDetailView(APIView):
             update_data["customer_id"] = customer_id
         if branch_id:
             update_data["branch_id"] = branch_id
-        q = QuotationService.update(instance=q, data=update_data, items=items, user=request.user)
+        try:
+            q = QuotationService.update(instance=q, data=update_data, items=items, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(data=serialize_quotation(q, include_items=True), message="Quotation updated.")
+
+    def delete(self, request, pk):
+        if not request.user.has_permission("sales.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        q = QuotationService.list().get(pk=pk)
+        QuotationService.delete(instance=q, user=request.user)
+        return success_response(message="Quotation deleted.")
 
 
 class InvoiceListCreateView(APIView):
@@ -133,7 +143,7 @@ class InvoiceDetailView(APIView):
         return success_response(data=serialize_invoice(inv, include_items=True))
 
     def put(self, request, pk):
-        if not request.user.has_permission("sales.create"):
+        if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         inv = InvoiceService.list().get(pk=pk)
         data = dict(request.data)
@@ -145,15 +155,28 @@ class InvoiceDetailView(APIView):
             update_data["customer_id"] = customer_id
         if branch_id:
             update_data["branch_id"] = branch_id
-        inv = InvoiceService.update(instance=inv, data=update_data, items=items, user=request.user)
+        try:
+            inv = InvoiceService.update(instance=inv, data=update_data, items=items, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(data=serialize_invoice(inv, include_items=True), message="Invoice updated.")
+
+    def delete(self, request, pk):
+        if not request.user.has_permission("sales.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        inv = InvoiceService.list().get(pk=pk)
+        try:
+            InvoiceService.delete(instance=inv, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(message="Invoice/receipt deleted.")
 
 
 class InvoiceMarkPaidView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def post(self, request, pk):
-        if not request.user.has_permission("sales.create"):
+        if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         inv = InvoiceService.list().get(pk=pk)
         try:

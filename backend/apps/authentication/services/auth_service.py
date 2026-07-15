@@ -116,12 +116,25 @@ class UserService:
         if not permission_ids:
             return
         permissions = Permission.objects.filter(id__in=permission_ids, deleted_at__isnull=True)
+        # Multi-shop managers may only grant permissions they themselves hold.
+        if granted_by is not None and UserService.is_scoped_manager(granted_by):
+            allowed = set(granted_by.get_permissions())
+            permissions = [p for p in permissions if p.codename in allowed]
         UserPermission.objects.bulk_create(
             [
                 UserPermission(user=user, permission=p, created_by=granted_by)
                 for p in permissions
             ]
         )
+
+    @staticmethod
+    def list_assignable_permissions(*, viewer=None):
+        """Permission catalog for Admin UI. Scoped managers see only what they can grant."""
+        qs = Permission.active_objects().all()
+        if viewer is not None and UserService.is_scoped_manager(viewer):
+            allowed = set(viewer.get_permissions())
+            qs = qs.filter(codename__in=allowed)
+        return qs.order_by("module", "codename")
 
     @staticmethod
     @transaction.atomic

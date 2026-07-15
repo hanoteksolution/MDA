@@ -46,30 +46,40 @@ export function AdminPage() {
 
   const loadRoles = useCallback(async () => {
     if (!canManageRoles) return;
-    setLoading(true);
     try {
       const res = await adminApi.roles();
       setRoles(res.data);
-    } finally {
-      setLoading(false);
+    } catch {
+      setRoles([]);
     }
   }, [canManageRoles]);
 
   const loadPermissions = useCallback(async () => {
     if (!canManageRoles) return;
-    setLoading(true);
     try {
       const res = await adminApi.permissions();
       setPermissions(res.data);
-    } finally {
-      setLoading(false);
+    } catch {
+      setPermissions({});
     }
   }, [canManageRoles]);
 
+  // Prefetch roles + permissions so KPI cards are accurate on the Users tab
+  useEffect(() => {
+    if (!canManageRoles) return;
+    void loadRoles();
+    void loadPermissions();
+  }, [canManageRoles, loadRoles, loadPermissions]);
+
   useEffect(() => {
     if (tab === "users") loadUsers();
-    else if (tab === "roles") loadRoles();
-    else loadPermissions();
+    else if (tab === "roles") {
+      setLoading(true);
+      loadRoles().finally(() => setLoading(false));
+    } else if (tab === "permissions") {
+      setLoading(true);
+      loadPermissions().finally(() => setLoading(false));
+    }
   }, [tab, loadUsers, loadRoles, loadPermissions]);
 
   const handleDeactivateUser = async (id: string, username: string) => {

@@ -255,7 +255,7 @@ class PermissionListView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("roles.view")]
 
     def get(self, request):
-        permissions = Permission.active_objects().all()
+        permissions = UserService.list_assignable_permissions(viewer=request.user)
         grouped = {}
         for perm in permissions:
             grouped.setdefault(perm.module, []).append(PermissionSerializer(perm).data)

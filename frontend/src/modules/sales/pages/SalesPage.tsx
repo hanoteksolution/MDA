@@ -16,6 +16,7 @@ import {
   FileDown,
   Truck,
   CircleCheck,
+  Trash2,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
@@ -30,6 +31,7 @@ import type { Invoice, Quotation, SalesSummary } from "@/services/api/sales";
 import { SalesReceiptDialog } from "../components/SalesReceiptDialog";
 import { useSalesReceipt } from "../hooks/useSalesReceipt";
 import { appDialog } from "@/components/feedback/AppDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const INVOICE_STATUS: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary", sent: "warning", paid: "success", overdue: "destructive", cancelled: "destructive",
@@ -41,6 +43,10 @@ function canMarkPaid(status: string) {
 
 export function SalesPage() {
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission("sales.create");
+  const canUpdate = hasPermission("sales.update");
+  const canDelete = hasPermission("sales.delete");
   const [tab, setTab] = useState("invoices");
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
@@ -104,6 +110,23 @@ export function SalesPage() {
     }
   };
 
+  const handleDelete = async (doc: Invoice | Quotation) => {
+    const label = tab === "invoices" ? "invoice/receipt" : "quotation";
+    const ok = await appDialog.confirm(
+      `Delete ${label} ${doc.number}? This cannot be undone.`,
+      { title: `Delete ${label}`, tone: "danger", confirmLabel: "Delete" },
+    );
+    if (!ok) return;
+    try {
+      if (tab === "invoices") await salesApi.deleteInvoice(doc.id);
+      else await salesApi.deleteQuotation(doc.id);
+      activeList.reload();
+      refreshSummary();
+    } catch (err) {
+      await appDialog.alert(err instanceof Error ? err.message : `Could not delete ${label}`);
+    }
+  };
+
   useEffect(() => {
     salesApi.summary()
       .then((sum) => setSummary(sum.data))
@@ -136,7 +159,7 @@ export function SalesPage() {
           <div className="flex items-center justify-end gap-0.5">
             {tab === "invoices" ? (
               <>
-                {unpaid && (
+                {unpaid && canUpdate && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -247,17 +270,30 @@ export function SalesPage() {
                 </Button>
               </>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              title="Edit"
-              onClick={() =>
-                navigate(tab === "invoices" ? `/sales/invoices/${r.id}/edit` : `/sales/quotations/${r.id}/edit`)
-              }
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
+            {canUpdate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                title="Edit"
+                onClick={() =>
+                  navigate(tab === "invoices" ? `/sales/invoices/${r.id}/edit` : `/sales/quotations/${r.id}/edit`)
+                }
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                title="Delete"
+                onClick={() => void handleDelete(r)}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
           </div>
         );
       },
@@ -277,12 +313,14 @@ export function SalesPage() {
             <Download className="h-4 w-4" />
             Export
           </Button>
-          <Button asChild>
-            <Link to={newPath}>
-              <Plus className="h-4 w-4" />
-              {tab === "invoices" ? "New Invoice" : "New Quotation"}
-            </Link>
-          </Button>
+          {canCreate && (
+            <Button asChild>
+              <Link to={newPath}>
+                <Plus className="h-4 w-4" />
+                {tab === "invoices" ? "New Invoice" : "New Quotation"}
+              </Link>
+            </Button>
+          )}
         </div>
       }
     >
@@ -325,9 +363,11 @@ export function SalesPage() {
           onSearchChange={setSearch}
           emptyMessage={tab === "invoices" ? "No invoices yet. Create your first invoice." : "No quotations yet. Create your first quotation."}
           actions={
-            <Button asChild size="sm">
-              <Link to={newPath}><Plus className="h-4 w-4" /> Create</Link>
-            </Button>
+            canCreate ? (
+              <Button asChild size="sm">
+                <Link to={newPath}><Plus className="h-4 w-4" /> Create</Link>
+              </Button>
+            ) : undefined
           }
         />
       </ContentSection>
@@ -335,7 +375,7 @@ export function SalesPage() {
       <SalesReceiptDialog
         preview={documentPreview}
         onClose={closePreview}
-        onMarkPaid={handleMarkPaidFromDialog}
+        onMarkPaid={canUpdate ? handleMarkPaidFromDialog : undefined}
         markingPaid={!!documentPreview && receiptLoadingId === documentPreview.invoiceId}
       />
     </PageLayout>

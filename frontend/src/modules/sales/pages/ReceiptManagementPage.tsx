@@ -4,16 +4,20 @@ import {
   Download,
   FileText,
   Loader2,
+  Pencil,
   Printer,
   Receipt,
   Search,
+  Trash2,
   Wallet,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PosReceiptView } from "@/modules/pos/components/PosReceiptView";
 import { salesApi, type Invoice } from "@/services/api/sales";
 import type { PosReceipt } from "@/services/api/pos";
@@ -53,6 +57,9 @@ function statusVariant(status: string): "success" | "warning" | "secondary" | "d
 }
 
 export function ReceiptManagementPage() {
+  const { hasPermission } = usePermissions();
+  const canUpdate = hasPermission("sales.update");
+  const canDelete = hasPermission("sales.delete");
   const [tab, setTab] = useState<PaymentTab>("all");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -125,7 +132,7 @@ export function ReceiptManagementPage() {
   };
 
   const handleMarkPaid = async () => {
-    if (!selected || !canMarkPaid(selected.status)) return;
+    if (!selected || !canMarkPaid(selected.status) || !canUpdate) return;
     if (
       !window.confirm(
         `Mark ${selected.number} as paid for ${formatCurrency(selected.total_amount)}?`
@@ -142,6 +149,23 @@ export function ReceiptManagementPage() {
       await appDialog.alert(err instanceof Error ? err.message : "Could not mark as paid");
     } finally {
       setMarking(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selected || !canDelete) return;
+    const ok = await appDialog.confirm(
+      `Delete receipt ${selected.number}? This cannot be undone.`,
+      { title: "Delete receipt", tone: "danger", confirmLabel: "Delete" },
+    );
+    if (!ok) return;
+    try {
+      await salesApi.deleteInvoice(selected.id);
+      setSelectedId(null);
+      setPreview(null);
+      list.reload();
+    } catch (err) {
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete receipt");
     }
   };
 
@@ -373,7 +397,7 @@ export function ReceiptManagementPage() {
                   {selected?.number ?? "Select a receipt"}
                 </p>
               </div>
-              {selected && canMarkPaid(selected.status) && (
+              {selected && canMarkPaid(selected.status) && canUpdate && (
                 <Button
                   size="sm"
                   className="h-9 shrink-0 gap-1.5 rounded-xl"
@@ -426,6 +450,30 @@ export function ReceiptManagementPage() {
                   <Download className="h-3.5 w-3.5" />
                   PDF
                 </Button>
+                {canUpdate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-1.5 rounded-xl border border-border"
+                    asChild
+                  >
+                    <Link to={`/sales/invoices/${selected.id}/edit`}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Link>
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-1.5 rounded-xl border border-border text-destructive hover:text-destructive"
+                    onClick={() => void handleDelete()}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                )}
               </div>
             )}
           </div>

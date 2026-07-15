@@ -230,6 +230,9 @@ export const salesApi = {
   updateInvoice: (id: string, data: Record<string, unknown>) =>
     apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
 
+  deleteInvoice: (id: string) =>
+    apiRequest<ApiResponse<null>>(`/sales/invoices/${id}/`, { method: "DELETE" }),
+
   markInvoicePaid: (id: string) =>
     apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/mark-paid/`, { method: "POST" }),
 
@@ -243,6 +246,9 @@ export const salesApi = {
 
   updateQuotation: (id: string, data: Record<string, unknown>) =>
     apiRequest<ApiResponse<Quotation>>(`/sales/quotations/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
+
+  deleteQuotation: (id: string) =>
+    apiRequest<ApiResponse<null>>(`/sales/quotations/${id}/`, { method: "DELETE" }),
 };
 
 export type { ApiListResponse };

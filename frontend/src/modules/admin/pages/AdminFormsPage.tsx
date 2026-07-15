@@ -149,7 +149,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
 
                 <FormSection
                   title="Direct permissions"
-                  description={`${selectedPermIds.length} extra permission(s) for this user only (in addition to their role)`}
+                  description="Extra permissions for this user only. Includes Sales & Receipts (view / update / delete) when available to you."
                 >
                   <PermissionMatrix
                     permissions={allPermissions}

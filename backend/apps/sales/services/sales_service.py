@@ -7,6 +7,33 @@ from django.utils import timezone
 from apps.sales.models import DocumentSequence, Invoice, InvoiceItem, Quotation, QuotationItem
 from apps.sales.services.sequence_service import DocumentSequenceService
 from apps.settings_app.models import Branch
+from apps.inventory.services.inventory_service import InventoryService
+
+
+def _aggregate_item_quantities(items) -> dict:
+    """Return {product_id: Decimal qty} from invoice line dicts or InvoiceItem qs."""
+    totals: dict = {}
+    for item in items or []:
+        if isinstance(item, dict):
+            pid = item.get("product_id")
+            qty = Decimal(str(item.get("quantity") or 0))
+        else:
+            pid = item.product_id
+            qty = Decimal(str(item.quantity or 0))
+        if not pid:
+            continue
+        totals[pid] = totals.get(pid, Decimal("0")) + qty
+    return totals
+
+
+def _stock_deltas(*, old_qty: dict, new_qty: dict) -> dict:
+    """Inventory deltas: sold more → negative stock; sold less → positive stock."""
+    keys = set(old_qty) | set(new_qty)
+    return {
+        pid: -(new_qty.get(pid, Decimal("0")) - old_qty.get(pid, Decimal("0")))
+        for pid in keys
+        if (new_qty.get(pid, Decimal("0")) - old_qty.get(pid, Decimal("0"))) != 0
+    }
 
 
 class QuotationService:
@@ -70,6 +97,8 @@ class QuotationService:
     @staticmethod
     @transaction.atomic
     def update(*, instance, data, items=None, user=None):
+        if instance.status == Quotation.STATUS_CANCELLED:
+            raise ValueError("Cancelled quotations cannot be edited.")
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
         if customer_id:
@@ -93,6 +122,12 @@ class QuotationService:
                 )
             QuotationService._recalculate(quotation=instance)
         return QuotationService.list().get(pk=instance.pk)
+
+    @staticmethod
+    @transaction.atomic
+    def delete(*, instance, user=None):
+        instance.soft_delete(user=user)
+        return instance
 
 
 class InvoiceService:
@@ -180,11 +215,93 @@ class InvoiceService:
                 created_by=user,
             )
         InvoiceService._recalculate(invoice=invoice)
+        InvoiceService._apply_stock_for_create(invoice=invoice, items=items or [], user=user)
         return InvoiceService.list().get(pk=invoice.pk)
+
+    @staticmethod
+    def _apply_stock_for_create(*, invoice, items, user=None):
+        warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        if not warehouse:
+            return
+        sold = _aggregate_item_quantities(items)
+        deltas = {pid: -qty for pid, qty in sold.items() if qty}
+        InventoryService.apply_invoice_quantity_deltas(
+            warehouse=warehouse,
+            quantity_by_product=deltas,
+            reference_id=invoice.id,
+            user=user,
+            notes=f"Sale {invoice.invoice_number}",
+        )
+
+    @staticmethod
+    def _apply_stock_for_update(*, invoice, old_branch, old_items_qty, new_items, user=None):
+        """
+        Diff line quantities and move stock.
+
+        Legacy invoices (never tracked in stock ledger) treat prior qty as 0 so the
+        first edit starts tracking without inventing a restock.
+        """
+        tracked = InventoryService.invoice_stock_tracked(invoice_id=invoice.id)
+        effective_old = old_items_qty if tracked else {}
+        new_qty = _aggregate_item_quantities(new_items)
+        old_wh = InventoryService.resolve_warehouse_for_branch(branch=old_branch)
+        new_wh = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+
+        if old_wh and new_wh and old_wh.id == new_wh.id:
+            deltas = _stock_deltas(old_qty=effective_old, new_qty=new_qty)
+            InventoryService.apply_invoice_quantity_deltas(
+                warehouse=new_wh,
+                quantity_by_product=deltas,
+                reference_id=invoice.id,
+                user=user,
+                notes=f"Sale edit {invoice.invoice_number}",
+            )
+            return
+
+        # Branch/warehouse changed: restore old sale, then apply new sale.
+        if old_wh and effective_old:
+            restore = {pid: qty for pid, qty in effective_old.items() if qty}
+            InventoryService.apply_invoice_quantity_deltas(
+                warehouse=old_wh,
+                quantity_by_product=restore,
+                reference_id=invoice.id,
+                user=user,
+                notes=f"Sale move restore {invoice.invoice_number}",
+            )
+        if new_wh and new_qty:
+            deduct = {pid: -qty for pid, qty in new_qty.items() if qty}
+            InventoryService.apply_invoice_quantity_deltas(
+                warehouse=new_wh,
+                quantity_by_product=deduct,
+                reference_id=invoice.id,
+                user=user,
+                notes=f"Sale move apply {invoice.invoice_number}",
+            )
+
+    @staticmethod
+    def _apply_stock_for_delete(*, invoice, user=None):
+        if not InventoryService.invoice_stock_tracked(invoice_id=invoice.id):
+            return
+        warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        if not warehouse:
+            return
+        sold = _aggregate_item_quantities(list(invoice.items.all()))
+        restore = {pid: qty for pid, qty in sold.items() if qty}
+        InventoryService.apply_invoice_quantity_deltas(
+            warehouse=warehouse,
+            quantity_by_product=restore,
+            reference_id=invoice.id,
+            user=user,
+            notes=f"Sale deleted {invoice.invoice_number}",
+        )
 
     @staticmethod
     @transaction.atomic
     def update(*, instance, data, items=None, user=None):
+        if instance.status == Invoice.STATUS_CANCELLED:
+            raise ValueError("Cancelled invoices/receipts cannot be edited.")
+        old_branch = instance.branch
+        old_items_qty = _aggregate_item_quantities(list(instance.items.all()))
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
         if customer_id:
@@ -207,7 +324,27 @@ class InvoiceService:
                     created_by=user,
                 )
             InvoiceService._recalculate(invoice=instance)
+            instance.refresh_from_db()
+            InvoiceService._apply_stock_for_update(
+                invoice=instance,
+                old_branch=old_branch,
+                old_items_qty=old_items_qty,
+                new_items=items,
+                user=user,
+            )
         return InvoiceService.list().get(pk=instance.pk)
+
+    @staticmethod
+    @transaction.atomic
+    def delete(*, instance, user=None):
+        if instance.status == Invoice.STATUS_CANCELLED:
+            raise ValueError("Invoice/receipt is already cancelled.")
+        InvoiceService._apply_stock_for_delete(invoice=instance, user=user)
+        instance.status = Invoice.STATUS_CANCELLED
+        instance.updated_by = user
+        instance.save(update_fields=["status", "updated_by", "updated_at"])
+        instance.soft_delete(user=user)
+        return instance
 
     @staticmethod
     @transaction.atomic

@@ -112,17 +112,21 @@ export function CategoriesPage() {
   };
 
   const handleDelete = async (cat: Category) => {
-    if (!confirm(`Delete category "${cat.name}"? Products using it may be affected.`)) return;
+    const ok = await appDialog.confirm(
+      `Delete category "${cat.name}"? Products using it may be affected.`,
+      { title: "Delete category", tone: "danger", confirmLabel: "Delete" },
+    );
+    if (!ok) return;
     try {
       await productsApi.deleteCategory(cat.id);
       await appDialog.alert(`"${cat.name}" was removed.`, { title: "Category deleted", tone: "success" });
       if (editingId === cat.id) closeForm();
       await load();
     } catch (err) {
-      await appDialog.alert(
-        err instanceof Error ? err.message : "Could not delete category.",
-        { title: "Delete failed", tone: "danger" }
-      );
+      await appDialog.alert(err instanceof Error ? err.message : "Could not delete category.", {
+        title: "Delete failed",
+        tone: "danger",
+      });
     }
   };
 
@@ -210,7 +214,7 @@ export function CategoriesPage() {
             </Button>
           </div>
 
-          <FormGrid cols={2}>
+          <FormGrid>
             <FormField label="Name" required>
               <Input
                 value={form.name}

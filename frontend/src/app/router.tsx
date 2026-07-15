@@ -227,7 +227,7 @@ export function AppRouter() {
           <Route
             path="/sales/invoices/:id/edit"
             element={
-              <PermissionGuard permission="sales.create">
+              <PermissionGuard permission="sales.update">
                 <InvoiceEditPage />
               </PermissionGuard>
             }
@@ -243,7 +243,7 @@ export function AppRouter() {
           <Route
             path="/sales/quotations/:id/edit"
             element={
-              <PermissionGuard permission="sales.create">
+              <PermissionGuard permission="sales.update">
                 <QuotationEditPage />
               </PermissionGuard>
             }
