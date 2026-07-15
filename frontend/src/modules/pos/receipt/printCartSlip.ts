@@ -2,7 +2,7 @@ import { THERMAL_RECEIPT_PRINT_CSS } from "@/documents/styles/thermalReceipt";
 import { getDocumentBranding } from "@/documents/branding";
 import { renderPremiumThermalSlip, type ThermalSlipItem } from "@/documents/renderers/thermal";
 import { printThermalDocument } from "@/utils/printThermal";
-import { posApi } from "@/services/api/pos";
+import { posApi, type PosMerchant } from "@/services/api/pos";
 import type { CartLine } from "../hooks/usePosCart";
 
 export interface CartSlipData {
@@ -21,6 +21,8 @@ export interface CartSlipData {
   notes?: string;
   heldAt?: string;
   isHold?: boolean;
+  /** Optional — if omitted, loaded from POS profile settings */
+  merchants?: PosMerchant[];
 }
 
 async function allocateSlipNumber(kind: "order" | "hold", branchId?: string): Promise<string> {
@@ -40,10 +42,33 @@ function cartToItems(cart: CartLine[]): ThermalSlipItem[] {
   }));
 }
 
+function merchantsToGuide(merchants: PosMerchant[]): { label: string; number: string }[] {
+  const guide: { label: string; number: string }[] = [];
+  for (const m of merchants.slice(0, 6)) {
+    const label = (m.label || m.company_name || "").trim();
+    const number = (m.merchant_number || "").trim();
+    if (label && number) guide.push({ label, number });
+  }
+  return guide;
+}
+
+async function resolveMerchants(explicit?: PosMerchant[]): Promise<PosMerchant[]> {
+  if (explicit && explicit.length > 0) return explicit;
+  try {
+    const res = await posApi.profile();
+    return res.data.merchants || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function printCartSlip(data: CartSlipData): Promise<void> {
-  const branding = await getDocumentBranding(
-    data.branchName ? { name: data.branchName, code: data.branchCode } : undefined
-  );
+  const [branding, merchants] = await Promise.all([
+    getDocumentBranding(
+      data.branchName ? { name: data.branchName, code: data.branchCode } : undefined
+    ),
+    resolveMerchants(data.merchants),
+  ]);
 
   const ref = await allocateSlipNumber(data.isHold ? "hold" : "order", data.branchId);
 
@@ -63,6 +88,7 @@ export async function printCartSlip(data: CartSlipData): Promise<void> {
       grandTotal: data.grandTotal,
       branding,
       isHold: data.isHold,
+      paymentGuide: merchantsToGuide(merchants),
     },
     { qrDataUrl: "", barcodeDataUrl: "" },
     "80mm"
