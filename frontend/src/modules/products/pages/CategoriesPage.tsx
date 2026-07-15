@@ -97,10 +97,10 @@ export function CategoriesPage() {
       };
       if (editingId) {
         await productsApi.updateCategory(editingId, payload);
-        appDialog.success({ title: "Category updated", description: `"${name}" was saved.` });
+        await appDialog.alert(`"${name}" was saved.`, { title: "Category updated", tone: "success" });
       } else {
         await productsApi.createCategory(payload);
-        appDialog.success({ title: "Category created", description: `"${name}" was added.` });
+        await appDialog.alert(`"${name}" was added.`, { title: "Category created", tone: "success" });
       }
       closeForm();
       await load();
@@ -115,14 +115,14 @@ export function CategoriesPage() {
     if (!confirm(`Delete category "${cat.name}"? Products using it may be affected.`)) return;
     try {
       await productsApi.deleteCategory(cat.id);
-      appDialog.success({ title: "Category deleted", description: `"${cat.name}" was removed.` });
+      await appDialog.alert(`"${cat.name}" was removed.`, { title: "Category deleted", tone: "success" });
       if (editingId === cat.id) closeForm();
       await load();
     } catch (err) {
-      appDialog.error({
-        title: "Delete failed",
-        description: err instanceof Error ? err.message : "Could not delete category.",
-      });
+      await appDialog.alert(
+        err instanceof Error ? err.message : "Could not delete category.",
+        { title: "Delete failed", tone: "danger" }
+      );
     }
   };
 
