@@ -47,7 +47,7 @@ export function PosPage() {
   const [waiterId, setWaiterId] = useState("");
 
   const {
-    cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, taxRate,
+    cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, discountMode, taxRate,
     orderNotes, setOrderNotes, totals, addToCart, updateQty, removeLine,
     clearCart, toggleFavorite, holdSale, resumeHeldSale, deleteHeldSale, completeSale,
   } = usePosCart();
@@ -520,7 +520,7 @@ export function PosPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 28 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-[min(100%,280px)] shrink-0 xl:w-[min(100%,320px)] 2xl:w-[min(100%,380px)]"
+            className="relative flex h-full min-h-0 w-[min(100%,280px)] shrink-0 flex-col overflow-hidden xl:w-[min(100%,320px)] 2xl:w-[min(100%,380px)]"
           >
           <PosCartPanel
             cart={cart}
@@ -529,6 +529,7 @@ export function PosPage() {
             discount={totals.discount}
             discountPct={discountPct}
             discountAmount={discountAmount}
+            discountMode={discountMode}
             onDiscountPctChange={setDiscountPct}
             onDiscountAmountChange={setDiscountAmount}
             tax={totals.tax}

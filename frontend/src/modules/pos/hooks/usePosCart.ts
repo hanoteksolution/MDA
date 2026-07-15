@@ -38,6 +38,9 @@ const RECENT_KEY = "mda_pos_recent";
 const HELD_KEY = "mda_pos_held";
 export const POS_TAX_RATE = 0.05;
 
+/** Which discount field the cashier last edited — prevents % and $ from fighting. */
+export type DiscountMode = "none" | "percent" | "amount";
+
 function loadJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -55,9 +58,26 @@ function calcSubtotal(cart: CartLine[]) {
   return cart.reduce((s, i) => s + i.price * i.qty, 0);
 }
 
-function calcDiscount(subtotal: number, discountPct: number, discountAmount: number) {
-  if (discountAmount > 0) return Math.min(subtotal, discountAmount);
-  if (discountPct > 0) return subtotal * (discountPct / 100);
+export function roundMoney(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function calcDiscount(
+  subtotal: number,
+  mode: DiscountMode,
+  discountPct: number,
+  discountAmount: number
+) {
+  if (subtotal <= 0) return 0;
+  if (mode === "percent" && discountPct > 0) {
+    return roundMoney(Math.min(subtotal, (subtotal * discountPct) / 100));
+  }
+  if (mode === "amount" && discountAmount > 0) {
+    return roundMoney(Math.min(subtotal, discountAmount));
+  }
+  // Legacy held sales / resume without an explicit mode
+  if (discountAmount > 0) return roundMoney(Math.min(subtotal, discountAmount));
+  if (discountPct > 0) return roundMoney(Math.min(subtotal, (subtotal * discountPct) / 100));
   return 0;
 }
 
@@ -68,6 +88,7 @@ export function usePosCart() {
   const [heldSales, setHeldSales] = useState<HeldSale[]>(() => loadJson<HeldSale[]>(HELD_KEY, []));
   const [discountPct, setDiscountPctState] = useState(0);
   const [discountAmount, setDiscountAmountState] = useState(0);
+  const [discountMode, setDiscountMode] = useState<DiscountMode>("none");
   const [taxRate] = useState(POS_TAX_RATE);
   const [orderNotes, setOrderNotes] = useState("");
 
@@ -81,29 +102,47 @@ export function usePosCart() {
     saveHeld(heldSales);
   }, [heldSales]);
 
-  // Keep amount in sync when cart subtotal changes but % discount is set
+  // When the cart total changes, keep the active discount source and refresh the other field.
   useEffect(() => {
-    if (discountPct > 0) {
-      setDiscountAmountState(subtotal * (discountPct / 100));
+    if (discountMode === "percent" && discountPct > 0) {
+      setDiscountAmountState(roundMoney((subtotal * discountPct) / 100));
+    } else if (discountMode === "amount" && discountAmount > 0) {
+      const capped = Math.min(subtotal, discountAmount);
+      setDiscountAmountState(capped);
+      setDiscountPctState(subtotal > 0 ? roundMoney((capped / subtotal) * 100) : 0);
     } else if (discountAmount > subtotal) {
       setDiscountAmountState(subtotal);
     }
-  }, [subtotal, discountPct]);
+  }, [subtotal]); // intentionally only when subtotal changes
 
   const setDiscountPct = useCallback(
     (pct: number) => {
       const safe = Math.min(100, Math.max(0, pct));
+      if (safe <= 0) {
+        setDiscountMode("none");
+        setDiscountPctState(0);
+        setDiscountAmountState(0);
+        return;
+      }
+      setDiscountMode("percent");
       setDiscountPctState(safe);
-      setDiscountAmountState(subtotal * (safe / 100));
+      setDiscountAmountState(roundMoney((subtotal * safe) / 100));
     },
     [subtotal]
   );
 
   const setDiscountAmount = useCallback(
     (amount: number) => {
-      const safe = Math.min(subtotal, Math.max(0, amount));
+      const safe = roundMoney(Math.min(subtotal, Math.max(0, amount)));
+      if (safe <= 0) {
+        setDiscountMode("none");
+        setDiscountPctState(0);
+        setDiscountAmountState(0);
+        return;
+      }
+      setDiscountMode("amount");
       setDiscountAmountState(safe);
-      setDiscountPctState(subtotal > 0 ? (safe / subtotal) * 100 : 0);
+      setDiscountPctState(subtotal > 0 ? roundMoney((safe / subtotal) * 100) : 0);
     },
     [subtotal]
   );
@@ -154,6 +193,7 @@ export function usePosCart() {
     setCart([]);
     setDiscountPctState(0);
     setDiscountAmountState(0);
+    setDiscountMode("none");
     setOrderNotes("");
   }, []);
 
@@ -167,12 +207,12 @@ export function usePosCart() {
     (extras?: { customerId?: string; waiterId?: string; waiterName?: string }) => {
       if (!cart.length) return null;
       const itemCount = cart.reduce((s, i) => s + i.qty, 0);
-      const discount = calcDiscount(subtotal, discountPct, discountAmount);
+      const discount = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
       const held: HeldSale = {
         id: crypto.randomUUID(),
         label: cart.length === 1 ? cart[0].name : `${itemCount} items`,
         cart: [...cart],
-        discountPct,
+        discountPct: discountMode === "percent" ? discountPct : subtotal > 0 ? roundMoney((discount / subtotal) * 100) : 0,
         discountAmount: discount,
         notes: orderNotes,
         heldAt: new Date().toISOString(),
@@ -186,7 +226,7 @@ export function usePosCart() {
       clearCart();
       return held;
     },
-    [cart, discountPct, discountAmount, orderNotes, subtotal, clearCart]
+    [cart, discountMode, discountPct, discountAmount, orderNotes, subtotal, clearCart]
   );
 
   const resumeHeldSale = useCallback(
@@ -198,7 +238,7 @@ export function usePosCart() {
 
       if (cart.length) {
         const itemCount = cart.reduce((s, i) => s + i.qty, 0);
-        const disc = calcDiscount(subtotal, discountPct, discountAmount);
+        const disc = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
         nextHeld = [
           {
             id: crypto.randomUUID(),
@@ -217,12 +257,27 @@ export function usePosCart() {
 
       setHeldSales(nextHeld);
       setCart(sale.cart);
-      setDiscountPctState(sale.discountPct);
-      setDiscountAmountState(sale.discountAmount ?? subtotal * (sale.discountPct / 100));
+      const saleSub = calcSubtotal(sale.cart);
+      const restoredAmount = roundMoney(sale.discountAmount ?? 0);
+      const restoredPct = sale.discountPct ?? 0;
+      // Prefer fixed amount when resume data stores the applied $ discount.
+      if (restoredAmount > 0 && (restoredPct <= 0 || Math.abs(saleSub * (restoredPct / 100) - restoredAmount) > 0.02)) {
+        setDiscountMode("amount");
+        setDiscountAmountState(restoredAmount);
+        setDiscountPctState(saleSub > 0 ? roundMoney((restoredAmount / saleSub) * 100) : 0);
+      } else if (restoredPct > 0) {
+        setDiscountMode("percent");
+        setDiscountPctState(restoredPct);
+        setDiscountAmountState(roundMoney((saleSub * restoredPct) / 100));
+      } else {
+        setDiscountMode("none");
+        setDiscountPctState(0);
+        setDiscountAmountState(0);
+      }
       setOrderNotes(sale.notes);
       return { sale, restored: true };
     },
-    [heldSales, cart, discountPct, discountAmount, orderNotes, subtotal]
+    [heldSales, cart, discountMode, discountPct, discountAmount, orderNotes, subtotal]
   );
 
   const deleteHeldSale = useCallback((id: string) => {
@@ -232,7 +287,7 @@ export function usePosCart() {
   const completeSale = useCallback(
     (method: string, total?: number, invoiceNumber?: string) => {
       if (!cart.length) return;
-      const discount = calcDiscount(subtotal, discountPct, discountAmount);
+      const discount = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
       const grandTotal =
         total ?? subtotal - discount + (subtotal - discount) * taxRate;
 
@@ -253,17 +308,17 @@ export function usePosCart() {
       });
       clearCart();
     },
-    [cart, discountPct, discountAmount, subtotal, taxRate, clearCart]
+    [cart, discountMode, discountPct, discountAmount, subtotal, taxRate, clearCart]
   );
 
   const totals = useMemo(() => {
-    const discount = calcDiscount(subtotal, discountPct, discountAmount);
-    const afterDiscount = subtotal - discount;
-    const tax = afterDiscount * taxRate;
-    const grandTotal = afterDiscount + tax;
+    const discount = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
+    const afterDiscount = Math.max(0, subtotal - discount);
+    const tax = roundMoney(afterDiscount * taxRate);
+    const grandTotal = roundMoney(afterDiscount + tax);
     const itemCount = cart.reduce((s, i) => s + i.qty, 0);
     return { subtotal, discount, tax, grandTotal, itemCount };
-  }, [cart, discountPct, discountAmount, subtotal, taxRate]);
+  }, [cart, discountMode, discountPct, discountAmount, subtotal, taxRate]);
 
   return {
     cart,
@@ -274,6 +329,7 @@ export function usePosCart() {
     setDiscountPct,
     discountAmount,
     setDiscountAmount,
+    discountMode,
     taxRate,
     orderNotes,
     setOrderNotes,

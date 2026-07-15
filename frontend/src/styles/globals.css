@@ -207,9 +207,25 @@
     @apply border-l border-border/40 bg-gradient-to-b from-card via-card to-muted/20 shadow-[-12px_0_36px_hsl(var(--foreground)/0.05)] backdrop-blur-2xl xl:shadow-[-16px_0_48px_hsl(var(--foreground)/0.06)];
   }
 
-  @media (max-height: 820px) {
+  /* Keep checkout/print reachable on laptop viewports */
+  @media (max-height: 900px) {
+    .pos-cart-panel .pos-cart-footer {
+      @apply shadow-[0_-8px_24px_hsl(var(--foreground)/0.06)];
+    }
+
     .pos-cart-panel .pos-cart-actions {
-      @apply gap-1.5 py-2.5;
+      @apply space-y-1.5 p-2.5 pt-1.5;
+    }
+
+    .pos-cart-panel .pos-cart-actions button {
+      @apply h-9;
+    }
+  }
+
+  @media (max-height: 760px) {
+    .pos-cart-panel .pos-cart-actions button.h-11,
+    .pos-cart-panel .pos-cart-actions button[class*="h-11"] {
+      height: 2.5rem;
     }
   }
 }
