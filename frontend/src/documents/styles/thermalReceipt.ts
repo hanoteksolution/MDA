@@ -52,11 +52,11 @@ export const THERMAL_RECEIPT_CSS = `
 }
 .th-tel { margin: 1px 0 0; font-size: 9.5px; }
 
-/* Merchants under header — no box border */
+/* Merchants under header — centered like company name */
 .th-merchants {
   margin: 3px 0 2px;
   padding: 0;
-  text-align: left;
+  text-align: center;
 }
 .th-merchant-row {
   font-size: 10px;
@@ -64,6 +64,7 @@ export const THERMAL_RECEIPT_CSS = `
   line-height: 1.25;
   margin: 0;
   word-break: break-all;
+  text-align: center;
 }
 .th-merchant-row .m-label { font-weight: 700; }
 .th-merchant-row .m-code { font-weight: 700; }
@@ -214,9 +215,9 @@ export const THERMAL_RECEIPT_PRINT_CSS = `
   width: auto; height: auto; margin: 0 auto 1px; object-fit: contain;
 }
 .th-address { margin: 1px 0 0; font-size: 10px; font-weight: 600; line-height: 1.15; }
-.th-merchants { margin: 2px 0 1px; padding: 0; text-align: left; }
+.th-merchants { margin: 2px 0 1px; padding: 0; text-align: center; }
 .th-merchant-row {
-  font-size: 10px; font-weight: 700; line-height: 1.2; margin: 0; word-break: break-all;
+  font-size: 10px; font-weight: 700; line-height: 1.2; margin: 0; word-break: break-all; text-align: center;
 }
 .th-sep {
   border: none; border-top: 1px solid #000; margin: 2px 0; height: 0;

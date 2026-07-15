@@ -211,6 +211,8 @@ export interface ThermalSlipInput {
   footer?: string;
   branding: DocumentBranding;
   isHold?: boolean;
+  /** Same as paid receipts — USSD / wallet codes under the header */
+  paymentGuide?: { label: string; number: string }[];
 }
 
 function formatSlipDateTime(): { date: string; time: string } {
@@ -226,7 +228,7 @@ function formatSlipDateTime(): { date: string; time: string } {
   };
 }
 
-/** Compact order / hold slip — same tight layout, no merchant block. */
+/** Compact order / hold slip — same header merchants as paid receipts. */
 export function renderPremiumThermalSlip(
   slip: ThermalSlipInput,
   _assets: ThermalAssets,
@@ -243,6 +245,19 @@ export function renderPremiumThermalSlip(
     : formatSlipDateTime();
   const title = slip.isHold ? "ON HOLD" : (slip.title || "ORDER").toUpperCase();
   const vatPct = Math.round((slip.taxRate || 0) * 100);
+
+  const guide = (slip.paymentGuide || []).slice(0, 6);
+  const merchantsBlock =
+    guide.length > 0
+      ? `<div class="th-merchants">
+          ${guide
+            .map((g) => {
+              const code = formatMerchantCode(g.number, slip.grandTotal);
+              return `<div class="th-merchant-row"><span class="m-label">${esc(g.label)}:</span> <span class="m-code">${esc(code)}</span></div>`;
+            })
+            .join("")}
+        </div>`
+      : "";
 
   const items = slip.items
     .map((item) => {
@@ -263,6 +278,8 @@ export function renderPremiumThermalSlip(
         <h1 class="th-company">${esc(company)}</h1>
         ${address ? `<p class="th-address">${esc(address)}</p>` : ""}
       </div>
+
+      ${merchantsBlock}
 
       <div class="th-meta">
         ${metaRow("Date", when.date)}
