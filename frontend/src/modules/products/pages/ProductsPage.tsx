@@ -117,6 +117,12 @@ export function ProductsPage() {
       breadcrumbs={["Home", "Products"]}
       actions={
         <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" asChild>
+            <Link to="/categories">
+              <Tag className="h-4 w-4" />
+              Categories
+            </Link>
+          </Button>
           <Button variant="secondary" disabled={printing} onClick={() => void printProductList()}>
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
             Print

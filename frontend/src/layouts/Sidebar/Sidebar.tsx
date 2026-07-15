@@ -21,6 +21,7 @@ import {
   Goal,
   CalendarDays,
   ScrollText,
+  Tags,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -58,6 +59,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Catalog",
     items: [
       { to: "/products", label: "Products", icon: Package, permission: "products.view" },
+      { to: "/categories", label: "Categories", icon: Tags, permission: "products.view" },
       { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view" },
       { to: "/customers", label: "Customers", icon: Users, permission: "customers.view" },
       { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view" },

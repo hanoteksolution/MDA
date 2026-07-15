@@ -12,6 +12,7 @@ import {
   ProductsPage,
   ProductFormPage,
   ProductEditPage,
+  CategoriesPage,
   InventoryDashboardPage,
   StockPage,
   AdjustmentsPage,
@@ -104,6 +105,14 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="products.update">
                 <ProductEditPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/categories"
+            element={
+              <PermissionGuard permission="products.view">
+                <CategoriesPage />
               </PermissionGuard>
             }
           />

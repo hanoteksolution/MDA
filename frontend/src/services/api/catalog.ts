@@ -32,10 +32,26 @@ export const productsApi = {
   uploadImage: (file: File) =>
     apiUpload<ApiResponse<{ url: string; path: string }>>("/products/upload-image/", file),
 
-  categories: () => apiRequest<ApiListResponse<Category>>("/categories/?page_size=100"),
+  categories: (params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiListResponse<Category>>(`/categories/${qs({ page_size: 100, ...params })}`),
 
-  createCategory: (name: string) =>
-    apiRequest<ApiResponse<Category>>("/categories/", { method: "POST", body: JSON.stringify({ name }) }),
+  createCategory: (data: string | { name: string; description?: string; is_active?: boolean }) =>
+    apiRequest<ApiResponse<Category>>("/categories/", {
+      method: "POST",
+      body: JSON.stringify(typeof data === "string" ? { name: data } : data),
+    }),
+
+  updateCategory: (
+    id: string,
+    data: { name?: string; description?: string; is_active?: boolean; parent_id?: string | null }
+  ) =>
+    apiRequest<ApiResponse<Category>>(`/categories/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteCategory: (id: string) =>
+    apiRequest<ApiResponse<null>>(`/categories/${id}/`, { method: "DELETE" }),
 
   brands: () => apiRequest<ApiListResponse<Brand>>("/brands/?page_size=100"),
 

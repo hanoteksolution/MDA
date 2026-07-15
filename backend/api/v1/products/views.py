@@ -26,7 +26,10 @@ class CategoryListCreateView(APIView):
     def post(self, request):
         if not request.user.has_permission("products.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        cat = CategoryService.create(data=request.data, user=request.user)
+        try:
+            cat = CategoryService.create(data=request.data, user=request.user)
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(data=serialize_category(cat), message="Category created.", status=status.HTTP_201_CREATED)
 
 

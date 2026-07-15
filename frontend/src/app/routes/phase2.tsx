@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { ProductsPage, ProductFormPage } from "@/modules/products/pages/ProductsPage";
+import { CategoriesPage } from "@/modules/products/pages/CategoriesPage";
 import {
   InventoryDashboardPage,
   StockPage,
@@ -15,6 +16,7 @@ export function ProductEditPage() {
 export {
   ProductsPage,
   ProductFormPage,
+  CategoriesPage,
   InventoryDashboardPage,
   StockPage,
   AdjustmentsPage,

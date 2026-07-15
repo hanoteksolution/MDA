@@ -58,7 +58,8 @@ export function forceLogout(redirect = true) {
   logoutInProgress = false;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+/** Refresh access token; persists rotated refresh when the backend returns one. */
+export async function refreshAccessToken(): Promise<string | null> {
   const refresh = localStorage.getItem("refresh_token");
   if (!refresh || isJwtExpired(refresh, 0)) return null;
 
@@ -71,9 +72,14 @@ async function refreshAccessToken(): Promise<string | null> {
       .then(async (res) => {
         if (!res.ok) return null;
         const data = await res.json();
-        const access = data.access as string | undefined;
+        const access = (data.access ?? data.data?.access) as string | undefined;
         if (!access) return null;
         localStorage.setItem("access_token", access);
+        // SIMPLE_JWT ROTATE_REFRESH_TOKENS blacklists the old refresh — must save the new one.
+        const nextRefresh = (data.refresh ?? data.data?.refresh) as string | undefined;
+        if (nextRefresh) {
+          localStorage.setItem("refresh_token", nextRefresh);
+        }
         return access;
       })
       .catch(() => null)

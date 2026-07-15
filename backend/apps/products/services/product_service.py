@@ -10,6 +10,21 @@ from apps.products.models import Brand, Category, Product, Unit
 
 
 class CategoryService:
+    _WRITABLE = ("name", "description", "is_active", "parent_id")
+
+    @staticmethod
+    def _prepare(data):
+        prepared = {}
+        for key in CategoryService._WRITABLE:
+            if key not in data:
+                continue
+            value = data.get(key)
+            if key == "parent_id" and value in ("", None):
+                prepared["parent_id"] = None
+            else:
+                prepared[key] = value
+        return prepared
+
     @staticmethod
     def list(*, search=None, is_active=None):
         qs = Category.active_objects().select_related("parent")
@@ -21,11 +36,15 @@ class CategoryService:
 
     @staticmethod
     def create(*, data, user=None):
-        return Category.objects.create(**data, created_by=user)
+        prepared = CategoryService._prepare(data)
+        if not prepared.get("name"):
+            raise ValueError("Category name is required.")
+        return Category.objects.create(**prepared, created_by=user)
 
     @staticmethod
     def update(*, instance, data, user=None):
-        for key, value in data.items():
+        prepared = CategoryService._prepare(data)
+        for key, value in prepared.items():
             setattr(instance, key, value)
         instance.updated_by = user
         instance.save()

@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import { api } from "@/services/api/client";
-import { clearAuthTokens, forceLogout, isJwtExpired } from "@/services/api/http";
+import { clearAuthTokens, forceLogout, isJwtExpired, refreshAccessToken } from "@/services/api/http";
 import { clearCloudSession, cloudLogin } from "@/services/api/cloudHttp";
 import { ensureConnectionLoaded, getCloudApiBase, getHybridConfig } from "@/config/connection";
 import { syncApi } from "@/services/api/sync";
 import { requestCloudSync } from "@/components/desktop/syncEvents";
 import { isTauri } from "@/utils/platform";
 import type { User } from "@/types/models";
+
+/** Bumps on login/logout so in-flight loadUser calls cannot wipe a newer session. */
+let authSessionGen = 0;
 
 function isPlatformUser(user: User): boolean {
   return Boolean(
@@ -89,6 +92,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   login: async (username, password) => {
+    const gen = ++authSessionGen;
     set({ isLoading: true, error: null });
     try {
       await ensureConnectionLoaded();
@@ -124,12 +128,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem("access_token", session.access);
       localStorage.setItem("refresh_token", session.refresh);
       await tryAutoCloudLogin(username, password, session.user);
+      if (gen !== authSessionGen) return;
       set({
         user: session.user,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (err) {
+      if (gen !== authSessionGen) return;
       set({
         error: err instanceof Error ? err.message : "Login failed",
         isLoading: false,
@@ -139,6 +145,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    authSessionGen += 1;
     const refresh = localStorage.getItem("refresh_token");
     try {
       if (refresh) await api.logout(refresh);
@@ -152,31 +159,45 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   sessionExpired: () => {
+    authSessionGen += 1;
     clearAuthTokens();
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
     forceLogout();
   },
 
   loadUser: async () => {
-    const token = localStorage.getItem("access_token");
+    const gen = authSessionGen;
+    let token = localStorage.getItem("access_token");
     if (!token) {
       set({ isAuthenticated: false, isLoading: false });
       return;
     }
 
     if (isJwtExpired(token)) {
-      set({ user: null, isAuthenticated: false, isLoading: false });
-      forceLogout();
-      return;
+      const renewed = await refreshAccessToken();
+      if (gen !== authSessionGen) return;
+      if (!renewed) {
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        forceLogout();
+        return;
+      }
+      token = renewed;
     }
 
     set({ isLoading: true });
     try {
       const response = await api.getMe();
+      if (gen !== authSessionGen) return;
       set({ user: response.data, isAuthenticated: true, isLoading: false });
     } catch {
-      set({ user: null, isAuthenticated: false, isLoading: false });
-      forceLogout();
+      if (gen !== authSessionGen) return;
+      // Auth client already cleared tokens on definitive 401; sync store state.
+      if (!localStorage.getItem("access_token")) {
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
+      // Network/5xx — keep tokens so a transient outage does not look like logout.
+      set({ isLoading: false });
     }
   },
 
