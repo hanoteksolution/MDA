@@ -1,7 +1,7 @@
 import re
 import json
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.db.models import Q
@@ -28,7 +28,14 @@ PAYMENT_LABELS = {
     "split": "Split Payment",
     "on_account": "Pay Later / Account",
     "invoice": "Invoice",
+    "hold": "On Hold",
 }
+
+MONEY = Decimal("0.01")
+
+
+def _money(value) -> Decimal:
+    return Decimal(str(value)).quantize(MONEY, rounding=ROUND_HALF_UP)
 
 
 def _parse_payment_from_notes(notes: str) -> tuple[str, str]:
@@ -198,9 +205,11 @@ class PosService:
             discount_amount = min(subtotal, Decimal(str(discount_amount_raw)))
         else:
             discount_amount = subtotal * (discount_pct / Decimal("100"))
-        after_discount = subtotal - discount_amount
-        tax_amount = after_discount * tax_rate
-        total_amount = after_discount + tax_amount
+        discount_amount = _money(discount_amount)
+        # VAT on full subtotal (before discount) so waving tax via $ discount totals cleanly.
+        tax_amount = _money(subtotal * tax_rate)
+        after_discount = _money(subtotal - discount_amount)
+        total_amount = _money(after_discount + tax_amount)
 
         payment_note = f"Payment: {payment_method}"
         if merchant:
@@ -216,21 +225,42 @@ class PosService:
         amount_paid = Decimal("0") if is_on_account else total_amount
         due_date = timezone.localdate() + timedelta(days=30) if is_on_account else None
 
-        invoice = InvoiceService.create(
-            data={
-                "customer_id": str(customer.id),
-                "branch_id": str(branch.id),
-                "status": invoice_status,
-                "issue_date": timezone.localdate(),
-                "due_date": due_date,
-                "discount_amount": discount_amount,
-                "amount_paid": amount_paid,
-                "notes": notes,
-                "served_by_user": served_by_user,
-            },
-            items=parsed_items,
-            user=user,
-        )
+        # Resumed hold: convert the existing on_hold invoice so the receipt
+        # number stays the same and no duplicate hold is left behind.
+        hold_invoice_id = data.get("hold_invoice_id")
+        held_invoice = None
+        if hold_invoice_id:
+            held_invoice = (
+                Invoice.active_objects()
+                .filter(pk=hold_invoice_id, status=Invoice.STATUS_ON_HOLD)
+                .first()
+            )
+
+        invoice_data = {
+            "customer_id": str(customer.id),
+            "branch_id": str(branch.id),
+            "status": invoice_status,
+            "issue_date": timezone.localdate(),
+            "due_date": due_date,
+            "discount_amount": discount_amount,
+            "amount_paid": amount_paid,
+            "notes": notes,
+            "served_by_user": served_by_user,
+        }
+
+        if held_invoice is not None:
+            invoice = InvoiceService.update(
+                instance=held_invoice,
+                data=invoice_data,
+                items=parsed_items,
+                user=user,
+            )
+        else:
+            invoice = InvoiceService.create(
+                data=invoice_data,
+                items=parsed_items,
+                user=user,
+            )
         invoice.tax_amount = tax_amount
         invoice.total_amount = total_amount
         invoice.save(update_fields=["tax_amount", "total_amount", "updated_at"])
@@ -256,6 +286,109 @@ class PosService:
             waiter_name=waiter_name,
         )
         return {"invoice": serialize_invoice(invoice, include_items=True), "receipt": receipt}
+
+    @staticmethod
+    @transaction.atomic
+    def hold(*, data, user):
+        """Persist an on-hold cart as an invoice with status on_hold (stock reserved)."""
+        branch_id = data.get("branch_id")
+        branch = _resolve_branch(branch_id)
+        customer_id = data.get("customer_id")
+        if customer_id and customer_id != "walkin":
+            customer = Customer.active_objects().get(pk=customer_id)
+        else:
+            customer = _resolve_walkin_customer(branch=branch)
+
+        items = data.get("items") or []
+        if not items:
+            raise ValueError("Cart is empty.")
+
+        discount_pct = Decimal(str(data.get("discount_pct") or 0))
+        discount_amount_raw = data.get("discount_amount")
+        tax_rate = Decimal(str(data.get("tax_rate") or 0))
+        order_notes = data.get("notes") or ""
+        waiter_id = data.get("waiter_id")
+        waiter_name = (data.get("waiter_name") or "").strip()
+        label = (data.get("label") or "").strip()
+
+        profile = get_pos_profile(user=user)
+        served_by_user = None
+        if waiter_id:
+            for w in profile.get("waiters") or []:
+                if w.get("id") == waiter_id:
+                    waiter_name = w.get("name") or waiter_name
+                    linked_user_id = w.get("user_id")
+                    if linked_user_id:
+                        served_by_user = User.objects.filter(pk=linked_user_id, is_active=True).first()
+                    break
+
+        if not waiter_id and not waiter_name:
+            raise ValueError("Select a waiter before holding a sale.")
+
+        parsed_items = [
+            {
+                "product_id": item["product_id"],
+                "quantity": Decimal(str(item["quantity"])),
+                "unit_price": Decimal(str(item["unit_price"])),
+            }
+            for item in items
+        ]
+
+        subtotal = sum(i["quantity"] * i["unit_price"] for i in parsed_items)
+        if discount_amount_raw is not None and str(discount_amount_raw).strip() != "":
+            discount_amount = min(subtotal, Decimal(str(discount_amount_raw)))
+        else:
+            discount_amount = subtotal * (discount_pct / Decimal("100"))
+        discount_amount = _money(discount_amount)
+        tax_amount = _money(subtotal * tax_rate)
+        after_discount = _money(subtotal - discount_amount)
+        total_amount = _money(after_discount + tax_amount)
+
+        payment_note = "Payment: hold"
+        if waiter_name:
+            payment_note += f" | Waiter: {waiter_name}"
+        if label:
+            payment_note += f" | HoldLabel: {label}"
+        notes = f"{order_notes}\n{payment_note}".strip() if order_notes else payment_note
+
+        invoice_data = {
+            "customer_id": str(customer.id),
+            "branch_id": str(branch.id),
+            "status": Invoice.STATUS_ON_HOLD,
+            "issue_date": timezone.localdate(),
+            "due_date": None,
+            "discount_amount": discount_amount,
+            "amount_paid": Decimal("0"),
+            "notes": notes,
+            "served_by_user": served_by_user,
+        }
+
+        # Re-holding a resumed hold updates the same invoice (same number).
+        hold_invoice_id = data.get("hold_invoice_id")
+        existing = None
+        if hold_invoice_id:
+            existing = (
+                Invoice.active_objects()
+                .filter(pk=hold_invoice_id, status=Invoice.STATUS_ON_HOLD)
+                .first()
+            )
+
+        if existing is not None:
+            invoice = InvoiceService.update(
+                instance=existing, data=invoice_data, items=parsed_items, user=user
+            )
+        else:
+            invoice = InvoiceService.create(data=invoice_data, items=parsed_items, user=user)
+        invoice.tax_amount = tax_amount
+        invoice.total_amount = total_amount
+        invoice.save(update_fields=["tax_amount", "total_amount", "updated_at"])
+        invoice = InvoiceService.list().get(pk=invoice.pk)
+        return serialize_invoice(invoice, include_items=True)
+
+    @staticmethod
+    def list_holds(*, branch_id=None, search=None):
+        qs = InvoiceService.list(payment_state="on_hold", branch_id=branch_id, search=search)
+        return [serialize_invoice(inv, include_items=True) for inv in qs]
 
     @staticmethod
     def list_waiter_sales(

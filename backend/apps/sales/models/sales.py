@@ -66,6 +66,7 @@ class Invoice(BaseModel):
     STATUS_SENT = "sent"
     STATUS_PAID = "paid"
     STATUS_OVERDUE = "overdue"
+    STATUS_ON_HOLD = "on_hold"
     STATUS_CANCELLED = "cancelled"
 
     STATUS_CHOICES = [
@@ -73,6 +74,7 @@ class Invoice(BaseModel):
         (STATUS_SENT, "Sent"),
         (STATUS_PAID, "Paid"),
         (STATUS_OVERDUE, "Overdue"),
+        (STATUS_ON_HOLD, "On hold"),
         (STATUS_CANCELLED, "Cancelled"),
     ]
 

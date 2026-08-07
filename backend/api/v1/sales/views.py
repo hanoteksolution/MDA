@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.sales.models import Invoice, Quotation
+from apps.sales.models import Expense, Invoice, Quotation
 from apps.sales.serializers.sales_serializers import serialize_invoice, serialize_quotation
 from apps.sales.services.pos_service import PosService
 from apps.sales.services.sales_service import InvoiceService, QuotationService
@@ -179,13 +179,33 @@ class InvoiceMarkPaidView(APIView):
         if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         inv = InvoiceService.list().get(pk=pk)
+        payment_method = (request.data or {}).get("payment_method") or "cash"
         try:
-            inv = InvoiceService.mark_paid(instance=inv, user=request.user)
+            inv = InvoiceService.mark_paid(
+                instance=inv, user=request.user, payment_method=payment_method
+            )
         except ValueError as e:
             return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=serialize_invoice(inv, include_items=True),
             message="Invoice marked as paid.",
+        )
+
+
+class InvoiceMarkUnpaidView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("sales.view")]
+
+    def post(self, request, pk):
+        if not request.user.has_permission("sales.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        inv = InvoiceService.list().get(pk=pk)
+        try:
+            inv = InvoiceService.mark_unpaid(instance=inv, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=serialize_invoice(inv, include_items=True),
+            message="Invoice marked as unpaid.",
         )
 
 
@@ -268,12 +288,12 @@ class ExpenseListCreateView(APIView):
         branch_id = request.query_params.get("branch_id") or getattr(
             getattr(request.user, "branch", None), "id", None
         )
-        date_from = request.query_params.get("date_from")
-        date_to = request.query_params.get("date_to")
         data = DailyOpsService.list_expenses(
             branch_id=branch_id,
-            date_from=date_from,
-            date_to=date_to,
+            date_from=request.query_params.get("date_from"),
+            date_to=request.query_params.get("date_to"),
+            category=request.query_params.get("category"),
+            search=request.query_params.get("search"),
         )
         return success_response(data=data)
 
@@ -294,10 +314,28 @@ class ExpenseListCreateView(APIView):
 class ExpenseDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def put(self, request, pk):
+        if not (
+            request.user.has_permission("finance.create")
+            or request.user.has_permission("sales.create")
+            or request.user.has_permission("sales.update")
+        ):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            data = DailyOpsService.update_expense(
+                expense_id=pk, data=request.data, user=request.user
+            )
+        except Expense.DoesNotExist:
+            return error_response(message="Expense not found.", status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=data, message="Expense updated.")
+
     def delete(self, request, pk):
         if not (
             request.user.has_permission("finance.create")
             or request.user.has_permission("sales.create")
+            or request.user.has_permission("sales.delete")
             or request.user.has_permission("sales.view")
         ):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
@@ -306,3 +344,67 @@ class ExpenseDetailView(APIView):
         except Exception:
             return error_response(message="Expense not found.", status=status.HTTP_404_NOT_FOUND)
         return success_response(data=None, message="Expense deleted.")
+
+
+class TrashListView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("trash.view")]
+
+    def get(self, request):
+        from apps.sales.services.trash_service import TrashService
+
+        branch_id = request.query_params.get("branch_id") or getattr(
+            getattr(request.user, "branch", None), "id", None
+        )
+        data = TrashService.list(
+            kind=request.query_params.get("kind"),
+            search=request.query_params.get("search"),
+            branch_id=branch_id,
+        )
+        return success_response(data=data)
+
+
+class TrashRestoreView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("trash.restore")]
+
+    def post(self, request, kind, pk):
+        from apps.sales.services.trash_service import TrashService
+        from apps.sales.serializers.sales_serializers import serialize_invoice, serialize_quotation
+
+        kind = (kind or "").strip().lower()
+        try:
+            if kind in ("invoice", "receipt"):
+                inv = TrashService.restore_invoice(invoice_id=pk, user=request.user)
+                return success_response(
+                    data=serialize_invoice(inv, include_items=True),
+                    message="Receipt restored.",
+                )
+            if kind == "quotation":
+                q = TrashService.restore_quotation(quotation_id=pk, user=request.user)
+                return success_response(
+                    data=serialize_quotation(q, include_items=True),
+                    message="Quotation restored.",
+                )
+            if kind == "expense":
+                e = TrashService.restore_expense(expense_id=pk, user=request.user)
+                from apps.sales.services.daily_ops_service import DailyOpsService
+
+                return success_response(
+                    data=DailyOpsService._expense_payload(e),
+                    message="Expense restored.",
+                )
+            return error_response(message="Unknown item type.", status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+
+
+class TrashPurgeView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("trash.restore")]
+
+    def delete(self, request, kind, pk):
+        from apps.sales.services.trash_service import TrashService
+
+        try:
+            TrashService.purge(kind=kind, item_id=pk, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=None, message="Permanently deleted.")

@@ -157,7 +157,15 @@ class InvoiceService:
         if payment_state == "paid":
             qs = qs.filter(status=Invoice.STATUS_PAID)
         elif payment_state == "unpaid":
-            qs = qs.exclude(status__in=[Invoice.STATUS_PAID, Invoice.STATUS_CANCELLED])
+            qs = qs.exclude(
+                status__in=[
+                    Invoice.STATUS_PAID,
+                    Invoice.STATUS_CANCELLED,
+                    Invoice.STATUS_ON_HOLD,
+                ]
+            )
+        elif payment_state == "on_hold":
+            qs = qs.filter(status=Invoice.STATUS_ON_HOLD)
         if customer_id:
             qs = qs.filter(customer_id=customer_id)
         if branch_id:
@@ -347,16 +355,55 @@ class InvoiceService:
         return instance
 
     @staticmethod
+    def _set_payment_method_in_notes(notes: str, method: str) -> str:
+        import re
+
+        text = notes or ""
+        if re.search(r"Payment:\s*[a-z_]+", text, re.IGNORECASE):
+            return re.sub(
+                r"Payment:\s*[a-z_]+",
+                f"Payment: {method}",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        return f"{text}\nPayment: {method}".strip() if text else f"Payment: {method}"
+
+    @staticmethod
     @transaction.atomic
-    def mark_paid(*, instance, user=None):
+    def mark_paid(*, instance, user=None, payment_method: str = "cash"):
         if instance.status == Invoice.STATUS_PAID:
             raise ValueError("Invoice is already paid.")
         if instance.status == Invoice.STATUS_CANCELLED:
             raise ValueError("Cancelled invoices cannot be marked as paid.")
+        method = (payment_method or "cash").strip().lower() or "cash"
         instance.status = Invoice.STATUS_PAID
         instance.amount_paid = instance.total_amount
+        instance.notes = InvoiceService._set_payment_method_in_notes(instance.notes or "", method)
         instance.updated_by = user
-        instance.save(update_fields=["status", "amount_paid", "updated_by", "updated_at"])
+        instance.save(update_fields=["status", "amount_paid", "notes", "updated_by", "updated_at"])
+        return InvoiceService.list().get(pk=instance.pk)
+
+    @staticmethod
+    @transaction.atomic
+    def mark_unpaid(*, instance, user=None):
+        if instance.status == Invoice.STATUS_CANCELLED:
+            raise ValueError("Cancelled invoices cannot be marked as unpaid.")
+        if instance.status == Invoice.STATUS_SENT and instance.amount_paid == 0:
+            raise ValueError("Invoice is already unpaid.")
+        instance.status = Invoice.STATUS_SENT
+        instance.amount_paid = Decimal("0")
+        if not instance.due_date:
+            from datetime import timedelta
+
+            instance.due_date = timezone.localdate() + timedelta(days=30)
+        instance.notes = InvoiceService._set_payment_method_in_notes(
+            instance.notes or "", "on_account"
+        )
+        instance.updated_by = user
+        instance.save(
+            update_fields=["status", "amount_paid", "due_date", "notes", "updated_by", "updated_at"]
+        )
         return InvoiceService.list().get(pk=instance.pk)
 
     @staticmethod

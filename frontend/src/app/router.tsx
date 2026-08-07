@@ -27,6 +27,8 @@ import {
   SalesPage,
   DailyOpsPage,
   ReceiptManagementPage,
+  ExpensesPage,
+  TrashPage,
   CustomersPage,
   SuppliersPage,
   FinancePage,
@@ -205,6 +207,22 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="sales.view">
                 <ReceiptManagementPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/expenses"
+            element={
+              <PermissionGuard permission={["finance.view", "sales.view"]}>
+                <ExpensesPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/trash"
+            element={
+              <PermissionGuard permission="trash.view">
+                <TrashPage />
               </PermissionGuard>
             }
           />

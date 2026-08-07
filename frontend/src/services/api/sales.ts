@@ -3,7 +3,16 @@ import type { ApiListResponse } from "@/types/models/catalog";
 import type { PosReceipt } from "./pos";
 import { apiRequest, qs } from "./http";
 
-export type SaleDocStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled" | "accepted" | "rejected" | "expired";
+export type SaleDocStatus =
+  | "draft"
+  | "sent"
+  | "paid"
+  | "overdue"
+  | "on_hold"
+  | "cancelled"
+  | "accepted"
+  | "rejected"
+  | "expired";
 
 export interface SaleLineItem {
   id?: string;
@@ -133,6 +142,35 @@ export interface DailyExpense {
   notes: string;
   expense_date: string;
   branch_id?: string;
+  branch_name?: string;
+  created_by?: string;
+  created_at?: string;
+}
+
+export interface ExpenseListData {
+  results: DailyExpense[];
+  count: number;
+  total_amount: number;
+}
+
+export type TrashKind = "invoice" | "quotation" | "expense" | "receipt";
+
+export interface TrashItem {
+  id: string;
+  kind: TrashKind | string;
+  number?: string;
+  title?: string;
+  customer_name?: string;
+  category?: string;
+  amount?: number;
+  total_amount?: number;
+  status?: string;
+  date?: string;
+  issue_date?: string;
+  branch_name?: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  notes?: string;
 }
 
 export interface DailyOpsData {
@@ -195,7 +233,7 @@ export const salesApi = {
   },
 
   expenses: (params: Record<string, string | undefined> = {}) =>
-    apiRequest<ApiResponse<DailyExpense[]>>(`/sales/expenses/${qs(params)}`),
+    apiRequest<ApiResponse<ExpenseListData>>(`/sales/expenses/${qs(params)}`),
 
   createExpense: (data: {
     description: string;
@@ -210,8 +248,33 @@ export const salesApi = {
       body: JSON.stringify(data),
     }),
 
+  updateExpense: (
+    id: string,
+    data: {
+      description?: string;
+      amount?: number;
+      category?: string;
+      expense_date?: string;
+      notes?: string;
+      branch_id?: string;
+    }
+  ) =>
+    apiRequest<ApiResponse<DailyExpense>>(`/sales/expenses/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
   deleteExpense: (id: string) =>
     apiRequest<ApiResponse<null>>(`/sales/expenses/${id}/`, { method: "DELETE" }),
+
+  trash: (params: Record<string, string | undefined> = {}) =>
+    apiRequest<ApiResponse<TrashItem[]>>(`/sales/trash/${qs(params)}`),
+
+  restoreTrash: (kind: string, id: string) =>
+    apiRequest<ApiResponse<unknown>>(`/sales/trash/${kind}/${id}/restore/`, { method: "POST" }),
+
+  purgeTrash: (kind: string, id: string) =>
+    apiRequest<ApiResponse<null>>(`/sales/trash/${kind}/${id}/purge/`, { method: "DELETE" }),
 
   invoices: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Invoice>>(`/sales/invoices/${qs(params)}`),
@@ -233,8 +296,14 @@ export const salesApi = {
   deleteInvoice: (id: string) =>
     apiRequest<ApiResponse<null>>(`/sales/invoices/${id}/`, { method: "DELETE" }),
 
-  markInvoicePaid: (id: string) =>
-    apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/mark-paid/`, { method: "POST" }),
+  markInvoicePaid: (id: string, data: { payment_method?: string } = {}) =>
+    apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/mark-paid/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  markInvoiceUnpaid: (id: string) =>
+    apiRequest<ApiResponse<Invoice>>(`/sales/invoices/${id}/mark-unpaid/`, { method: "POST" }),
 
   quotations: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Quotation>>(`/sales/quotations/${qs(params)}`),

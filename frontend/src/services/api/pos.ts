@@ -106,6 +106,8 @@ export interface PosCheckoutPayload {
   waiter_id?: string;
   waiter_name?: string;
   notes?: string;
+  /** Resumed on-hold invoice — converts it in place, keeping the receipt number. */
+  hold_invoice_id?: string;
 }
 
 export interface PosCheckoutResult {
@@ -176,6 +178,22 @@ export const posApi = {
 
   checkout: (data: PosCheckoutPayload) =>
     apiRequest<ApiResponse<PosCheckoutResult>>("/pos/checkout/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  listHolds: (params: { branch_id?: string; search?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.branch_id) q.set("branch_id", params.branch_id);
+    if (params.search) q.set("search", params.search);
+    const qs = q.toString();
+    return apiRequest<ApiResponse<import("./sales").Invoice[]>>(
+      `/pos/holds/${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  createHold: (data: PosCheckoutPayload & { label?: string }) =>
+    apiRequest<ApiResponse<import("./sales").Invoice>>("/pos/holds/", {
       method: "POST",
       body: JSON.stringify(data),
     }),

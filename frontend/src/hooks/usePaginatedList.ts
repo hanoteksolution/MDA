@@ -8,6 +8,8 @@ export interface ListResult<T> {
 
 export interface UsePaginatedListOptions {
   pageSize?: number;
+  /** Restore page after refresh (e.g. from URL). */
+  initialPage?: number;
   /** Auto-refresh interval ms. Default 30_000. Set false or 0 to disable. */
   autoRefresh?: boolean | number;
 }
@@ -18,8 +20,8 @@ export function usePaginatedList<T, P extends Record<string, string | number | u
   filters: P,
   options: UsePaginatedListOptions = {}
 ) {
-  const { pageSize: initialPageSize = 10, autoRefresh = true } = options;
-  const [page, setPage] = useState(1);
+  const { pageSize: initialPageSize = 10, initialPage = 1, autoRefresh = true } = options;
+  const [page, setPage] = useState(() => Math.max(1, initialPage || 1));
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -27,6 +29,7 @@ export function usePaginatedList<T, P extends Record<string, string | number | u
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const silentRef = useRef(false);
+  const skipFilterResetRef = useRef(true);
 
   const filterKey = JSON.stringify(filters);
   const intervalMs =
@@ -37,6 +40,10 @@ export function usePaginatedList<T, P extends Record<string, string | number | u
         : 30_000;
 
   useEffect(() => {
+    if (skipFilterResetRef.current) {
+      skipFilterResetRef.current = false;
+      return;
+    }
     setPage(1);
   }, [filterKey, pageSize]);
 

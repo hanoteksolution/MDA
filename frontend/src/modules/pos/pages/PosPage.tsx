@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, ScanBarcode, Wifi, WifiOff,
@@ -14,14 +15,16 @@ import { customersApi } from "@/services/api/partners";
 import { useAuthStore } from "@/store/authStore";
 import type { Product } from "@/types/models/catalog";
 import type { Category } from "@/types/models/catalog";
-import { usePosCart } from "../hooks/usePosCart";
+import { usePosCart, roundMoney } from "../hooks/usePosCart";
 import { PosProductCard } from "../components/PosProductCard";
 import { PosCartPanel } from "../components/PosCartPanel";
 import { PosCheckoutPanel } from "../components/PosCheckoutPanel";
 import { PosHeldSalesPanel } from "../components/PosHeldSalesPanel";
 import { PosWaiterSalesPanel } from "../components/PosWaiterSalesPanel";
 import { posApi, type PosWaiter } from "@/services/api/pos";
+import { salesApi } from "@/services/api/sales";
 import { printHeldSaleSlip } from "../receipt/printCartSlip";
+import { invoiceToHeldSale } from "../utils/heldSales";
 import type { PosReceipt } from "@/services/api/pos";
 import { useAutoRefresh, requestDataRefresh } from "@/hooks/useAutoRefresh";
 
@@ -36,7 +39,6 @@ export function PosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
-  const [customerId, setCustomerId] = useState("walkin");
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -44,13 +46,42 @@ export function PosPage() {
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [waiterSalesOpen, setWaiterSalesOpen] = useState(false);
   const [waiters, setWaiters] = useState<PosWaiter[]>([]);
-  const [waiterId, setWaiterId] = useState("");
 
   const {
     cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, discountMode, taxRate,
     orderNotes, setOrderNotes, totals, addToCart, updateQty, removeLine,
-    clearCart, toggleFavorite, holdSale, resumeHeldSale, deleteHeldSale, completeSale,
+    clearCart, toggleFavorite, holdSale, resumeHeldSale, deleteHeldSale, replaceHeldSales, completeSale,
+    sessionCustomerId: customerId,
+    setSessionCustomerId: setCustomerId,
+    sessionWaiterId: waiterId,
+    setSessionWaiterId: setWaiterId,
+    activeHoldId,
+    setActiveHoldId,
   } = usePosCart();
+
+  // A resumed hold stays on the server until checkout — hide it from the held list.
+  const visibleHeldSales = useMemo(
+    () => heldSales.filter((h) => h.id !== activeHoldId),
+    [heldSales, activeHoldId]
+  );
+
+  const syncHoldsFromServer = useCallback(async () => {
+    try {
+      const res = await posApi.listHolds({ branch_id: user?.branch?.id });
+      const server = (res.data || []).map(invoiceToHeldSale);
+      // Keep offline holds (no server number yet) until they reach the server
+      replaceHeldSales((prev) => [
+        ...prev.filter((h) => !h.invoiceNumber && !server.some((s) => s.id === h.id)),
+        ...server,
+      ]);
+    } catch {
+      /* keep local cache if offline */
+    }
+  }, [user?.branch?.id, replaceHeldSales]);
+
+  useEffect(() => {
+    void syncHoldsFromServer();
+  }, [syncHoldsFromServer]);
 
   useEffect(() => {
     const load = async () => {
@@ -131,8 +162,9 @@ export function PosPage() {
       setTimeout(() => setCheckoutMsg(null), 3000);
       requestDataRefresh();
       void refreshCatalog();
+      void syncHoldsFromServer();
     },
-    [completeSale, refreshCatalog]
+    [completeSale, refreshCatalog, syncHoldsFromServer]
   );
 
   const handleCreateCustomer = useCallback(
@@ -182,54 +214,166 @@ export function PosPage() {
       setTimeout(() => setCheckoutMsg(null), 2500);
       return;
     }
-    const held = holdSale({
+    if (!cart.length) return;
+
+    const label = cart.length === 1 ? cart[0].name : `${totals.itemCount} items`;
+    const snapshot = {
+      label,
+      cart: cart.map((l) => ({ ...l })),
+      subtotal: totals.subtotal,
+      discountAmount: totals.discount,
+      notes: orderNotes,
       customerId,
       waiterId,
       waiterName: waiterName || undefined,
-    });
-    if (held) {
-      const disc = held.discountAmount;
-      const afterDisc = held.subtotal - disc;
-      const taxAmt = afterDisc * taxRate;
-      const total = afterDisc + taxAmt;
-      const cust =
-        held.customerId && held.customerId !== "walkin"
-          ? customers.find((c) => c.id === held.customerId)?.name ?? "Customer"
-          : "Walk-in Customer";
+      heldAt: new Date().toISOString(),
+    };
+
+    let receiptNumber: string | undefined;
+    try {
+      const res = await posApi.createHold({
+        customer_id: customerId !== "walkin" ? customerId : undefined,
+        branch_id: user?.branch?.id,
+        items: cart.map((line) => ({
+          product_id: line.id,
+          quantity: line.qty,
+          unit_price: line.price,
+        })),
+        discount_pct: discountMode === "percent" ? discountPct : 0,
+        discount_amount: totals.discount,
+        tax_rate: taxRate,
+        payment_method: "cash",
+        waiter_id: waiterId,
+        waiter_name: waiterName || undefined,
+        notes: orderNotes,
+        label,
+        // Re-holding a resumed hold keeps the same receipt number
+        hold_invoice_id: activeHoldId ?? undefined,
+      });
+      receiptNumber = res.data.number;
+      clearCart();
+      await syncHoldsFromServer();
+    } catch (err) {
+      // Offline / API failure — keep browser hold so the sale is not lost
+      holdSale({
+        customerId,
+        waiterId,
+        waiterName: waiterName || undefined,
+      });
+      setCheckoutMsg(err instanceof Error ? err.message : "Held locally (offline)");
+      setTimeout(() => setCheckoutMsg(null), 3000);
+    }
+
+    const disc = snapshot.discountAmount;
+    const taxAmt = roundMoney(snapshot.subtotal * taxRate);
+    const total = roundMoney(Math.max(0, snapshot.subtotal - disc) + taxAmt);
+    const cust =
+      snapshot.customerId && snapshot.customerId !== "walkin"
+        ? customers.find((c) => c.id === snapshot.customerId)?.name ?? "Customer"
+        : "Walk-in Customer";
+    try {
       await printHeldSaleSlip({
-        label: held.label,
+        label: snapshot.label,
         customerName: cust,
-        waiterName: held.waiterName,
+        waiterName: snapshot.waiterName,
         branchName: user?.branch?.name,
         branchCode: user?.branch?.code,
         branchId: user?.branch?.id,
-        cart: held.cart,
-        subtotal: held.subtotal,
+        cart: snapshot.cart,
+        subtotal: snapshot.subtotal,
         discount: disc,
         tax: taxAmt,
         taxRate,
         grandTotal: total,
-        notes: held.notes,
-        heldAt: new Date(held.heldAt).toLocaleString(),
+        notes: snapshot.notes,
+        heldAt: new Date(snapshot.heldAt).toLocaleString(),
+        // Slip carries the real receipt number so reprints always match
+        refNumber: receiptNumber,
       });
-      setCheckoutMsg(`On hold · ${held.label}`);
-      setTimeout(() => setCheckoutMsg(null), 2500);
+    } catch {
+      /* print optional */
     }
-  }, [holdSale, customerId, waiterId, waiterName, taxRate, customers, user?.branch]);
+    setCheckoutMsg(`On hold · ${receiptNumber || snapshot.label}`);
+    setTimeout(() => setCheckoutMsg(null), 2500);
+  }, [
+    cart,
+    totals,
+    orderNotes,
+    customerId,
+    waiterId,
+    waiterName,
+    discountMode,
+    discountPct,
+    taxRate,
+    customers,
+    user?.branch,
+    clearCart,
+    holdSale,
+    syncHoldsFromServer,
+    activeHoldId,
+  ]);
 
   const handleResumeHeld = useCallback(
     (id: string) => {
+      if (cart.length) {
+        setCheckoutMsg("Hold or clear the current cart before resuming");
+        setTimeout(() => setCheckoutMsg(null), 3000);
+        return;
+      }
       const result = resumeHeldSale(id);
       if (result?.restored) {
         const sale = result.sale;
         if (sale.customerId) setCustomerId(sale.customerId);
         if (sale.waiterId) setWaiterId(sale.waiterId);
-        setCheckoutMsg("Held sale restored to cart");
+        // Keep the server hold linked — checkout or re-hold reuses its receipt number.
+        setActiveHoldId(id);
+        setDraftsOpen(false);
+        setCheckoutMsg(`Resumed ${sale.label} — receipt number kept`);
         setTimeout(() => setCheckoutMsg(null), 2500);
       }
     },
-    [resumeHeldSale]
+    [cart.length, resumeHeldSale, setActiveHoldId, setCustomerId, setWaiterId]
   );
+
+  const handleDeleteHeld = useCallback(
+    async (id: string) => {
+      try {
+        await salesApi.deleteInvoice(id);
+      } catch {
+        /* local-only */
+      }
+      deleteHeldSale(id);
+      await syncHoldsFromServer();
+    },
+    [deleteHeldSale, syncHoldsFromServer]
+  );
+
+  // /pos?resume=<invoiceId> (from the Receipts page) auto-resumes that hold.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resumeHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const resumeId = searchParams.get("resume");
+    if (!resumeId || resumeHandledRef.current === resumeId) return;
+
+    const clearParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("resume");
+      setSearchParams(next, { replace: true });
+    };
+
+    if (resumeId === activeHoldId) {
+      resumeHandledRef.current = resumeId;
+      setCheckoutMsg("That held sale is already in the cart");
+      setTimeout(() => setCheckoutMsg(null), 2500);
+      clearParam();
+      return;
+    }
+    const sale = heldSales.find((h) => h.id === resumeId);
+    if (!sale) return; // holds still syncing from server
+    resumeHandledRef.current = resumeId;
+    handleResumeHeld(resumeId);
+    clearParam();
+  }, [searchParams, setSearchParams, heldSales, activeHoldId, handleResumeHeld]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -332,9 +476,9 @@ export function PosPage() {
                 onClick={() => setDraftsOpen(true)}
               >
                 Drafts
-                {heldSales.length > 0 && (
+                {visibleHeldSales.length > 0 && (
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    {heldSales.length}
+                    {visibleHeldSales.length}
                   </span>
                 )}
               </Button>
@@ -348,9 +492,9 @@ export function PosPage() {
               onClick={() => setDraftsOpen(true)}
             >
               Drafts
-              {heldSales.length > 0 && (
+              {visibleHeldSales.length > 0 && (
                 <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                  {heldSales.length}
+                  {visibleHeldSales.length}
                 </span>
               )}
             </Button>
@@ -477,14 +621,14 @@ export function PosPage() {
 
         <PosHeldSalesPanel
           open={draftsOpen}
-          heldSales={heldSales}
+          heldSales={visibleHeldSales}
           customers={customers}
           taxRate={taxRate}
           branchName={user?.branch?.name}
           branchId={user?.branch?.id}
           onClose={() => setDraftsOpen(false)}
           onResume={handleResumeHeld}
-          onDelete={deleteHeldSale}
+          onDelete={handleDeleteHeld}
         />
 
         <PosWaiterSalesPanel
@@ -578,6 +722,7 @@ export function PosPage() {
         waiterId={waiterId}
         waiterName={waiterName}
         waiters={waiters}
+        holdInvoiceId={activeHoldId ?? undefined}
         onClose={() => setCheckoutOpen(false)}
         onSaveDraft={handleHold}
         onComplete={handleCheckoutComplete}

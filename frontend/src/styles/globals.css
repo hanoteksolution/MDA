@@ -214,15 +214,23 @@
     }
 
     .pos-cart-panel .pos-cart-actions {
-      @apply space-y-1.5 p-2.5 pt-1.5;
+      @apply space-y-1 p-2 pt-1.5;
     }
 
     .pos-cart-panel .pos-cart-actions button {
-      @apply h-9;
+      @apply h-9 text-xs;
     }
   }
 
   @media (max-height: 760px) {
+    .pos-cart-panel .pos-cart-actions {
+      @apply p-1.5 pt-1;
+    }
+
+    .pos-cart-panel .pos-cart-actions button {
+      height: 2.25rem;
+    }
+
     .pos-cart-panel .pos-cart-actions button.h-11,
     .pos-cart-panel .pos-cart-actions button[class*="h-11"] {
       height: 2.5rem;

@@ -54,6 +54,8 @@ PERMISSIONS = [
     ("futsal.view", "View Futsal Module", "futsal"),
     ("futsal.manage", "Manage Courts, Teams & Bookings", "futsal"),
     ("futsal.finance", "Manage Futsal Income & Expenses", "futsal"),
+    ("trash.view", "View Trash / Deleted Records", "trash"),
+    ("trash.restore", "Restore or Permanently Delete Trash", "trash"),
 ]
 
 ROLE_PERMISSIONS = {
@@ -113,11 +115,12 @@ ROLE_PERMISSIONS = {
         "dashboard.view", "reports.view", "reports.export",
         "staff.performance.view", "staff.performance.evaluate",
         "platform.view", "platform.manage",
-        "finance.view", "sales.view", "sales.update", "sales.delete",
+        "finance.view", "finance.create", "sales.view", "sales.update", "sales.delete",
         "customers.view",
         "users.view", "users.create", "users.update",
         "roles.view",
         "products.view", "inventory.view",
+        "trash.view", "trash.restore",
     ],
 }
 

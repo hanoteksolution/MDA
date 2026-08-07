@@ -3,7 +3,7 @@ from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
 from django.utils import timezone
 
 from apps.sales.models import Expense, Invoice, InvoiceItem
@@ -38,7 +38,9 @@ class DailyOpsService:
         )
 
         paid = invoices.filter(status=Invoice.STATUS_PAID)
-        unpaid = invoices.exclude(status__in=[Invoice.STATUS_PAID, Invoice.STATUS_CANCELLED])
+        unpaid = invoices.exclude(
+            status__in=[Invoice.STATUS_PAID, Invoice.STATUS_CANCELLED, Invoice.STATUS_ON_HOLD]
+        )
 
         # Products sold that day (all non-cancelled invoices)
         product_rows = (
@@ -260,25 +262,69 @@ class DailyOpsService:
         }
 
     @staticmethod
-    def list_expenses(*, branch_id=None, date_from=None, date_to=None):
+    def list_expenses(*, branch_id=None, date_from=None, date_to=None, category=None, search=None):
         branch = _resolve_branch(branch_id)
-        qs = Expense.active_objects().filter(branch=branch)
+        qs = (
+            Expense.active_objects()
+            .filter(branch=branch)
+            .select_related("branch", "created_by_user")
+            .order_by("-expense_date", "-created_at")
+        )
         if date_from:
             qs = qs.filter(expense_date__gte=date_from)
         if date_to:
             qs = qs.filter(expense_date__lte=date_to)
-        return [
-            {
+        if category and category != "all":
+            qs = qs.filter(category=category)
+        if search:
+            qs = qs.filter(
+                Q(description__icontains=search)
+                | Q(notes__icontains=search)
+                | Q(category__icontains=search)
+            )
+        rows = []
+        total = Decimal("0")
+        for e in qs[:500]:
+            amount = Decimal(str(e.amount))
+            total += amount
+            created_by = ""
+            if e.created_by_user_id:
+                created_by = e.created_by_user.get_full_name() or e.created_by_user.username
+            rows.append({
                 "id": str(e.id),
                 "description": e.description,
                 "category": e.category,
-                "amount": float(e.amount),
+                "amount": float(amount),
                 "notes": e.notes,
                 "expense_date": e.expense_date.isoformat(),
                 "branch_id": str(e.branch_id),
-            }
-            for e in qs[:200]
-        ]
+                "branch_name": e.branch.name if e.branch_id else "",
+                "created_by": created_by,
+                "created_at": e.created_at.isoformat(),
+            })
+        return {
+            "results": rows,
+            "count": len(rows),
+            "total_amount": float(total),
+        }
+
+    @staticmethod
+    def _expense_payload(expense: Expense) -> dict:
+        created_by = ""
+        if expense.created_by_user_id:
+            created_by = expense.created_by_user.get_full_name() or expense.created_by_user.username
+        return {
+            "id": str(expense.id),
+            "description": expense.description,
+            "category": expense.category,
+            "amount": float(expense.amount),
+            "notes": expense.notes,
+            "expense_date": expense.expense_date.isoformat(),
+            "branch_id": str(expense.branch_id),
+            "branch_name": expense.branch.name if expense.branch_id else "",
+            "created_by": created_by,
+            "created_at": expense.created_at.isoformat() if expense.created_at else None,
+        }
 
     @staticmethod
     def create_expense(*, data, user=None):
@@ -297,15 +343,30 @@ class DailyOpsService:
             raise ValueError("Description is required.")
         if expense.amount <= 0:
             raise ValueError("Amount must be greater than zero.")
-        return {
-            "id": str(expense.id),
-            "description": expense.description,
-            "category": expense.category,
-            "amount": float(expense.amount),
-            "notes": expense.notes,
-            "expense_date": expense.expense_date.isoformat(),
-            "branch_id": str(expense.branch_id),
-        }
+        return DailyOpsService._expense_payload(expense)
+
+    @staticmethod
+    def update_expense(*, expense_id, data, user=None):
+        expense = Expense.active_objects().select_related("branch", "created_by_user").get(pk=expense_id)
+        if "description" in data:
+            expense.description = (data.get("description") or "").strip()
+        if "category" in data:
+            expense.category = data.get("category") or expense.category
+        if "amount" in data and data.get("amount") is not None:
+            expense.amount = Decimal(str(data.get("amount")))
+        if "notes" in data:
+            expense.notes = (data.get("notes") or "").strip()
+        if "expense_date" in data and data.get("expense_date"):
+            expense.expense_date = data.get("expense_date")
+        if data.get("branch_id"):
+            expense.branch = _resolve_branch(data.get("branch_id"))
+        if not expense.description:
+            raise ValueError("Description is required.")
+        if expense.amount <= 0:
+            raise ValueError("Amount must be greater than zero.")
+        expense.updated_by = user
+        expense.save()
+        return DailyOpsService._expense_payload(expense)
 
     @staticmethod
     def delete_expense(*, expense_id, user=None):

@@ -38,6 +38,41 @@ class PosCheckoutView(APIView):
         )
 
 
+class PosHoldListCreateView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def get(self, request):
+        if not (
+            request.user.has_permission("pos.access")
+            or request.user.has_permission("sales.view")
+        ):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        data = PosService.list_holds(
+            branch_id=request.query_params.get("branch_id"),
+            search=request.query_params.get("search"),
+        )
+        return success_response(data=data)
+
+    def post(self, request):
+        if not request.user.has_permission("sales.create"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            ShopSyncService.assert_subscription_usable()
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_402_PAYMENT_REQUIRED)
+        try:
+            invoice = PosService.hold(data=request.data, user=request.user)
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=invoice,
+            message="Sale held.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class PosProfileView(APIView):
     permission_classes = [IsAuthenticated]
 

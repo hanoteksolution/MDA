@@ -2,6 +2,7 @@ import { FileText, Play, Trash2, X, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/utils/cn";
 import type { HeldSale } from "../hooks/usePosCart";
+import { roundMoney } from "../hooks/usePosCart";
 import { printHeldSaleSlip } from "../receipt/printCartSlip";
 
 interface PosHeldSalesPanelProps {
@@ -49,9 +50,8 @@ export function PosHeldSalesPanel({
 
   const printHeld = async (sale: HeldSale) => {
     const disc = sale.discountAmount;
-    const afterDisc = sale.subtotal - disc;
-    const tax = afterDisc * taxRate;
-    const total = afterDisc + tax;
+    const tax = roundMoney(sale.subtotal * taxRate);
+    const total = roundMoney(Math.max(0, sale.subtotal - disc) + tax);
     await printHeldSaleSlip({
       label: sale.label,
       customerName: customerLabel(sale, customers),
@@ -66,6 +66,7 @@ export function PosHeldSalesPanel({
       grandTotal: total,
       notes: sale.notes,
       heldAt: formatHeldTime(sale.heldAt),
+      refNumber: sale.invoiceNumber,
     });
   };
 

@@ -21,6 +21,8 @@ export interface CartSlipData {
   notes?: string;
   heldAt?: string;
   isHold?: boolean;
+  /** Use this reference (e.g. the invoice number) instead of allocating a new slip number. */
+  refNumber?: string;
   /** Optional — if omitted, loaded from POS profile settings */
   merchants?: PosMerchant[];
 }
@@ -70,7 +72,8 @@ export async function printCartSlip(data: CartSlipData): Promise<void> {
     resolveMerchants(data.merchants),
   ]);
 
-  const ref = await allocateSlipNumber(data.isHold ? "hold" : "order", data.branchId);
+  const ref =
+    data.refNumber || (await allocateSlipNumber(data.isHold ? "hold" : "order", data.branchId));
 
   const body = renderPremiumThermalSlip(
     {

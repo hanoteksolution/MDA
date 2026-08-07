@@ -340,11 +340,9 @@ export function PosCartPanel({
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
 
-      {/* Sticky footer: adjustments + totals + actions always visible on laptops */}
-      <div className="pos-cart-footer shrink-0 border-t border-border/50 bg-card/95 backdrop-blur-md">
-        <div className="space-y-1.5 px-3 py-2 xl:space-y-2 xl:px-4 xl:py-2.5">
+        {/* Adjustments scroll with cart so Print/Hold/Checkout stay pinned */}
+        <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2 xl:mt-3 xl:space-y-2 xl:pt-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Adjustments
           </p>
@@ -390,7 +388,10 @@ export function PosCartPanel({
             />
           </div>
         </div>
+      </div>
 
+      {/* Sticky footer: totals + actions always visible on laptops */}
+      <div className="pos-cart-footer shrink-0 border-t border-border/50 bg-card/95 backdrop-blur-md">
         <div className="space-y-1 border-t border-border/40 bg-background/40 px-3 py-2 xl:space-y-1.5 xl:px-4 xl:py-2.5">
           <div className="flex justify-between text-[13px]">
             <span className="text-muted-foreground">Subtotal</span>

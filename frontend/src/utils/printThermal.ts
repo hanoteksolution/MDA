@@ -87,7 +87,10 @@ ${bodyHtml}
 </html>`);
     doc.close();
 
+    let printed = false;
     const runPrint = () => {
+      if (printed) return;
+      printed = true;
       try {
         win.focus();
         win.print();

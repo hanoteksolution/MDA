@@ -22,6 +22,7 @@ import {
   CalendarDays,
   ScrollText,
   Tags,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -50,9 +51,11 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access" },
       { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view" },
       { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view" },
+      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"] },
       { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view" },
       { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"] },
       { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view" },
+      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view" },
     ],
   },
   {

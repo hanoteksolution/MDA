@@ -89,6 +89,8 @@ interface PosCheckoutPanelProps {
   waiterId?: string;
   waiterName?: string;
   waiters?: PosWaiter[];
+  /** Resumed on-hold invoice id — checkout converts it, keeping its receipt number. */
+  holdInvoiceId?: string;
   onClose: () => void;
   onSaveDraft?: () => void;
   onComplete: (receipt: PosReceipt) => void;
@@ -112,6 +114,7 @@ export function PosCheckoutPanel({
   branchCode,
   waiterId,
   waiterName,
+  holdInvoiceId,
   onClose,
   onSaveDraft,
   onComplete,
@@ -209,6 +212,7 @@ export function PosCheckoutPanel({
         waiter_id: waiterId,
         waiter_name: waiterName || undefined,
         notes: buildNotes(),
+        hold_invoice_id: holdInvoiceId,
       });
       setReceipt(res.data.receipt);
       setStep("success");

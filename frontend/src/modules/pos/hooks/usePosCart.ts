@@ -31,15 +31,30 @@ export interface HeldSale {
   customerId?: string;
   waiterId?: string;
   waiterName?: string;
+  /** Server receipt number (e.g. INV-BR01-00055) — used on every reprint. */
+  invoiceNumber?: string;
 }
 
 const FAVORITES_KEY = "mda_pos_favorites";
 const RECENT_KEY = "mda_pos_recent";
 const HELD_KEY = "mda_pos_held";
+const ACTIVE_CART_KEY = "mda_pos_active_cart";
 export const POS_TAX_RATE = 0.05;
 
 /** Which discount field the cashier last edited — prevents % and $ from fighting. */
 export type DiscountMode = "none" | "percent" | "amount";
+
+type ActiveCartSession = {
+  cart: CartLine[];
+  discountPct: number;
+  discountAmount: number;
+  discountMode: DiscountMode;
+  orderNotes: string;
+  customerId?: string;
+  waiterId?: string;
+  /** Server invoice id of the resumed hold — keeps its receipt number on checkout/re-hold. */
+  holdInvoiceId?: string;
+};
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -48,6 +63,46 @@ function loadJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function loadActiveCart(): ActiveCartSession {
+  const empty: ActiveCartSession = {
+    cart: [],
+    discountPct: 0,
+    discountAmount: 0,
+    discountMode: "none",
+    orderNotes: "",
+  };
+  try {
+    const raw = localStorage.getItem(ACTIVE_CART_KEY);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as Partial<ActiveCartSession>;
+    const cart = Array.isArray(parsed.cart) ? parsed.cart.filter((l) => l?.id && l.qty > 0) : [];
+    const mode =
+      parsed.discountMode === "percent" || parsed.discountMode === "amount" || parsed.discountMode === "none"
+        ? parsed.discountMode
+        : "none";
+    return {
+      cart,
+      discountPct: Number(parsed.discountPct) || 0,
+      discountAmount: Number(parsed.discountAmount) || 0,
+      discountMode: mode,
+      orderNotes: typeof parsed.orderNotes === "string" ? parsed.orderNotes : "",
+      customerId: typeof parsed.customerId === "string" ? parsed.customerId : undefined,
+      waiterId: typeof parsed.waiterId === "string" ? parsed.waiterId : undefined,
+      holdInvoiceId: typeof parsed.holdInvoiceId === "string" ? parsed.holdInvoiceId : undefined,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function saveActiveCart(session: ActiveCartSession) {
+  localStorage.setItem(ACTIVE_CART_KEY, JSON.stringify(session));
+}
+
+function clearActiveCartStorage() {
+  localStorage.removeItem(ACTIVE_CART_KEY);
 }
 
 function saveHeld(held: HeldSale[]) {
@@ -82,15 +137,19 @@ function calcDiscount(
 }
 
 export function usePosCart() {
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const restored = useMemo(() => loadActiveCart(), []);
+  const [cart, setCart] = useState<CartLine[]>(() => restored.cart);
   const [favorites, setFavorites] = useState<string[]>(() => loadJson(FAVORITES_KEY, []));
   const [recentSales, setRecentSales] = useState<RecentSale[]>(() => loadJson(RECENT_KEY, []));
   const [heldSales, setHeldSales] = useState<HeldSale[]>(() => loadJson<HeldSale[]>(HELD_KEY, []));
-  const [discountPct, setDiscountPctState] = useState(0);
-  const [discountAmount, setDiscountAmountState] = useState(0);
-  const [discountMode, setDiscountMode] = useState<DiscountMode>("none");
+  const [discountPct, setDiscountPctState] = useState(() => restored.discountPct);
+  const [discountAmount, setDiscountAmountState] = useState(() => restored.discountAmount);
+  const [discountMode, setDiscountMode] = useState<DiscountMode>(() => restored.discountMode);
   const [taxRate] = useState(POS_TAX_RATE);
-  const [orderNotes, setOrderNotes] = useState("");
+  const [orderNotes, setOrderNotes] = useState(() => restored.orderNotes);
+  const [sessionCustomerId, setSessionCustomerId] = useState(() => restored.customerId || "walkin");
+  const [sessionWaiterId, setSessionWaiterId] = useState(() => restored.waiterId || "");
+  const [activeHoldId, setActiveHoldId] = useState<string | null>(() => restored.holdInvoiceId || null);
 
   const subtotal = useMemo(() => calcSubtotal(cart), [cart]);
 
@@ -101,6 +160,24 @@ export function usePosCart() {
   useEffect(() => {
     saveHeld(heldSales);
   }, [heldSales]);
+
+  // Persist active cart so refresh does not wipe in-progress sales
+  useEffect(() => {
+    if (!cart.length && discountMode === "none" && !orderNotes.trim() && sessionCustomerId === "walkin" && !sessionWaiterId) {
+      clearActiveCartStorage();
+      return;
+    }
+    saveActiveCart({
+      cart,
+      discountPct,
+      discountAmount,
+      discountMode,
+      orderNotes,
+      customerId: sessionCustomerId,
+      waiterId: sessionWaiterId || undefined,
+      holdInvoiceId: activeHoldId || undefined,
+    });
+  }, [cart, discountPct, discountAmount, discountMode, orderNotes, sessionCustomerId, sessionWaiterId, activeHoldId]);
 
   // When the cart total changes, keep the active discount source and refresh the other field.
   useEffect(() => {
@@ -195,6 +272,8 @@ export function usePosCart() {
     setDiscountAmountState(0);
     setDiscountMode("none");
     setOrderNotes("");
+    setActiveHoldId(null);
+    clearActiveCartStorage();
   }, []);
 
   const toggleFavorite = useCallback((productId: string) => {
@@ -284,12 +363,20 @@ export function usePosCart() {
     setHeldSales((prev) => prev.filter((h) => h.id !== id));
   }, []);
 
+  const replaceHeldSales = useCallback(
+    (next: HeldSale[] | ((prev: HeldSale[]) => HeldSale[])) => {
+      setHeldSales(next);
+    },
+    []
+  );
+
   const completeSale = useCallback(
     (method: string, total?: number, invoiceNumber?: string) => {
       if (!cart.length) return;
       const discount = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
+      const tax = roundMoney(subtotal * taxRate);
       const grandTotal =
-        total ?? subtotal - discount + (subtotal - discount) * taxRate;
+        total ?? roundMoney(Math.max(0, subtotal - discount) + tax);
 
       const sale: RecentSale = {
         id: invoiceNumber ?? crypto.randomUUID(),
@@ -313,8 +400,11 @@ export function usePosCart() {
 
   const totals = useMemo(() => {
     const discount = calcDiscount(subtotal, discountMode, discountPct, discountAmount);
-    const afterDiscount = Math.max(0, subtotal - discount);
-    const tax = roundMoney(afterDiscount * taxRate);
+    // VAT is charged on the full item subtotal (before discount), so offline
+    // cashiers can waive tax by entering that VAT amount as a $ discount and get
+    // a clean total equal to the pre-tax subtotal.
+    const tax = roundMoney(subtotal * taxRate);
+    const afterDiscount = Math.max(0, roundMoney(subtotal - discount));
     const grandTotal = roundMoney(afterDiscount + tax);
     const itemCount = cart.reduce((s, i) => s + i.qty, 0);
     return { subtotal, discount, tax, grandTotal, itemCount };
@@ -333,6 +423,12 @@ export function usePosCart() {
     taxRate,
     orderNotes,
     setOrderNotes,
+    sessionCustomerId,
+    setSessionCustomerId,
+    sessionWaiterId,
+    setSessionWaiterId,
+    activeHoldId,
+    setActiveHoldId,
     totals,
     addToCart,
     updateQty,
@@ -342,6 +438,7 @@ export function usePosCart() {
     holdSale,
     resumeHeldSale,
     deleteHeldSale,
+    replaceHeldSales,
     completeSale,
   };
 }
