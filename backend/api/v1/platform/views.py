@@ -17,6 +17,10 @@ from apps.platform.services.domain_utils import (
     validate_tenant_slug,
 )
 from apps.platform.services.platform_service import PlatformService
+from apps.platform.services.module_feature_service import (
+    ModuleFeatureError,
+    ModuleFeatureService,
+)
 from apps.platform.services.module_service import (
     ModuleDependencyError,
     ensure_default_modules,
@@ -249,11 +253,30 @@ class PlatformTenantModulesView(APIView):
                 disable_missing=True,
                 validate_dependencies=True,
             )
+            module_features = request.data.get("module_features") or request.data.get(
+                "features"
+            )
+            if isinstance(module_features, dict):
+                for code, fmap in module_features.items():
+                    if not isinstance(fmap, dict):
+                        continue
+                    ModuleFeatureService.set_features(
+                        tenant=tenant,
+                        module_code=str(code),
+                        features=fmap,
+                        user=request.user,
+                    )
         except ModuleDependencyError as exc:
             return error_response(
                 message=str(exc),
                 status=status.HTTP_400_BAD_REQUEST,
                 errors={"code": exc.code, "missing": exc.missing},
+            )
+        except ModuleFeatureError as exc:
+            return error_response(
+                message=str(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+                code=exc.code,
             )
         links = (
             TenantModule.active_objects()

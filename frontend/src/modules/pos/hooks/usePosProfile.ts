@@ -64,7 +64,7 @@ function inferCode(modules: string[]): PosProfileCode {
 
 /** Resolve Universal POS profile code + capabilities from profile API + enabled modules. */
 export function usePosProfile(profile: PosProfile | null | undefined) {
-  const { modules, hasModule } = useModules();
+  const { modules, hasModule, hasFeature } = useModules();
 
   return useMemo(() => {
     const code = (profile?.code as PosProfileCode) || inferCode(modules);
@@ -79,10 +79,17 @@ export function usePosProfile(profile: PosProfile | null | undefined) {
       code,
       capabilities,
       showTables: Boolean(capabilities.tables) && hasModule("restaurant"),
-      showBatches: Boolean(capabilities.batches) && hasModule("pharmacy"),
+      showBatches:
+        Boolean(capabilities.batches) &&
+        hasModule("pharmacy") &&
+        hasFeature("pharmacy", "batches"),
+      showRx:
+        hasModule("pharmacy") &&
+        hasFeature("pharmacy", "prescriptions") &&
+        capabilities.rx !== false,
       showWaiters: capabilities.waiters !== false,
       showChargeToRoom:
         Boolean(capabilities.charge_to_room) && hasModule("hotel"),
     };
-  }, [profile, modules, hasModule]);
+  }, [profile, modules, hasModule, hasFeature]);
 }

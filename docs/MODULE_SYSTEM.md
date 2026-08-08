@@ -32,7 +32,15 @@ If the module is enabled but a required dependency is off (orphan TenantModule r
 { "success": false, "code": "MODULE_DEPENDENCY", "details": { "module": "pharmacy", "missing": ["inventory", "pos"] } }
 ```
 
-`/me` `enabled_modules` is the **usable** set (enabled + deps). Platform admins bypass. Plan entitlements remain STEP 24.
+Pharmacy feature off (module still enabled):
+
+```json
+{ "success": false, "code": "MODULE_FEATURE_DISABLED", "details": { "module": "pharmacy", "feature": "prescriptions" } }
+```
+
+`/me` `enabled_modules` is the **usable** set (enabled + deps). `/me` also includes `module_features` (e.g. pharmacy `batches` / `prescriptions` / `expiry_alerts`). Platform admins bypass. Plan entitlements remain STEP 24.
+
+Pharmacy APIs return `403 MODULE_FEATURE_DISABLED` when the module is on but a feature is off.
 
 ## Frontend
 

@@ -27,6 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
     shop_slug = serializers.SerializerMethodField()
     managed_shop_group = serializers.SerializerMethodField()
     enabled_modules = serializers.SerializerMethodField()
+    module_features = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -35,6 +36,7 @@ class UserSerializer(serializers.ModelSerializer):
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
             "is_active", "is_platform_admin", "permissions", "direct_permissions",
             "permission_ids", "shop_slug", "managed_shop_group", "enabled_modules",
+            "module_features",
             "last_login", "date_joined",
         ]
         read_only_fields = ["id", "last_login", "date_joined"]
@@ -77,6 +79,11 @@ class UserSerializer(serializers.ModelSerializer):
 
             return [code for code, *_ in MODULE_SEEDS]
         return sorted(usable_module_codes(user=obj))
+
+    def get_module_features(self, obj):
+        from apps.platform.services.module_feature_service import ModuleFeatureService
+
+        return ModuleFeatureService.features_by_module(user=obj)
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

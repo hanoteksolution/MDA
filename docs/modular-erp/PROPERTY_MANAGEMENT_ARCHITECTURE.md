@@ -26,6 +26,7 @@ Do **not** duplicate Property/Building for housing vs office — specialize Unit
 - Document metadata records (URL/title; upload later)
 - BT `property`, presets `property_residential` / `property_commercial` / `property_mixed`
 - Demo seeder + FE `/property` + workspace + dashboard card
+- RN staff `property_staff` workspace (PHASE 24)
 
 ## Accounting (later)
 

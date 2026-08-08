@@ -37,6 +37,11 @@ export interface PharmacySummary {
   expiring_count: number;
   expiry_alert_days: number;
   categories?: PharmacyCategory[];
+  features?: {
+    batches?: boolean;
+    prescriptions?: boolean;
+    expiry_alerts?: boolean;
+  };
   prescriptions_active?: number;
   prescriptions_dispensed?: number;
   prescriptions_total?: number;

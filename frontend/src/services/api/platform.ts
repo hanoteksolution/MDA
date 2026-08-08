@@ -446,20 +446,33 @@ export const platformApi = {
           enabled: boolean;
           category: string;
           dependencies?: string[];
+          features?: Record<string, boolean>;
+          feature_catalog?: { code: string; name: string; is_default?: boolean }[];
         }[];
         enabled: string[];
       }>
     >(`/platform/tenants/${tenantId}/modules/`),
 
-  updateTenantModules: (tenantId: string, enabled_modules: string[]) =>
+  updateTenantModules: (
+    tenantId: string,
+    enabled_modules: string[],
+    module_features?: Record<string, Record<string, boolean>>
+  ) =>
     platformCloudRequest<
       ApiResponse<{
-        items: { code: string; name: string; enabled: boolean; category: string }[];
+        items: {
+          code: string;
+          name: string;
+          enabled: boolean;
+          category: string;
+          features?: Record<string, boolean>;
+          feature_catalog?: { code: string; name: string }[];
+        }[];
         enabled: string[];
       }>
     >(`/platform/tenants/${tenantId}/modules/`, {
       method: "PUT",
-      body: JSON.stringify({ enabled_modules }),
+      body: JSON.stringify({ enabled_modules, module_features }),
     }),
 
   checkSlug: (slug: string) =>

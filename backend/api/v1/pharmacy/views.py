@@ -8,6 +8,7 @@ from apps.pharmacy.services.prescription_service import (
     PrescriptionError,
     PrescriptionService,
 )
+from apps.platform.services.module_feature_service import ModuleFeatureService
 from apps.products.models import Product
 from core.responses.api_response import error_response, success_response
 from core.tenancy import apply_tenant_scope
@@ -15,11 +16,39 @@ from core.utils.pagination import paginate_queryset
 from permissions.base import HasPermission
 
 
+def _require_pharmacy_feature(request, feature: str):
+    if ModuleFeatureService.tenant_has_feature(
+        "pharmacy", feature, user=request.user, request=request
+    ):
+        return None
+    return error_response(
+        message=f"Pharmacy feature '{feature}' is not enabled for this business.",
+        status=status.HTTP_403_FORBIDDEN,
+        code="MODULE_FEATURE_DISABLED",
+        details={"module": "pharmacy", "feature": feature},
+    )
+
+
 class PharmacySummaryView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
         data = BatchService.summary(user=request.user, request=request)
+        features = ModuleFeatureService.resolve_features(
+            "pharmacy", user=request.user, request=request
+        )
+        data["features"] = features
+        if not features.get("batches"):
+            data["batch_count"] = 0
+            data["total_quantity"] = 0
+            data["categories"] = []
+        if not features.get("expiry_alerts"):
+            data["expired_count"] = 0
+            data["expiring_count"] = 0
+        if not features.get("prescriptions"):
+            data["prescriptions_active"] = 0
+            data["prescriptions_dispensed"] = 0
+            data["prescriptions_total"] = 0
         return success_response(data=data)
 
 
@@ -29,6 +58,9 @@ class PharmacyCategoryListView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
+        denied = _require_pharmacy_feature(request, "batches")
+        if denied:
+            return denied
         return success_response(data=BatchService.list_categories(user=request.user, request=request))
 
 
@@ -36,6 +68,9 @@ class BatchListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
+        denied = _require_pharmacy_feature(request, "batches")
+        if denied:
+            return denied
         qs = BatchService.list_batches(
             user=request.user,
             request=request,
@@ -51,6 +86,9 @@ class BatchListCreateView(APIView):
         )
 
     def post(self, request):
+        denied = _require_pharmacy_feature(request, "batches")
+        if denied:
+            return denied
         if not request.user.has_permission("pharmacy.manage"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = request.data
@@ -98,6 +136,9 @@ class BatchExpiringView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
+        denied = _require_pharmacy_feature(request, "expiry_alerts")
+        if denied:
+            return denied
         within = request.query_params.get("within_days")
         qs = BatchService.expiring(
             user=request.user,
@@ -117,6 +158,9 @@ class BatchFefoPreviewView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
+        denied = _require_pharmacy_feature(request, "batches")
+        if denied:
+            return denied
         product_id = request.query_params.get("product_id")
         warehouse_id = request.query_params.get("warehouse_id")
         quantity = request.query_params.get("quantity") or "1"
@@ -152,6 +196,9 @@ class PrescriptionListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def get(self, request):
+        denied = _require_pharmacy_feature(request, "prescriptions")
+        if denied:
+            return denied
         qs = PrescriptionService.list(
             status=request.query_params.get("status"),
             search=request.query_params.get("search"),
@@ -166,6 +213,9 @@ class PrescriptionListCreateView(APIView):
         )
 
     def post(self, request):
+        denied = _require_pharmacy_feature(request, "prescriptions")
+        if denied:
+            return denied
         if not (
             request.user.has_permission("pharmacy.manage")
             or request.user.has_permission("pharmacy.dispense")
@@ -190,6 +240,9 @@ class PrescriptionDispenseView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("pharmacy.view")]
 
     def post(self, request, pk):
+        denied = _require_pharmacy_feature(request, "prescriptions")
+        if denied:
+            return denied
         if not (
             request.user.has_permission("pharmacy.dispense")
             or request.user.has_permission("pharmacy.manage")

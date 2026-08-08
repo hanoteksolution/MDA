@@ -14,6 +14,9 @@ const ROUTE_BY_WORKSPACE: Record<string, keyof RootStackParamList> = {
   pharmacy_staff: "PharmacyWorkspace",
   hotel_staff: "HotelWorkspace",
   restaurant_staff: "RestaurantWorkspace",
+  property_staff: "PropertyWorkspace",
+  housing_staff: "HousingWorkspace",
+  office_staff: "OfficeWorkspace",
 };
 
 export function WorkspaceSwitcherScreen({ navigation }: Props) {
@@ -30,8 +33,8 @@ export function WorkspaceSwitcherScreen({ navigation }: Props) {
       {!moduleWorkspaces.length ? (
         <Card>
           <Text style={styles.empty}>
-            No staff mobile workspaces available. Enable Gym, Pharmacy, Hotel, or Restaurant and
-            ensure your role has view permissions.
+            No staff mobile workspaces available. Enable Gym, Pharmacy, Hotel, Restaurant, Property,
+            Housing, or Office and ensure your role has view permissions.
           </Text>
         </Card>
       ) : (

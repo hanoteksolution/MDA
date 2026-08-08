@@ -27,6 +27,7 @@ Preset: `property_commercial` / `property_mixed`.
 - Demo seeder + FE `/office` charges panel
 - Activate/terminate syncs unit occupancy via PropertyService
 - **Billing:** same `RentalBillingService` as housing — `POST /charges/<id>/invoice/` + `/paid/`
+- RN staff `office_staff` workspace (requires property core)
 
 ## Later
 

@@ -50,3 +50,15 @@ export function fetchHotelSummary() {
 export function fetchRestaurantSummary() {
   return apiRequest<Record<string, unknown>>("/restaurant/summary/");
 }
+
+export function fetchPropertySummary() {
+  return apiRequest<Record<string, unknown>>("/property/summary/");
+}
+
+export function fetchHousingSummary() {
+  return apiRequest<Record<string, unknown>>("/housing/summary/");
+}
+
+export function fetchOfficeSummary() {
+  return apiRequest<Record<string, unknown>>("/office/summary/");
+}

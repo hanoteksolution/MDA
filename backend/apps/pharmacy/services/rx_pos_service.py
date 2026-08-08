@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from apps.pharmacy.models import Prescription
 from apps.pharmacy.services.prescription_service import PrescriptionService
+from apps.platform.services.module_feature_service import ModuleFeatureService
 from apps.platform.services.module_service import tenant_has_module
 from apps.products.models import Product
 from core.tenancy import apply_tenant_scope
@@ -23,13 +24,20 @@ class RxPosService:
         code = (profile.get("code") or "").strip().upper()
         mods = {str(m).lower() for m in (profile.get("enabled_modules") or [])}
         caps = profile.get("capabilities") or {}
-        if code == "PHARMACY":
-            return True
-        if "pharmacy" in mods and (caps.get("batches") or caps.get("rx") or caps.get("prescriptions")):
-            return True
-        if user is not None and tenant_has_module("pharmacy", user=user):
-            return True
-        return False
+        module_on = (
+            code == "PHARMACY"
+            or "pharmacy" in mods
+            or (user is not None and tenant_has_module("pharmacy", user=user))
+        )
+        if not module_on:
+            return False
+        if caps.get("rx") is False or caps.get("prescriptions") is False:
+            return False
+        if user is not None:
+            return ModuleFeatureService.tenant_has_feature(
+                "pharmacy", "prescriptions", user=user
+            )
+        return True
 
     @staticmethod
     def _remaining_by_product(lines) -> dict[str, Decimal]:

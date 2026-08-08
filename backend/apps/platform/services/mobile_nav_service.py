@@ -128,6 +128,51 @@ MOBILE_NAV_CATALOG: list[dict] = [
             },
         ],
     },
+    {
+        "id": "property_staff",
+        "label": "Property",
+        "module": "property_management",
+        "permission": "property_management.view",
+        "audience": "staff",
+        "screens": [
+            {
+                "id": "property_staff_summary",
+                "label": "Property overview",
+                "route": "PropertyWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "housing_staff",
+        "label": "Housing",
+        "module": "housing_rental",
+        "permission": "housing_rental.view",
+        "audience": "staff",
+        "screens": [
+            {
+                "id": "housing_staff_summary",
+                "label": "Housing overview",
+                "route": "HousingWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "office_staff",
+        "label": "Office",
+        "module": "office_rental",
+        "permission": "office_rental.view",
+        "audience": "staff",
+        "screens": [
+            {
+                "id": "office_staff_summary",
+                "label": "Office overview",
+                "route": "OfficeWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
 ]
 
 

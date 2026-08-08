@@ -65,7 +65,15 @@ export function PlatformShopDetailPage() {
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [userFormError, setUserFormError] = useState("");
   const [moduleItems, setModuleItems] = useState<
-    { code: string; name: string; enabled: boolean; category: string; dependencies?: string[] }[]
+    {
+      code: string;
+      name: string;
+      enabled: boolean;
+      category: string;
+      dependencies?: string[];
+      features?: Record<string, boolean>;
+      feature_catalog?: { code: string; name: string; is_default?: boolean }[];
+    }[]
   >([]);
   const [moduleBusy, setModuleBusy] = useState(false);
   const [moduleMsg, setModuleMsg] = useState<string | null>(null);
@@ -106,6 +114,17 @@ export function PlatformShopDetailPage() {
     );
   };
 
+  const toggleFeature = (moduleCode: string, feature: string) => {
+    setModuleItems((prev) =>
+      prev.map((m) => {
+        if (m.code !== moduleCode) return m;
+        const next = { ...(m.features || {}), [feature]: !(m.features?.[feature] !== false) };
+        if (feature === "batches" && !next.batches) next.expiry_alerts = false;
+        return { ...m, features: next };
+      })
+    );
+  };
+
   const moduleGaps = useMemo(() => {
     const enabled = new Set(moduleItems.filter((m) => m.enabled).map((m) => m.code));
     return moduleItems
@@ -122,7 +141,13 @@ export function PlatformShopDetailPage() {
     setModuleMsg(null);
     try {
       const enabled = moduleItems.filter((m) => m.enabled).map((m) => m.code);
-      const res = await platformApi.updateTenantModules(shopId, enabled);
+      const module_features: Record<string, Record<string, boolean>> = {};
+      for (const m of moduleItems) {
+        if (m.enabled && m.features && Object.keys(m.features).length) {
+          module_features[m.code] = m.features;
+        }
+      }
+      const res = await platformApi.updateTenantModules(shopId, enabled, module_features);
       setModuleItems(res.data.items ?? []);
       setModuleMsg("Modules saved. Dependencies may auto-enable required modules.");
     } catch (err) {
@@ -504,13 +529,13 @@ export function PlatformShopDetailPage() {
                 ) : null}
                 <div className="grid gap-2 sm:grid-cols-2">
                   {moduleItems.map((m) => (
-                    <label
+                    <div
                       key={m.code}
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 px-4 py-3"
+                      className="flex items-start gap-3 rounded-xl border border-border/60 px-4 py-3"
                     >
                       <input
                         type="checkbox"
-                        className="mt-1"
+                        className="mt-1 cursor-pointer"
                         checked={m.enabled}
                         onChange={() => toggleModule(m.code)}
                       />
@@ -523,8 +548,27 @@ export function PlatformShopDetailPage() {
                             ? ` · needs ${m.dependencies.join(", ")}`
                             : ""}
                         </span>
+                        {m.enabled && m.feature_catalog?.length ? (
+                          <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                            {m.feature_catalog.map((f) => (
+                              <label
+                                key={f.code}
+                                className="flex items-center gap-1 text-xs font-normal normal-case text-foreground"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={m.features?.[f.code] !== false}
+                                  disabled={f.code === "expiry_alerts" && m.features?.batches === false}
+                                  onChange={() => toggleFeature(m.code, f.code)}
+                                />
+                                {f.name}
+                              </label>
+                            ))}
+                          </span>
+                        ) : null}
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
                 {!moduleItems.length ? (

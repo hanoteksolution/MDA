@@ -47,26 +47,52 @@ export function PharmacyPage() {
     notes: "",
   });
 
+  const featureFlags = {
+    batches: summary?.features?.batches !== false,
+    prescriptions: summary?.features?.prescriptions !== false,
+    expiry_alerts: summary?.features?.expiry_alerts !== false,
+  };
+
+  useEffect(() => {
+    if (tab === "batches" && !featureFlags.batches && featureFlags.prescriptions) {
+      setTab("prescriptions");
+    } else if (tab === "prescriptions" && !featureFlags.prescriptions && featureFlags.batches) {
+      setTab("batches");
+    }
+  }, [featureFlags.batches, featureFlags.prescriptions, tab]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumRes, catRes] = await Promise.all([
-        pharmacyApi.summary(),
-        pharmacyApi.categories(),
-      ]);
+      const sumRes = await pharmacyApi.summary();
       setSummary(sumRes.data);
-      setCategories(catRes.data ?? sumRes.data.categories ?? []);
-      const categoryFilter = categoryId || undefined;
-      if (tab === "batches") {
-        const listRes = showExpiringOnly
-          ? await pharmacyApi.expiring({ page_size: 100, category_id: categoryFilter })
-          : await pharmacyApi.batches({
-              page_size: 100,
-              search: search || undefined,
-              category_id: categoryFilter,
-            });
-        setBatches(listRes.data.results);
+      const feats = sumRes.data.features;
+      const allowBatches = feats?.batches !== false;
+      const allowRx = feats?.prescriptions !== false;
+      const allowExpiry = feats?.expiry_alerts !== false;
+      if (allowBatches) {
+        try {
+          const catRes = await pharmacyApi.categories();
+          setCategories(catRes.data ?? sumRes.data.categories ?? []);
+        } catch {
+          setCategories(sumRes.data.categories ?? []);
+        }
       } else {
+        setCategories([]);
+      }
+      const categoryFilter = categoryId || undefined;
+      if (tab === "batches" && allowBatches) {
+        const listRes =
+          showExpiringOnly && allowExpiry
+            ? await pharmacyApi.expiring({ page_size: 100, category_id: categoryFilter })
+            : await pharmacyApi.batches({
+                page_size: 100,
+                search: search || undefined,
+                category_id: categoryFilter,
+              });
+        setBatches(listRes.data.results);
+        setPrescriptions([]);
+      } else if (tab === "prescriptions" && allowRx) {
         const listRes = await pharmacyApi.prescriptions({
           page_size: 100,
           search: search || undefined,
@@ -74,6 +100,10 @@ export function PharmacyPage() {
           category_id: categoryFilter,
         });
         setPrescriptions(listRes.data.results);
+        setBatches([]);
+      } else {
+        setBatches([]);
+        setPrescriptions([]);
       }
     } catch {
       setSummary(null);
@@ -304,37 +334,49 @@ export function PharmacyPage() {
       breadcrumbs={["Home", "Pharmacy"]}
     >
       <KpiGrid>
-        <KpiCard
-          title="Active batches"
-          value={String(summary?.batch_count ?? 0)}
-          icon={<Package className="h-5 w-5" />}
-        />
-        <KpiCard
-          title="Units on batches"
-          value={String(summary?.total_quantity ?? 0)}
-          icon={<Pill className="h-5 w-5" />}
-        />
-        <KpiCard
-          title={`Expiring ≤${summary?.expiry_alert_days ?? 30}d`}
-          value={String(summary?.expiring_count ?? 0)}
-          icon={<CalendarClock className="h-5 w-5" />}
-          accent="warning"
-        />
-        <KpiCard
-          title="Active Rx"
-          value={String(summary?.prescriptions_active ?? 0)}
-          icon={<ClipboardList className="h-5 w-5" />}
-        />
-        <KpiCard
-          title="Expired"
-          value={String(summary?.expired_count ?? 0)}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          accent="warning"
-        />
+        {featureFlags.batches ? (
+          <>
+            <KpiCard
+              title="Active batches"
+              value={String(summary?.batch_count ?? 0)}
+              icon={<Package className="h-5 w-5" />}
+            />
+            <KpiCard
+              title="Units on batches"
+              value={String(summary?.total_quantity ?? 0)}
+              icon={<Pill className="h-5 w-5" />}
+            />
+          </>
+        ) : null}
+        {featureFlags.expiry_alerts ? (
+          <>
+            <KpiCard
+              title={`Expiring ≤${summary?.expiry_alert_days ?? 30}d`}
+              value={String(summary?.expiring_count ?? 0)}
+              icon={<CalendarClock className="h-5 w-5" />}
+              accent="warning"
+            />
+            <KpiCard
+              title="Expired"
+              value={String(summary?.expired_count ?? 0)}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              accent="warning"
+            />
+          </>
+        ) : null}
+        {featureFlags.prescriptions ? (
+          <KpiCard
+            title="Active Rx"
+            value={String(summary?.prescriptions_active ?? 0)}
+            icon={<ClipboardList className="h-5 w-5" />}
+          />
+        ) : null}
       </KpiGrid>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {(["batches", "prescriptions"] as Tab[]).map((t) => (
+        {(["batches", "prescriptions"] as Tab[])
+          .filter((t) => (t === "batches" ? featureFlags.batches : featureFlags.prescriptions))
+          .map((t) => (
           <Button
             key={t}
             variant={tab === t ? "default" : "secondary"}
@@ -372,7 +414,7 @@ export function PharmacyPage() {
         </div>
       ) : null}
 
-      {tab === "batches" && (
+      {tab === "batches" && featureFlags.batches && (
         <ContentSection
           title="Batches"
           description="Lots sorted by expiry (FEFO). Sales deduct earliest expiry first."
@@ -398,6 +440,7 @@ export function PharmacyPage() {
                   </option>
                 ))}
               </select>
+              {featureFlags.expiry_alerts ? (
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
@@ -406,6 +449,7 @@ export function PharmacyPage() {
                 />
                 Expiring / expired only
               </label>
+              ) : null}
             </div>
           }
         >
@@ -418,7 +462,7 @@ export function PharmacyPage() {
         </ContentSection>
       )}
 
-      {tab === "prescriptions" && (
+      {tab === "prescriptions" && featureFlags.prescriptions && (
         <ContentSection
           title="Prescriptions"
           description="Create Rx, partial-fill dispense (FEFO when product-linked), track remaining qty."

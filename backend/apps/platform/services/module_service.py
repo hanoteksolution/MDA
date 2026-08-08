@@ -95,7 +95,7 @@ MODULE_SEEDS = [
         140,
         [],
         "/property",
-        {"supports_pos": False, "supports_inventory": False},
+        {"supports_pos": False, "supports_inventory": False, "supports_mobile": True},
     ),
     (
         "housing_rental",
@@ -105,7 +105,7 @@ MODULE_SEEDS = [
         141,
         ["property_management"],
         "/housing",
-        {"supports_pos": False},
+        {"supports_pos": False, "supports_mobile": True},
     ),
     (
         "office_rental",
@@ -115,7 +115,7 @@ MODULE_SEEDS = [
         142,
         ["property_management"],
         "/office",
-        {"supports_pos": False},
+        {"supports_pos": False, "supports_mobile": True},
     ),
     (
         "gym",
@@ -274,6 +274,11 @@ def sync_tenant_modules(
                     ]
                 )
         rows.append(link)
+    from apps.platform.services.module_feature_service import ModuleFeatureService
+
+    for link in rows:
+        if link.enabled:
+            ModuleFeatureService.seed_defaults(link)
     return rows
 
 
@@ -368,6 +373,8 @@ def module_required_for_path(path: str) -> str | None:
 
 
 def module_payload(module: Module) -> dict:
+    from apps.platform.services.module_feature_service import ModuleFeatureService
+
     return {
         "id": str(module.id),
         "code": module.code,
@@ -386,15 +393,24 @@ def module_payload(module: Module) -> dict:
         "supports_pos": bool(module.supports_pos),
         "supports_inventory": bool(module.supports_inventory),
         "supports_finance": bool(module.supports_finance),
+        "feature_catalog": ModuleFeatureService.catalog_for(module.code),
     }
 
 
 def tenant_module_payload(link: TenantModule) -> dict:
+    from apps.platform.services.module_feature_service import ModuleFeatureService
+
+    features = (
+        ModuleFeatureService.resolve_from_link(link, link.module.code)
+        if link.enabled
+        else {k: False for k in ModuleFeatureService.known_codes(link.module.code)}
+    )
     return {
         **module_payload(link.module),
         "enabled": link.enabled,
         "tenant_module_id": str(link.id),
         "configuration": link.configuration or {},
+        "features": features,
         "enabled_at": link.enabled_at.isoformat() if link.enabled_at else None,
         "disabled_at": link.disabled_at.isoformat() if link.disabled_at else None,
     }

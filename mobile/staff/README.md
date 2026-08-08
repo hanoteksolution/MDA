@@ -6,8 +6,8 @@ Expo staff app with **module workspace switcher** driven by `GET /mobile/bootstr
 
 - Tenant slug + staff login
 - Bootstrap `mobile_nav` filtered to staff audience
-  (`staff_hub`, `gym_staff`, `pharmacy_staff`, `hotel_staff`, `restaurant_staff`)
-- Workspace switcher → Gym / Pharmacy / Hotel / Restaurant KPI screens
+  (`staff_hub`, gym/pharmacy/hotel/restaurant/property/housing/office `_staff`)
+- Workspace switcher → Gym / Pharmacy / Hotel / Restaurant / Property / Housing / Office KPI screens
 
 ## Setup
 
@@ -29,5 +29,8 @@ Configure `extra.apiBase` / `extra.tenantSlug` in `app.json` as needed.
 | Pharmacy workspace | `GET /api/v1/pharmacy/summary/` |
 | Hotel workspace | `GET /api/v1/hotel/summary/` |
 | Restaurant workspace | `GET /api/v1/restaurant/summary/` |
+| Property workspace | `GET /api/v1/property/summary/` |
+| Housing workspace | `GET /api/v1/housing/summary/` |
+| Office workspace | `GET /api/v1/office/summary/` |
 
 Member portal remains in [`../gym-member/`](../gym-member/) (`audience=member` / default member workspace).

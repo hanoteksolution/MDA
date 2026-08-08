@@ -114,6 +114,8 @@ def get_pos_capabilities(
     *,
     enabled_modules: set[str] | list[str] | None = None,
     explicit_code: str | None = None,
+    user=None,
+    tenant=None,
 ) -> dict:
     code = resolve_pos_profile_code(
         enabled_modules=enabled_modules, explicit_code=explicit_code
@@ -126,4 +128,17 @@ def get_pos_capabilities(
     if "restaurant" in mods:
         caps["tables"] = True
         caps["waiters"] = True
+    if "pharmacy" in mods and (user is not None or tenant is not None):
+        from apps.platform.services.module_feature_service import ModuleFeatureService
+
+        caps["batches"] = ModuleFeatureService.tenant_has_feature(
+            "pharmacy", "batches", user=user, tenant=tenant
+        )
+        caps["expiry"] = ModuleFeatureService.tenant_has_feature(
+            "pharmacy", "expiry_alerts", user=user, tenant=tenant
+        )
+        caps["rx"] = ModuleFeatureService.tenant_has_feature(
+            "pharmacy", "prescriptions", user=user, tenant=tenant
+        )
+        caps["prescriptions"] = caps["rx"]
     return {"code": code, "capabilities": caps, "modules": sorted(mods)}

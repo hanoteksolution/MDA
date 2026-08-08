@@ -127,7 +127,9 @@ def get_pos_profile(*, user):
     tenant = getattr(user, "tenant", None)
     mods = enabled_module_codes(tenant=tenant, user=user) if tenant or user else set()
     explicit = (profile.get("code") or profile.get("profile_code") or "").strip() or None
-    caps = get_pos_capabilities(enabled_modules=mods, explicit_code=explicit)
+    caps = get_pos_capabilities(
+        enabled_modules=mods, explicit_code=explicit, user=user, tenant=tenant
+    )
     profile["code"] = caps["code"]
     profile["capabilities"] = caps["capabilities"]
     profile["enabled_modules"] = caps["modules"]

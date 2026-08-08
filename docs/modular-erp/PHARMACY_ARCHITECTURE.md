@@ -25,7 +25,7 @@ Manual dispense deducts inventory + FEFO (`reference_type=prescription`). Partia
 - ~~Partial-fill dispense UI / line qty fills~~ ✓
 - ~~Prescriptions depth (categories UX)~~ ✓ (filter batches/Rx by inventory Category; demo Analgesics/Antibiotics)
 - Demo seeder medicines/batches/Rx ✓
-- Module features: `batches`, `prescriptions`, `expiry_alerts`
+- ~~Module features: `batches`, `prescriptions`, `expiry_alerts`~~ ✓ (`TenantModule.configuration.features`)
 - ~~Dependencies: require `inventory` + `pos` when enabling~~ ✓ (seed + sync expand + runtime gate)
 
 ## Mapping keys (CAE)

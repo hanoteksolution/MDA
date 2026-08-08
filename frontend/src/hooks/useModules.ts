@@ -5,6 +5,7 @@ export function useModules() {
   const user = useAuthStore((s) => s.user);
   const { isSuperAdmin } = usePermissions();
   const modules = user?.enabled_modules ?? [];
+  const features = user?.module_features ?? {};
 
   const hasModule = (code: string) => {
     if (isSuperAdmin) return true;
@@ -21,5 +22,13 @@ export function useModules() {
     return codes.some((c) => modules.includes(c));
   };
 
-  return { modules, hasModule, hasAnyModule };
+  const hasFeature = (moduleCode: string, feature: string) => {
+    if (isSuperAdmin) return true;
+    if (!hasModule(moduleCode)) return false;
+    const map = features[moduleCode];
+    if (!map) return true;
+    return map[feature] !== false;
+  };
+
+  return { modules, features, hasModule, hasAnyModule, hasFeature };
 }

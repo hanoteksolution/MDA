@@ -27,6 +27,7 @@ Module: `housing_rental` requires `property_management`.
   - Deposit charges map to `SECURITY_DEPOSIT_LIABILITY`
 - Demo seeder + FE `/housing` charges panel (Invoice / Collect)
 - No fork of Property/Building — leases FK `PropertyUnit`
+- RN staff `housing_staff` workspace (requires property core)
 
 ## Later
 

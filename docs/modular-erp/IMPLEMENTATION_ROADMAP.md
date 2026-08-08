@@ -24,13 +24,13 @@ Stack: Django + DRF + React/Vite (+ RN). Extend `apps/platform` / vertical apps 
 | 13 | Universal POS profiles | **DONE** (profile codes + restaurant pay-table) |
 | 14 | Gym EXTEND features/demo | **PARTIAL** (PT + class drop-in billing; base KEEP) |
 | 15 | Cafeteria/Restaurant **CREATE** app | **DONE** (skeleton: menu/tables/orders) |
-| 16 | Pharmacy EXTEND | **PARTIAL** (CAE + Rx + POS + FEFO + categories UX; base KEEP) |
+| 16 | Pharmacy EXTEND | **PARTIAL** (CAE + Rx + POS + FEFO + categories + features; base KEEP) |
 | 17 | Hotel **CREATE** | **DONE** (skeleton + charge-to-room + folio settle) |
 | 18 | Property core **CREATE** | **DONE** (assets/buildings/units/maintenance) |
 | 19 | Housing rental **CREATE** | **DONE** (leases on PropertyUnit) |
 | 20 | Office rental **CREATE** | **DONE** (commercial leases on PropertyUnit) |
 | 21–23 | Cross-module + CAE mappings + reporting | continuous |
-| 24 | RN dynamic modules | **PARTIAL** (member nav + staff switcher gym/pharmacy/hotel/restaurant) |
+| 24 | RN dynamic modules | **PARTIAL** (member nav + staff switcher gym/pharmacy/hotel/restaurant/property/housing/office) |
 | 25–28 | Security, perf, tests, production migration | continuous |
 
 ---
@@ -59,8 +59,10 @@ Stack: Django + DRF + React/Vite (+ RN). Extend `apps/platform` / vertical apps 
 33. ~~RN staff hotel + restaurant workspaces~~ ✓
 34. ~~Module dependency gate polish (checklist 9–11)~~ ✓
 35. ~~Pharmacy categories UX (inventory Category filter + demo Analgesics/Antibiotics)~~ ✓
+36. ~~RN staff property + housing + office workspaces~~ ✓
+37. ~~Pharmacy module features (`batches`, `prescriptions`, `expiry_alerts`)~~ ✓
 
-**Next:** Property/housing staff workspaces — **or** pharmacy module features (`batches`, `prescriptions`, `expiry_alerts`).
+**Next:** Futsal staff workspace — **or** gym module features (`members`, `classes`, `attendance`).
 
 **Stop before:** inventing a second Property/Building stack.
 

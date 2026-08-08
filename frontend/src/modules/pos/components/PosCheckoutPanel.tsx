@@ -30,6 +30,7 @@ import {
   type PosReceipt,
   type PosWaiter,
 } from "@/services/api/pos";
+import { useModules } from "@/hooks/useModules";
 import { pharmacyApi, type Prescription } from "@/services/api/pharmacy";
 import { PosReceiptView } from "./PosReceiptView";
 import { printOrderSlip } from "../receipt/printCartSlip";
@@ -137,6 +138,7 @@ export function PosCheckoutPanel({
   onSaveDraft,
   onComplete,
 }: PosCheckoutPanelProps) {
+  const { hasFeature } = useModules();
   const [step, setStep] = useState<"payment" | "success">("payment");
   const [profile, setProfile] = useState<PosProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -152,9 +154,10 @@ export function PosCheckoutPanel({
   const [prescriptionId, setPrescriptionId] = useState("");
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
 
+  const rxEnabled = hasFeature("pharmacy", "prescriptions");
   const needsPrescription = useMemo(
-    () => cart.some((i) => i.requires_prescription),
-    [cart]
+    () => rxEnabled && cart.some((i) => i.requires_prescription),
+    [cart, rxEnabled]
   );
 
   useEffect(() => {
