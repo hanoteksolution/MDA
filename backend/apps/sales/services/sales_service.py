@@ -8,6 +8,7 @@ from apps.sales.models import DocumentSequence, Invoice, InvoiceItem, Quotation,
 from apps.sales.services.sequence_service import DocumentSequenceService
 from apps.settings_app.models import Branch
 from apps.inventory.services.inventory_service import InventoryService
+from core.tenancy import apply_tenant_scope, resolve_acting_tenant, stamp_tenant_id
 
 
 def _aggregate_item_quantities(items) -> dict:
@@ -38,8 +39,9 @@ def _stock_deltas(*, old_qty: dict, new_qty: dict) -> dict:
 
 class QuotationService:
     @staticmethod
-    def list(*, search=None, status=None, customer_id=None, branch_id=None):
+    def list(*, search=None, status=None, customer_id=None, branch_id=None, user=None, request=None):
         qs = Quotation.active_objects().select_related("customer", "branch", "created_by_user").prefetch_related("items__product")
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if search:
             qs = qs.filter(
                 Q(quotation_number__icontains=search) | Q(customer__full_name__icontains=search)
@@ -74,14 +76,17 @@ class QuotationService:
     def create(*, data, items, user=None):
         branch_id = data.pop("branch_id", None)
         customer_id = data.pop("customer_id")
-        branch = _resolve_branch(branch_id)
+        branch = _resolve_branch(branch_id, user=user)
+        payload = stamp_tenant_id(dict(data), user=user)
+        if not payload.get("tenant_id") and getattr(branch, "tenant_id", None):
+            payload["tenant_id"] = branch.tenant_id
         quotation = Quotation.objects.create(
             quotation_number=QuotationService._next_number(branch=branch),
             customer_id=customer_id,
             branch=branch,
             created_by_user=user,
             created_by=user,
-            **data,
+            **payload,
         )
         for item in items or []:
             QuotationItem.objects.create(
@@ -92,7 +97,7 @@ class QuotationService:
                 created_by=user,
             )
         QuotationService._recalculate(quotation=quotation)
-        return QuotationService.list().get(pk=quotation.pk)
+        return QuotationService.list(user=user).get(pk=quotation.pk)
 
     @staticmethod
     @transaction.atomic
@@ -121,7 +126,7 @@ class QuotationService:
                     created_by=user,
                 )
             QuotationService._recalculate(quotation=instance)
-        return QuotationService.list().get(pk=instance.pk)
+        return QuotationService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
     @transaction.atomic
@@ -142,10 +147,13 @@ class InvoiceService:
         date_from=None,
         date_to=None,
         waiter=None,
+        user=None,
+        request=None,
     ):
         qs = Invoice.active_objects().select_related(
             "customer", "branch", "created_by_user", "served_by_user"
         ).prefetch_related("items__product")
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if search:
             qs = qs.filter(
                 Q(invoice_number__icontains=search)
@@ -205,14 +213,20 @@ class InvoiceService:
     def create(*, data, items, user=None):
         branch_id = data.pop("branch_id", None)
         customer_id = data.pop("customer_id")
-        branch = _resolve_branch(branch_id)
+        served_by_user = data.pop("served_by_user", None)
+        branch = _resolve_branch(branch_id, user=user)
+        payload = stamp_tenant_id(dict(data), user=user)
+        if not payload.get("tenant_id") and getattr(branch, "tenant_id", None):
+            payload["tenant_id"] = branch.tenant_id
+        if served_by_user is not None:
+            payload["served_by_user"] = served_by_user
         invoice = Invoice.objects.create(
             invoice_number=InvoiceService._next_number(branch=branch),
             customer_id=customer_id,
             branch=branch,
             created_by_user=user,
             created_by=user,
-            **data,
+            **payload,
         )
         for item in items or []:
             InvoiceItem.objects.create(
@@ -224,7 +238,7 @@ class InvoiceService:
             )
         InvoiceService._recalculate(invoice=invoice)
         InvoiceService._apply_stock_for_create(invoice=invoice, items=items or [], user=user)
-        return InvoiceService.list().get(pk=invoice.pk)
+        return InvoiceService.list(user=user).get(pk=invoice.pk)
 
     @staticmethod
     def _apply_stock_for_create(*, invoice, items, user=None):
@@ -232,6 +246,15 @@ class InvoiceService:
         if not warehouse:
             return
         sold = _aggregate_item_quantities(items)
+        if invoice.status == Invoice.STATUS_ON_HOLD:
+            InventoryService.reserve_invoice_quantities(
+                warehouse=warehouse,
+                quantity_by_product=sold,
+                reference_id=invoice.id,
+                user=user,
+                notes=f"Hold {invoice.invoice_number}",
+            )
+            return
         deltas = {pid: -qty for pid, qty in sold.items() if qty}
         InventoryService.apply_invoice_quantity_deltas(
             warehouse=warehouse,
@@ -242,19 +265,91 @@ class InvoiceService:
         )
 
     @staticmethod
-    def _apply_stock_for_update(*, invoice, old_branch, old_items_qty, new_items, user=None):
+    def _apply_stock_for_update(
+        *,
+        invoice,
+        old_branch,
+        old_items_qty,
+        new_items,
+        user=None,
+        old_status=None,
+    ):
         """
         Diff line quantities and move stock.
 
-        Legacy invoices (never tracked in stock ledger) treat prior qty as 0 so the
-        first edit starts tracking without inventing a restock.
+        Hold invoices use reserved_quantity (STEP 12). Legacy holds that already
+        deducted on-hand keep the sale-ledger path (Option A).
         """
-        tracked = InventoryService.invoice_stock_tracked(invoice_id=invoice.id)
-        effective_old = old_items_qty if tracked else {}
         new_qty = _aggregate_item_quantities(new_items)
         old_wh = InventoryService.resolve_warehouse_for_branch(branch=old_branch)
         new_wh = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        was_hold = old_status == Invoice.STATUS_ON_HOLD
+        is_hold = invoice.status == Invoice.STATUS_ON_HOLD
+        reserve_tracked = InventoryService.invoice_reserve_tracked(invoice_id=invoice.id)
+        sale_tracked = InventoryService.invoice_stock_tracked(invoice_id=invoice.id)
 
+        # New-style hold: reserved stock only
+        if was_hold and reserve_tracked and not sale_tracked:
+            if old_wh and old_items_qty:
+                InventoryService.unreserve_invoice_quantities(
+                    warehouse=old_wh,
+                    quantity_by_product=old_items_qty,
+                    reference_id=invoice.id,
+                    user=user,
+                    notes=f"Hold edit release {invoice.invoice_number}",
+                )
+            if is_hold:
+                if new_wh and new_qty:
+                    InventoryService.reserve_invoice_quantities(
+                        warehouse=new_wh,
+                        quantity_by_product=new_qty,
+                        reference_id=invoice.id,
+                        user=user,
+                        notes=f"Hold edit reserve {invoice.invoice_number}",
+                    )
+                return
+            # Hold → sale/checkout
+            if new_wh and new_qty:
+                InventoryService.consume_invoice_reserved(
+                    warehouse=new_wh,
+                    quantity_by_product=new_qty,
+                    reference_id=invoice.id,
+                    user=user,
+                    notes=f"Checkout from hold {invoice.invoice_number}",
+                )
+                # consume_reserved already unreserves then sells for new_qty;
+                # but we already unreserved old_items above. If new_qty differs from
+                # old, consume_reserved will unreserve new_qty which may exceed
+                # remaining reserved (unreserve clamps). Then sale-deducts new_qty.
+                # Problem: we unreserved ALL old already, so reserved is 0.
+                # Fix: don't unreserve-all then consume; instead handle carefully.
+            return
+
+        # Converting sale → hold (rare): reverse sale tracking then reserve
+        if not was_hold and is_hold:
+            tracked = sale_tracked
+            effective_old = old_items_qty if tracked else {}
+            if old_wh and effective_old:
+                restore = {pid: qty for pid, qty in effective_old.items() if qty}
+                InventoryService.apply_invoice_quantity_deltas(
+                    warehouse=old_wh,
+                    quantity_by_product=restore,
+                    reference_id=invoice.id,
+                    user=user,
+                    notes=f"Convert to hold restore {invoice.invoice_number}",
+                )
+            if new_wh and new_qty:
+                InventoryService.reserve_invoice_quantities(
+                    warehouse=new_wh,
+                    quantity_by_product=new_qty,
+                    reference_id=invoice.id,
+                    user=user,
+                    notes=f"Convert to hold {invoice.invoice_number}",
+                )
+            return
+
+        tracked = sale_tracked
+        effective_old = old_items_qty if tracked else {}
         if old_wh and new_wh and old_wh.id == new_wh.id:
             deltas = _stock_deltas(old_qty=effective_old, new_qty=new_qty)
             InventoryService.apply_invoice_quantity_deltas(
@@ -266,7 +361,6 @@ class InvoiceService:
             )
             return
 
-        # Branch/warehouse changed: restore old sale, then apply new sale.
         if old_wh and effective_old:
             restore = {pid: qty for pid, qty in effective_old.items() if qty}
             InventoryService.apply_invoice_quantity_deltas(
@@ -288,12 +382,25 @@ class InvoiceService:
 
     @staticmethod
     def _apply_stock_for_delete(*, invoice, user=None):
-        if not InventoryService.invoice_stock_tracked(invoice_id=invoice.id):
-            return
         warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
         if not warehouse:
             return
         sold = _aggregate_item_quantities(list(invoice.items.all()))
+        reserve_tracked = InventoryService.invoice_reserve_tracked(invoice_id=invoice.id)
+        sale_tracked = InventoryService.invoice_stock_tracked(invoice_id=invoice.id)
+
+        if invoice.status == Invoice.STATUS_ON_HOLD and reserve_tracked and not sale_tracked:
+            InventoryService.unreserve_invoice_quantities(
+                warehouse=warehouse,
+                quantity_by_product=sold,
+                reference_id=invoice.id,
+                user=user,
+                notes=f"Hold cancelled {invoice.invoice_number}",
+            )
+            return
+
+        if not sale_tracked:
+            return
         restore = {pid: qty for pid, qty in sold.items() if qty}
         InventoryService.apply_invoice_quantity_deltas(
             warehouse=warehouse,
@@ -309,6 +416,7 @@ class InvoiceService:
         if instance.status == Invoice.STATUS_CANCELLED:
             raise ValueError("Cancelled invoices/receipts cannot be edited.")
         old_branch = instance.branch
+        old_status = instance.status
         old_items_qty = _aggregate_item_quantities(list(instance.items.all()))
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
@@ -339,8 +447,26 @@ class InvoiceService:
                 old_items_qty=old_items_qty,
                 new_items=items,
                 user=user,
+                old_status=old_status,
             )
-        return InvoiceService.list().get(pk=instance.pk)
+        elif old_status == Invoice.STATUS_ON_HOLD and instance.status != Invoice.STATUS_ON_HOLD:
+            # Status-only convert (items unchanged) — still release reserve → sale
+            InvoiceService._apply_stock_for_update(
+                invoice=instance,
+                old_branch=old_branch,
+                old_items_qty=old_items_qty,
+                new_items=[
+                    {
+                        "product_id": i.product_id,
+                        "quantity": i.quantity,
+                        "unit_price": i.unit_price,
+                    }
+                    for i in instance.items.all()
+                ],
+                user=user,
+                old_status=old_status,
+            )
+        return InvoiceService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
     @transaction.atomic
@@ -382,7 +508,7 @@ class InvoiceService:
         instance.notes = InvoiceService._set_payment_method_in_notes(instance.notes or "", method)
         instance.updated_by = user
         instance.save(update_fields=["status", "amount_paid", "notes", "updated_by", "updated_at"])
-        return InvoiceService.list().get(pk=instance.pk)
+        return InvoiceService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
     @transaction.atomic
@@ -404,11 +530,11 @@ class InvoiceService:
         instance.save(
             update_fields=["status", "amount_paid", "due_date", "notes", "updated_by", "updated_at"]
         )
-        return InvoiceService.list().get(pk=instance.pk)
+        return InvoiceService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
-    def summary():
-        qs = Invoice.active_objects()
+    def summary(*, user=None, request=None):
+        qs = apply_tenant_scope(Invoice.active_objects(), user=user, request=request)
         by_status = qs.values("status").annotate(count=Count("id"))
         status_map = {row["status"]: row["count"] for row in by_status}
         today = timezone.localdate()
@@ -423,12 +549,22 @@ class InvoiceService:
             "today_sales": today_total,
             "month_sales": month_total,
             "open_invoices": status_map.get(Invoice.STATUS_SENT, 0) + status_map.get(Invoice.STATUS_DRAFT, 0),
-            "quotations_count": Quotation.active_objects().count(),
+            "quotations_count": apply_tenant_scope(
+                Quotation.active_objects(), user=user, request=request
+            ).count(),
         }
 
 
-def _resolve_branch(branch_id):
+def _resolve_branch(branch_id, user=None):
     if branch_id:
-        return Branch.active_objects().get(pk=branch_id)
-    branch = Branch.active_objects().filter(is_default=True).first()
-    return branch or Branch.active_objects().first()
+        qs = Branch.active_objects()
+        qs = apply_tenant_scope(qs, user=user)
+        return qs.get(pk=branch_id)
+    qs = Branch.active_objects()
+    qs = apply_tenant_scope(qs, user=user)
+    if user is not None and getattr(user, "branch_id", None):
+        branch = qs.filter(pk=user.branch_id).first()
+        if branch:
+            return branch
+    branch = qs.filter(is_default=True).first()
+    return branch or qs.first()

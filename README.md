@@ -70,6 +70,8 @@ For dev demo data: `make seed-demo` (admin / admin12345 + sample catalog).
 | `make dev-desktop` | Run Tauri desktop app in dev mode |
 | `make install-desktop` | Install Tauri CLI dependencies |
 | `make test` | Run backend pytest |
+| `make test-critical` | Critical business-path tests only |
+| `make test-isolation` | Tenant isolation tests |
 
 ### Manual setup (without Make)
 

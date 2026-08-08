@@ -6,6 +6,25 @@ from rest_framework.response import Response
 from core.responses.api_response import success_response
 
 
+def paginate_sequence(request, items, serializer_fn):
+    """Paginate an in-memory sequence (e.g. cached reference lists)."""
+    page = max(int(request.query_params.get("page", 1)), 1)
+    page_size = min(int(request.query_params.get("page_size", 20)), 100)
+    total = len(items)
+    total_pages = max(ceil(total / page_size), 1) if total else 1
+    offset = (page - 1) * page_size
+    page_items = items[offset : offset + page_size]
+    return success_response(
+        data={
+            "results": serializer_fn(page_items),
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
+    )
+
+
 def paginate_queryset(request, queryset, serializer_fn):
     page = max(int(request.query_params.get("page", 1)), 1)
     page_size = min(int(request.query_params.get("page_size", 20)), 100)

@@ -1,6 +1,13 @@
 import type { ApiResponse } from "@/types/models";
 import { apiRequest, qs } from "./http";
 
+export interface ReportPack {
+  id: string;
+  title: string;
+  description: string;
+  reports: string[];
+}
+
 export interface ReportResult {
   columns: string[];
   rows: Record<string, string | number>[];
@@ -37,6 +44,8 @@ export interface SalesReportPrintData {
 }
 
 export const reportsApi = {
+  catalog: () => apiRequest<ApiResponse<ReportPack[]>>("/reports/catalog/"),
+
   data: (params: {
     category: string;
     report: string;
@@ -51,4 +60,26 @@ export const reportsApi = {
     apiRequest<ApiResponse<{ month: string; revenue?: number; profit?: number; expenses?: number }[]>>(
       `/reports/chart/?category=${category}`
     ),
+
+  exportCsv: (params: {
+    category: string;
+    report: string;
+    date_from?: string;
+    date_to?: string;
+  }) => {
+    const q = qs(params);
+    const token = localStorage.getItem("access_token");
+    return fetch(`/api/v1/reports/export/${q}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(async (res) => {
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${params.category}-${params.report.replace(/\s+/g, "-").toLowerCase()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  },
 };

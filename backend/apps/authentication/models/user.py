@@ -19,7 +19,18 @@ class Role(BaseModel):
         ("read_only", "Read Only User"),
         ("futsal_staff", "Futsal Staff"),
         ("futsal_manager", "Futsal Manager"),
+        ("pharmacist", "Pharmacist"),
+        ("gym_manager", "Gym Manager"),
+        ("receptionist", "Receptionist"),
+        ("trainer", "Trainer"),
+        ("gym_member", "Gym Member"),
+        ("waiter", "Waiter"),
+        ("kitchen", "Kitchen"),
         ("cafeteria_cashier", "Cafeteria Cashier"),
+        ("front_desk", "Front Desk"),
+        ("housekeeping", "Housekeeping"),
+        ("property_manager", "Property Manager"),
+        ("property_maintenance", "Property Maintenance"),
         ("shop_group_manager", "Multi-Shop Manager"),
     ]
 

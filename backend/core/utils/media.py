@@ -40,6 +40,17 @@ def _save_image(*, uploaded_file, folder: str) -> str:
     ext = Path(uploaded_file.name).suffix.lower().lstrip(".")
     if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
         ext = "jpg"
+
+    try:
+        from PIL import Image
+
+        uploaded_file.seek(0)
+        with Image.open(uploaded_file) as img:
+            img.verify()
+        uploaded_file.seek(0)
+    except Exception as exc:
+        raise ValueError("Invalid or corrupted image file.") from exc
+
     filename = f"{folder}/{uuid.uuid4().hex}.{ext}"
     saved_path = default_storage.save(filename, uploaded_file)
     return default_storage.url(saved_path)

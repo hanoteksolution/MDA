@@ -66,4 +66,34 @@ export const purchasesApi = {
 
   delete: (id: string) =>
     apiRequest<ApiResponse<null>>(`/purchases/${id}/`, { method: "DELETE" }),
+
+  receivePreview: (id: string) =>
+    apiRequest<
+      ApiResponse<{
+        order_number: string;
+        status: string;
+        fully_received: boolean;
+        lines: {
+          product_id: string;
+          product_name: string;
+          quantity_ordered: number;
+          quantity_received: number;
+          quantity_remaining: number;
+          unit_cost: number;
+        }[];
+      }>
+    >(`/purchases/${id}/receive/preview/`),
+
+  receive: (
+    id: string,
+    data: {
+      warehouse_id: string;
+      notes?: string;
+      lines: { product_id: string; quantity_received: number; unit_cost?: number }[];
+    }
+  ) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/purchases/${id}/receive/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

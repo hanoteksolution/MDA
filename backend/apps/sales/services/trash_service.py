@@ -163,7 +163,7 @@ class TrashService:
                 notes=f"Sale restored {inv.invoice_number}",
             )
 
-        return InvoiceService.list().get(pk=inv.pk)
+        return InvoiceService.list(user=user).get(pk=inv.pk)
 
     @staticmethod
     @transaction.atomic

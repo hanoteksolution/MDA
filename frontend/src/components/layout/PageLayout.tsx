@@ -45,7 +45,7 @@ export function PageLayout({
           backLabel={backLabel}
         />
       </motion.div>
-      <motion.div variants={animation.stagger.item} className="space-y-6">
+      <motion.div variants={animation.stagger.item} className="space-y-4 xl:space-y-6">
         {children}
       </motion.div>
     </motion.div>

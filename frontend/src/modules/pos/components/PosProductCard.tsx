@@ -47,9 +47,9 @@ export function PosProductCard({
           onToggleFavorite();
         }}
         className={cn(
-          "absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full xl:h-8 xl:w-8",
+          "absolute right-2 top-2 z-30 flex h-10 w-10 items-center justify-center rounded-full xl:h-9 xl:w-9",
           "border border-white/25 bg-black/25 shadow-lg backdrop-blur-md transition-all duration-200",
-          "hover:scale-105",
+          "hover:scale-105 active:scale-95",
           isFavorite ? "text-rose-400" : "text-white/90 hover:text-rose-300"
         )}
         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -92,6 +92,11 @@ export function PosProductCard({
         <p className="line-clamp-2 text-xs font-semibold leading-snug tracking-tight text-foreground xl:text-[13px]">
           {product.name}
         </p>
+        {product.requires_prescription ? (
+          <Badge variant="warning" className="mt-1 w-fit text-[9px] uppercase tracking-wide">
+            Rx
+          </Badge>
+        ) : null}
 
         <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
           <span className="truncate text-sm font-bold tabular-nums tracking-tight text-primary xl:text-base">
@@ -101,7 +106,7 @@ export function PosProductCard({
             type="button"
             size="sm"
             className={cn(
-              "h-7 shrink-0 gap-0.5 rounded-lg px-2 text-[10px] font-semibold shadow-sm xl:h-8 xl:rounded-xl xl:px-2.5 xl:text-[11px]",
+              "h-10 min-w-10 shrink-0 gap-0.5 rounded-xl px-2.5 text-[11px] font-semibold shadow-sm active:scale-95 xl:h-9 xl:rounded-xl xl:px-2.5",
               outOfStock && "opacity-60"
             )}
             disabled={outOfStock}

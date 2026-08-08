@@ -17,6 +17,10 @@ import {
 import { getApiBase } from "@/config/api";
 import { isTauri } from "@/utils/platform";
 import { cn } from "@/utils/cn";
+import {
+  resolveTenantHost,
+  type ResolvedTenantHost,
+} from "@/config/tenantHost";
 
 const REMEMBER_KEY = "mda_remember_username";
 
@@ -52,7 +56,26 @@ export function LoginPage() {
   const { login, isLoading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const sessionExpired = searchParams.get("expired") === "1";
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [hostTenant, setHostTenant] = useState<ResolvedTenantHost | null>(null);
+  // keep searchParams usage
+  useEffect(() => {
+    setSessionExpired(searchParams.get("expired") === "1");
+  }, [searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveTenantHost()
+      .then((resolved) => {
+        if (!cancelled) setHostTenant(resolved);
+      })
+      .catch(() => {
+        /* ignore branding errors */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +179,24 @@ export function LoginPage() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Left — 60% branding */}
       <div className="lg:w-[60%] order-2 lg:order-1">
-        <LoginBrandingPanel />
+        <LoginBrandingPanel
+          productName={hostTenant?.tenant?.name || undefined}
+          productTagline={
+            hostTenant?.tenant
+              ? hostTenant.tenant.business_type_name || "Business portal"
+              : undefined
+          }
+          headline={
+            hostTenant?.tenant
+              ? `Sign in to ${hostTenant.tenant.name}`
+              : undefined
+          }
+          description={
+            hostTenant?.tenant
+              ? `Secure access for ${hostTenant.tenant.name} staff. Your session is bound to this business domain.`
+              : undefined
+          }
+        />
       </div>
 
       {/* Right — 40% form */}
@@ -178,7 +218,9 @@ export function LoginPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600">
               <span className="text-base font-black text-white">M</span>
             </div>
-            <span className="text-lg font-bold text-foreground">MDA Retail ERP</span>
+            <span className="text-lg font-bold text-foreground">
+              {hostTenant?.tenant?.name || "MDA Retail ERP"}
+            </span>
           </div>
 
           <div className="mb-8">
@@ -196,7 +238,9 @@ export function LoginPage() {
               transition={{ delay: 0.15 }}
               className="mt-2 text-muted-foreground"
             >
-              {isTauri() && shopConnectionReady()
+              {hostTenant?.tenant
+                ? `Sign in to ${hostTenant.tenant.name}`
+                : isTauri() && shopConnectionReady()
                 ? "Sign in with your cloud shop account. This PC will work offline after the first login."
                 : "Sign in to access your enterprise dashboard"}
             </motion.p>
@@ -355,6 +399,15 @@ export function LoginPage() {
                   )}
                 </Button>
               </motion.div>
+
+              {!isTauri() && (
+                <motion.p variants={formItem} className="text-center text-sm text-muted-foreground">
+                  New shop?{" "}
+                  <Link to="/onboard" className="font-medium text-primary hover:underline">
+                    Start free onboarding
+                  </Link>
+                </motion.p>
+              )}
             </motion.form>
           </motion.div>
 

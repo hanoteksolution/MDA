@@ -1,4 +1,18 @@
-# MDA ERP — production stack (VPS: also use docker-compose.vps.yml)
+# MDA ERP — production stack
+# Postgres + Redis + API (Gunicorn) + Celery worker/beat + Nginx (SPA + reverse proxy)
+#
+# Usage:
+#   cp backend/.env.cloud.example backend/.env.cloud   # edit secrets
+#   docker compose build
+#
+# Existing VPS (Hostinger) — ALWAYS include volumes overlay so data stays on
+# docker_mda_pgdata / docker_mda_media (do not use bare `docker compose up`):
+#   docker compose -f docker-compose.yml -f docker-compose.vps.yml -f docker-compose.volumes.yml up -d
+#   ./scripts/smoke_deploy.sh http://127.0.0.1:8010
+#
+# Fresh staging/local (new empty volumes OK):
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
 name: mda
 
 services:
@@ -14,21 +28,126 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
     volumes:
       - mda_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - mda
+
+  redis:
+    image: redis:7-alpine
+    container_name: mda_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mda
 
   api:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile
+    image: mda-api
     container_name: mda_api
     restart: unless-stopped
     env_file:
       - ./backend/.env.cloud
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - mda_media:/app/media
+    expose:
+      - "8000"
+    networks:
+      - mda
+
+  celery:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: mda-api
+    container_name: mda_celery
+    restart: unless-stopped
+    command: celery -A config.celery worker -l info --concurrency=2
+    env_file:
+      - ./backend/.env.cloud
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    networks:
+      - mda
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: mda-api
+    container_name: mda_celery_beat
+    restart: unless-stopped
+    command: celery -A config.celery beat -l info
+    env_file:
+      - ./backend/.env.cloud
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    networks:
+      - mda
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        VITE_TENANT_BASE_DOMAIN: ${VITE_TENANT_BASE_DOMAIN:-erp.safaritechno.com}
+    image: mda-web
+    container_name: mda_web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8010}:80"
+    volumes:
+      - mda_media:/var/www/media:ro
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - mda
+
+networks:
+  mda:
+    driver: bridge
 
 volumes:
   mda_pgdata:

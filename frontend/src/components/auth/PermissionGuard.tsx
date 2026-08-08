@@ -1,23 +1,28 @@
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { useModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 
 interface PermissionGuardProps {
   children: React.ReactNode;
   /** Single permission or any-of list */
   permission: string | string[];
+  /** TenantModule code; also requires dependencies (usable set from /me). */
+  module?: string;
   fallback?: string;
 }
 
 export function PermissionGuard({
   children,
   permission,
+  module,
   fallback = "/dashboard",
 }: PermissionGuardProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission } = usePermissions();
+  const { hasModule } = useModules();
 
   // Refresh / cold start: token exists but /me has not returned yet — do not redirect.
   if (isAuthenticated && (isLoading || !user)) {
@@ -33,6 +38,9 @@ export function PermissionGuard({
     : hasPermission(permission);
 
   if (!allowed) {
+    return <Navigate to={fallback} replace />;
+  }
+  if (module && !hasModule(module)) {
     return <Navigate to={fallback} replace />;
   }
 

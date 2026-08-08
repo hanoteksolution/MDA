@@ -4,6 +4,8 @@ from apps.inventory.models.stock import (
     InventoryAdjustmentItem,
     InventoryTransaction,
     StockMovement,
+    StockTransfer,
+    StockTransferLine,
     Warehouse,
 )
 
@@ -14,4 +16,6 @@ __all__ = [
     "InventoryTransaction",
     "InventoryAdjustment",
     "InventoryAdjustmentItem",
+    "StockTransfer",
+    "StockTransferLine",
 ]

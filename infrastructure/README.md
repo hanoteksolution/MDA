@@ -7,7 +7,7 @@ Deployment and operations configuration.
 - `docker/` — Dockerfiles and Compose stacks (dev, prod)
 - `nginx/` — Reverse proxy configuration
 - `scripts/` — Backup and restore (`backup.py`, `restore.py`); see [GOOGLE_DRIVE_BACKUP.md](scripts/GOOGLE_DRIVE_BACKUP.md)
-- `monitoring/` — Observability setup (planned)
+- `monitoring/` — Prometheus/Grafana overlay, health cron docs ([README.md](monitoring/README.md))
 
 ## Requirements (from SYSTEM_ARCHITECTURE.md)
 

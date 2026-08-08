@@ -24,7 +24,26 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
 };
 
-export function LoginBrandingPanel() {
+export function LoginBrandingPanel({
+  productName,
+  productTagline,
+  headline,
+  description,
+}: {
+  productName?: string;
+  productTagline?: string;
+  headline?: string;
+  description?: string;
+} = {}) {
+  const name = productName || "MDA Retail";
+  const tagline = productTagline || "Enterprise ERP & POS";
+  const title =
+    headline ||
+    undefined;
+  const body =
+    description ||
+    "POS, inventory, purchases, finance, and analytics — built for multi-branch retailers who demand speed, reliability, and control.";
+
   return (
     <div className="relative flex flex-col justify-between overflow-hidden bg-secondary px-8 py-10 lg:px-14 lg:py-12 xl:px-16">
       {/* Background layers */}
@@ -51,28 +70,33 @@ export function LoginBrandingPanel() {
         <motion.div variants={item} className="mb-8 lg:mb-10">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/30">
-              <span className="text-lg font-black text-white">M</span>
+              <span className="text-lg font-black text-white">{name.slice(0, 1).toUpperCase()}</span>
             </div>
             <div>
               <p className="text-sm font-semibold tracking-widest text-emerald-400 uppercase">
-                MDA Retail
+                {name}
               </p>
-              <p className="text-xs text-white/50">Enterprise ERP & POS</p>
+              <p className="text-xs text-white/50">{tagline}</p>
             </div>
           </div>
         </motion.div>
 
         <motion.div variants={item} className="mb-6 lg:mb-8">
           <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl xl:text-[3.25rem] xl:leading-[1.1]">
-            Run your entire{" "}
-            <span className="text-gradient from-emerald-300 to-emerald-500 bg-gradient-to-r bg-clip-text text-transparent">
-              retail operation
-            </span>{" "}
-            from one platform.
+            {title ? (
+              title
+            ) : (
+              <>
+                Run your entire{" "}
+                <span className="text-gradient from-emerald-300 to-emerald-500 bg-gradient-to-r bg-clip-text text-transparent">
+                  retail operation
+                </span>{" "}
+                from one platform.
+              </>
+            )}
           </h1>
           <p className="mt-4 max-w-lg text-base leading-relaxed text-white/60 lg:text-lg">
-            POS, inventory, purchases, finance, and analytics — built for
-            multi-branch retailers who demand speed, reliability, and control.
+            {body}
           </p>
         </motion.div>
 

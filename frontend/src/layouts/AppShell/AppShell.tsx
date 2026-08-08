@@ -1,7 +1,9 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { PageMetaProvider } from "@/contexts/PageMetaContext";
+import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { SubscriptionAlertDialog } from "@/components/platform/SubscriptionAlertDialog";
+import { SubscriptionPaywallBanner } from "@/components/platform/SubscriptionPaywallBanner";
 import { CloudSyncManager } from "@/components/desktop/CloudSyncManager";
 import { Sidebar } from "@/layouts/Sidebar/Sidebar";
 import { Header } from "@/layouts/Header/Header";
@@ -33,10 +35,12 @@ export function AppShell() {
     <PageMetaProvider>
       <SubscriptionAlertDialog />
       <CloudSyncManager />
+      <NotificationDrawer />
       <div className="flex h-dvh max-h-dvh overflow-hidden bg-background">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header compact={isPos} />
+          <SubscriptionPaywallBanner />
           <main
             className={cn(
               "min-h-0 flex-1 overflow-y-auto scrollbar-thin",

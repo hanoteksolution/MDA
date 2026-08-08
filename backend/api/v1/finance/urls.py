@@ -1,21 +1,117 @@
 from django.urls import path
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
 
-from core.responses.api_response import success_response
-from core.services.analytics_service import AnalyticsService
-from permissions.base import HasPermission
-
-
-class FinanceSummaryView(APIView):
-    permission_classes = [IsAuthenticated, HasPermission("finance.view")]
-
-    def get(self, request):
-        period = request.query_params.get("period", "month")
-        branch_id = getattr(request.user.branch, "id", None)
-        return success_response(data=AnalyticsService.get_finance_summary(branch_id=branch_id, period=period))
-
+from api.v1.finance.views import (
+    AccountListView,
+    AccountingBackfillView,
+    AccountingCutoverView,
+    AccountingEquationView,
+    AccountingHealthView,
+    BalanceSheetReportView,
+    BankBookView,
+    CashFlowReportView,
+    BusinessUnitListCreateView,
+    CostCenterListCreateView,
+    CustomerReceiptView,
+    FinanceSummaryView,
+    GeneralLedgerReportView,
+    JournalDiscardView,
+    JournalListCreateView,
+    JournalPostView,
+    PayablesAgingView,
+    PeriodActionView,
+    PeriodListView,
+    ProfitLossReportView,
+    ReceivablesAgingView,
+    ReconciliationAutoMatchView,
+    ReconciliationCompleteView,
+    ReconciliationDetailView,
+    ReconciliationLineView,
+    ReconciliationListCreateView,
+    ReconciliationMatchView,
+    ReconciliationUnmatchView,
+    SupplierPaymentView,
+    TaxReportView,
+    TrialBalanceReportView,
+)
 
 urlpatterns = [
     path("summary/", FinanceSummaryView.as_view(), name="finance-summary"),
+    path("accounts/", AccountListView.as_view(), name="finance-accounts"),
+    path("cost-centers/", CostCenterListCreateView.as_view(), name="finance-cost-centers"),
+    path(
+        "business-units/",
+        BusinessUnitListCreateView.as_view(),
+        name="finance-business-units",
+    ),
+    path("journal/", JournalListCreateView.as_view(), name="finance-journal"),
+    path(
+        "journal/<uuid:entry_id>/post/",
+        JournalPostView.as_view(),
+        name="finance-journal-post",
+    ),
+    path(
+        "journal/<uuid:entry_id>/discard/",
+        JournalDiscardView.as_view(),
+        name="finance-journal-discard",
+    ),
+    path("periods/", PeriodListView.as_view(), name="finance-periods"),
+    path(
+        "periods/<uuid:period_id>/<str:action>/",
+        PeriodActionView.as_view(),
+        name="finance-period-action",
+    ),
+    path("vouchers/receipts/", CustomerReceiptView.as_view(), name="finance-receipt-voucher"),
+    path(
+        "vouchers/supplier-payments/",
+        SupplierPaymentView.as_view(),
+        name="finance-supplier-payment-voucher",
+    ),
+    path("bank-book/", BankBookView.as_view(), name="finance-bank-book"),
+    path(
+        "reconciliations/",
+        ReconciliationListCreateView.as_view(),
+        name="finance-reconciliations",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/",
+        ReconciliationDetailView.as_view(),
+        name="finance-reconciliation-detail",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/lines/",
+        ReconciliationLineView.as_view(),
+        name="finance-reconciliation-lines",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/match/",
+        ReconciliationMatchView.as_view(),
+        name="finance-reconciliation-match",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/unmatch/",
+        ReconciliationUnmatchView.as_view(),
+        name="finance-reconciliation-unmatch",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/auto-match/",
+        ReconciliationAutoMatchView.as_view(),
+        name="finance-reconciliation-auto-match",
+    ),
+    path(
+        "reconciliations/<uuid:reconciliation_id>/complete/",
+        ReconciliationCompleteView.as_view(),
+        name="finance-reconciliation-complete",
+    ),
+    path("reports/trial-balance/", TrialBalanceReportView.as_view(), name="finance-trial-balance"),
+    path("reports/profit-loss/", ProfitLossReportView.as_view(), name="finance-profit-loss"),
+    path("reports/balance-sheet/", BalanceSheetReportView.as_view(), name="finance-balance-sheet"),
+    path("reports/cash-flow/", CashFlowReportView.as_view(), name="finance-cash-flow"),
+    path("reports/general-ledger/", GeneralLedgerReportView.as_view(), name="finance-general-ledger"),
+    path("reports/ar-aging/", ReceivablesAgingView.as_view(), name="finance-ar-aging"),
+    path("reports/ap-aging/", PayablesAgingView.as_view(), name="finance-ap-aging"),
+    path("reports/tax/", TaxReportView.as_view(), name="finance-tax-report"),
+    path("health/", AccountingHealthView.as_view(), name="finance-health"),
+    path("equation/", AccountingEquationView.as_view(), name="finance-equation"),
+    path("backfill/", AccountingBackfillView.as_view(), name="finance-backfill"),
+    path("cutover/", AccountingCutoverView.as_view(), name="finance-cutover"),
 ]

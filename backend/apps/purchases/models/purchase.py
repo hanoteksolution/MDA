@@ -4,9 +4,10 @@ from django.db import models
 from django.utils import timezone
 
 from core.models.base import BaseModel
+from core.models.tenant import TenantScopedModel
 
 
-class PurchaseOrder(BaseModel):
+class PurchaseOrder(TenantScopedModel, BaseModel):
     STATUS_DRAFT = "draft"
     STATUS_ORDERED = "ordered"
     STATUS_RECEIVED = "received"

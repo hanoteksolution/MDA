@@ -40,6 +40,8 @@ import {
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatCurrency } from "@/utils/cn";
 import type { DashboardKPIs } from "@/types/models";
+import { DashboardModuleCards } from "@/components/dashboard/DashboardModuleCards";
+import { DashboardFinanceStrip } from "@/components/dashboard/DashboardFinanceStrip";
 
 const topProductColumns: Column<DashboardTopProduct>[] = [
   { key: "name", header: "Product", cell: (r) => <span className="font-medium">{r.name}</span>, exportValue: (r) => r.name },
@@ -166,6 +168,10 @@ export function DashboardPage() {
         <KpiCard index={3} accent="warning" title="Expenses" value={formatCurrency(displayKpis.expenses)} icon={<AlertTriangle className="h-5 w-5" />} trendUp={false} loading={loading} />
         <KpiCard index={4} accent="primary" title="Inventory Value" value={formatCurrency(displayKpis.inventory_value)} icon={<Package className="h-5 w-5" />} loading={loading} />
       </KpiGrid>
+
+      <DashboardFinanceStrip period={period} />
+
+      <DashboardModuleCards />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <ChartCard index={0} title="Sales Trend" description="Monthly sales from invoices" className="xl:col-span-2" height={300}>

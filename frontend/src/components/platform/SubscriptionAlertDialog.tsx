@@ -81,6 +81,12 @@ export function SubscriptionAlertDialog() {
   }, [load]);
 
   useEffect(() => {
+    const openAlert = () => setOpen(true);
+    window.addEventListener("mda:open-subscription-alert", openAlert);
+    return () => window.removeEventListener("mda:open-subscription-alert", openAlert);
+  }, []);
+
+  useEffect(() => {
     const onSync = () => {
       void load();
     };

@@ -5,19 +5,23 @@ from api.v1.sync.views import (
     ShopPullSyncView,
     ShopPushSyncView,
     ShopReportPaymentView,
+    ShopVerifySyncView,
     SubscriptionStatusView,
     SyncConfigView,
     SyncPaymentStatusView,
+    SyncQueueView,
     SyncReportPaymentView,
     SyncRunView,
 )
 
 urlpatterns = [
     path("config/", SyncConfigView.as_view(), name="sync-config"),
+    path("queue/", SyncQueueView.as_view(), name="sync-queue"),
     path("run/", SyncRunView.as_view(), name="sync-run"),
     path("subscription-status/", SubscriptionStatusView.as_view(), name="sync-subscription-status"),
     path("report-payment/", SyncReportPaymentView.as_view(), name="sync-report-payment"),
     path("payment-status/", SyncPaymentStatusView.as_view(), name="sync-payment-status"),
+    path("shop-verify/", ShopVerifySyncView.as_view(), name="sync-shop-verify"),
     path("shop-push/", ShopPushSyncView.as_view(), name="sync-shop-push"),
     path("shop-pull/", ShopPullSyncView.as_view(), name="sync-shop-pull"),
     path("shop-report-payment/", ShopReportPaymentView.as_view(), name="sync-shop-report-payment"),

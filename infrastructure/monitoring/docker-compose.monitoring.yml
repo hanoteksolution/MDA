@@ -1,0 +1,43 @@
+# MDA ERP — monitoring & alerting (STEP 34)
+#
+# Optional overlay — does not start with the main app stack by default.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f infrastructure/monitoring/docker-compose.monitoring.yml up -d
+#
+# Prometheus scrapes /api/v1/health/* via the web proxy on port 8010.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: mda_prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - mda_prom_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: mda_grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - mda_grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  mda_prom_data:
+  mda_grafana_data:

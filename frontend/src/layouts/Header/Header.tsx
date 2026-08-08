@@ -1,8 +1,10 @@
-import { Bell, Moon, Sun, Search, ChevronDown } from "lucide-react";
+import { Moon, Sun, Search, ChevronDown } from "lucide-react";
+import { NotificationBellButton } from "@/components/notifications/NotificationDrawer";
+import { SyncQueueBadge } from "@/components/desktop/SyncQueueBadge";
+import { ModuleSwitcher } from "@/components/navigation/ModuleSwitcher";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/cn";
 
 interface HeaderProps {
@@ -21,6 +23,8 @@ export function Header({ compact }: HeaderProps) {
         compact ? "h-12 gap-3 px-3 xl:h-14 xl:gap-4 xl:px-4" : "h-14 gap-4 px-4 xl:h-[72px] xl:gap-6 xl:px-6"
       )}
     >
+      <ModuleSwitcher compact={compact} />
+
       <div className={cn("relative min-w-0 flex-1", compact ? "max-w-md" : "max-w-xl")}>
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -50,15 +54,9 @@ export function Header({ compact }: HeaderProps) {
           </button>
         )}
 
-        <button
-          type="button"
-          className="relative rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          <Badge className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center p-0 text-[10px]">
-            3
-          </Badge>
-        </button>
+        <SyncQueueBadge compact={compact} />
+
+        <NotificationBellButton />
 
         <button
           type="button"

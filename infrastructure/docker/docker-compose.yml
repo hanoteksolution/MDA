@@ -1,3 +1,11 @@
+# Docker Compose — see repository root
+#
+# Production stack lives at ../../docker-compose.yml
+#
+#   docker compose -f ../../docker-compose.yml -f ../../docker-compose.staging.yml up -d --build
+#
+# Legacy minimal compose (API + DB only) — prefer root compose files.
+
 services:
   db:
     image: postgres:16-alpine
@@ -20,6 +28,7 @@ services:
       - ../../backend/.env.cloud
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - db
     volumes:

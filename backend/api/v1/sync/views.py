@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from apps.platform.models import Tenant
 from apps.platform.services.sync_service import CloudShopSyncService, ShopSyncService
+from apps.platform.services.sync_finance_policy import SyncFinancePolicy
+from apps.platform.services.sync_outbox_service import SyncOutboxService
 from core.responses.api_response import error_response, success_response
 
 
@@ -85,6 +87,34 @@ class SubscriptionStatusView(APIView):
         return success_response(data=data)
 
 
+class SyncQueueView(APIView):
+    """Outbox queue status for offline POS sync UX."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        pending = [
+            {
+                "id": str(row.id),
+                "resource_type": row.resource_type,
+                "resource_id": row.resource_id,
+                "idempotency_key": row.idempotency_key,
+                "status": row.status,
+                "attempts": row.attempts,
+                "last_error": row.last_error,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in SyncOutboxService.list_pending(limit=20)
+        ]
+        return success_response(
+            data={
+                "summary": SyncOutboxService.summary(),
+                "pending": pending,
+                "finance_rules": SyncFinancePolicy.public_rules(),
+            }
+        )
+
+
 class SyncReportPaymentView(APIView):
     """Desktop shop reports Waafi/EVC payment → cloud tracking + auto-renew."""
 
@@ -159,6 +189,34 @@ class ShopPaymentStatusView(APIView):
         return success_response(data=data)
 
 
+class ShopVerifySyncView(APIView):
+    """Prove X-Tenant-Slug + X-Sync-Secret before desktop connection save."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return self._verify(request)
+
+    def post(self, request):
+        return self._verify(request)
+
+    def _verify(self, request):
+        slug = request.headers.get("X-Tenant-Slug", "").strip()
+        secret = request.headers.get("X-Sync-Secret", "").strip()
+        if not slug or not secret:
+            return error_response(
+                message="Missing sync credentials.", status=status.HTTP_401_UNAUTHORIZED
+            )
+        try:
+            data = CloudShopSyncService.verify(tenant_slug=slug, sync_secret=secret)
+        except Tenant.DoesNotExist:
+            return error_response(
+                message="Invalid shop sync credentials.", status=status.HTTP_403_FORBIDDEN
+            )
+        return success_response(data=data, message="Sync credentials verified.")
+
+
 class ShopPushSyncView(APIView):
     """Receive shop data from offline PCs (no user JWT — uses tenant slug + sync secret)."""
 
@@ -176,6 +234,8 @@ class ShopPushSyncView(APIView):
                 sync_secret=secret,
                 payload=request.data,
             )
+        except Tenant.DoesNotExist:
+            return error_response(message="Invalid shop sync credentials.", status=status.HTTP_403_FORBIDDEN)
         except Exception:
             return error_response(message="Invalid shop sync credentials.", status=status.HTTP_403_FORBIDDEN)
         apply_stats = (snap.payload or {}).get("apply_stats", {})
@@ -185,6 +245,7 @@ class ShopPushSyncView(APIView):
                 "synced_at": snap.synced_at.isoformat(),
                 "invoice_count": len(snap.invoices),
                 "applied": apply_stats,
+                "idempotent_replays": apply_stats.get("idempotent_replays", 0),
             },
             message="Shop data received and applied.",
         )
@@ -208,6 +269,8 @@ class ShopPullSyncView(APIView):
                 sync_secret=secret,
                 since=since,
             )
+        except Tenant.DoesNotExist:
+            return error_response(message="Invalid shop sync credentials.", status=status.HTTP_403_FORBIDDEN)
         except Exception:
             return error_response(message="Invalid shop sync credentials.", status=status.HTTP_403_FORBIDDEN)
         return success_response(data=data, message="Catalog bundle ready.")

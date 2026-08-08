@@ -139,6 +139,15 @@ class UserService:
     @staticmethod
     @transaction.atomic
     def create_user(*, data, created_by=None):
+        from apps.platform.services.entitlement_service import EntitlementError, EntitlementService
+        from apps.platform.services.platform_service import PlatformService
+
+        tenant = data.get("tenant") or PlatformService.resolve_user_tenant(created_by)
+        try:
+            EntitlementService.assert_can_add_user(tenant=tenant, user=created_by)
+        except EntitlementError as exc:
+            raise ValueError(str(exc)) from exc
+
         password = data.pop("password")
         role_id = data.pop("role_id", None)
         branch_id = data.pop("branch_id", None)

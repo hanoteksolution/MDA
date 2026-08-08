@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.inventory.services.inventory_service import InventoryService
 from apps.purchases.models import PurchaseOrder
-from apps.sales.models import Invoice, InvoiceItem
+from apps.sales.models import Expense, Invoice, InvoiceItem
 
 
 class AnalyticsService:
@@ -61,9 +61,14 @@ class AnalyticsService:
         )
         total_sales = float(inv_agg["total_sales"] or 0)
         cash_collected = float(inv_agg["cash_collected"] or 0)
-        # Invoiced revenue drives P&L; cash collected is tracked separately.
         revenue = total_sales
-        expenses = float(po_qs.aggregate(t=Sum("total_amount"))["t"] or 0)
+        purchase_expenses = float(po_qs.aggregate(t=Sum("total_amount"))["t"] or 0)
+        period_start = AnalyticsService._period_start(period)
+        op_qs = Expense.active_objects().filter(expense_date__gte=period_start)
+        if branch_id:
+            op_qs = op_qs.filter(branch_id=branch_id)
+        operating_expenses = float(op_qs.aggregate(t=Sum("amount"))["t"] or 0)
+        expenses = purchase_expenses + operating_expenses
         profit = revenue - expenses
         summary = InventoryService.get_summary(branch_id=branch_id)
         return {
@@ -72,6 +77,8 @@ class AnalyticsService:
             "cash_collected": cash_collected,
             "profit": profit,
             "expenses": expenses,
+            "purchase_expenses": purchase_expenses,
+            "operating_expenses": operating_expenses,
             "inventory_value": summary["inventory_value"],
             "low_stock_count": summary["low_stock_count"],
             "out_of_stock_count": summary["out_of_stock_count"],
@@ -198,7 +205,13 @@ class AnalyticsService:
         }
 
     @staticmethod
-    def get_finance_summary(*, branch_id=None, period="month"):
+    def get_finance_summary(*, branch_id=None, period="month", user=None, request=None):
+        from apps.finance.services.summary_service import FinanceSummaryService
+
+        if user is not None or request is not None:
+            return FinanceSummaryService.get_summary(
+                branch_id=branch_id, period=period, user=user, request=request
+            )
         kpis = AnalyticsService.get_kpis(branch_id=branch_id, period=period)
         inv_qs = AnalyticsService._invoice_qs(branch_id=branch_id, period=period).order_by("-issue_date")[:5]
         po_qs = AnalyticsService._purchase_qs(branch_id=branch_id, period=period).order_by("-order_date")[:5]
@@ -262,7 +275,7 @@ class AnalyticsService:
         }
 
     @staticmethod
-    def get_report(*, category: str, report: str, branch_id=None, date_from=None, date_to=None):
+    def get_report(*, category: str, report: str, branch_id=None, date_from=None, date_to=None, user=None, request=None):
         if category == "sales":
             if report == "Daily Sales":
                 rows = []
@@ -441,7 +454,9 @@ class AnalyticsService:
                     ],
                 }
         if category == "finance":
-            fin = AnalyticsService.get_finance_summary(branch_id=branch_id, period="year")
+            fin = AnalyticsService.get_finance_summary(
+                branch_id=branch_id, period="year", user=user, request=request
+            )
             if report == "Profit & Loss":
                 return {
                     "columns": ["line", "amount"],

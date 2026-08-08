@@ -5,7 +5,6 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.suppliers.models import Supplier
 from apps.suppliers.serializers.supplier_serializers import serialize_supplier
 from apps.suppliers.services.supplier_service import SupplierService
 from core.responses.api_response import error_response, success_response
@@ -31,6 +30,7 @@ class SupplierListCreateView(APIView):
         qs = SupplierService.list(
             search=request.query_params.get("search"),
             is_active=is_active == "true" if is_active else None,
+            user=request.user,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_supplier(s) for s in items])
 
@@ -52,20 +52,20 @@ class SupplierDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("suppliers.view")]
 
     def get(self, request, pk):
-        supplier = SupplierService.list().get(pk=pk)
+        supplier = SupplierService.list(user=request.user).get(pk=pk)
         return success_response(data=serialize_supplier(supplier))
 
     def put(self, request, pk):
         if not request.user.has_permission("suppliers.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        supplier = SupplierService.list().get(pk=pk)
+        supplier = SupplierService.list(user=request.user).get(pk=pk)
         supplier = SupplierService.update(instance=supplier, data=_parse_supplier_data(request.data), user=request.user)
         return success_response(data=serialize_supplier(supplier), message="Supplier updated.")
 
     def delete(self, request, pk):
         if not request.user.has_permission("suppliers.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        supplier = SupplierService.list().get(pk=pk)
+        supplier = SupplierService.list(user=request.user).get(pk=pk)
         supplier.soft_delete(user=request.user)
         return success_response(message="Supplier deleted.")
 
@@ -74,7 +74,7 @@ class SupplierSummaryView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("suppliers.view")]
 
     def get(self, request):
-        qs = Supplier.active_objects()
+        qs = SupplierService.list(user=request.user)
         return success_response(
             data={
                 "total": qs.count(),

@@ -5,12 +5,14 @@ from django.db.models import Count, Q, Sum
 
 from apps.purchases.models import PurchaseOrder, PurchaseOrderItem
 from apps.settings_app.models import Branch
+from core.tenancy import apply_tenant_scope, stamp_tenant_id
 
 
 class PurchaseOrderService:
     @staticmethod
-    def list(*, search=None, status=None, supplier_id=None, branch_id=None):
+    def list(*, search=None, status=None, supplier_id=None, branch_id=None, user=None, request=None):
         qs = PurchaseOrder.active_objects().select_related("supplier", "branch", "ordered_by").prefetch_related("items__product")
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if search:
             qs = qs.filter(
                 Q(order_number__icontains=search) | Q(supplier__company_name__icontains=search)
@@ -42,17 +44,21 @@ class PurchaseOrderService:
     def create(*, data, items, user=None):
         branch_id = data.pop("branch_id", None)
         supplier_id = data.pop("supplier_id")
-        branch = Branch.active_objects().get(pk=branch_id) if branch_id else Branch.active_objects().filter(is_default=True).first()
+        branch_qs = apply_tenant_scope(Branch.active_objects(), user=user)
+        branch = branch_qs.get(pk=branch_id) if branch_id else branch_qs.filter(is_default=True).first()
         if not branch:
-            branch = Branch.active_objects().first()
+            branch = branch_qs.first()
 
+        payload = stamp_tenant_id(dict(data), user=user)
+        if not payload.get("tenant_id") and getattr(branch, "tenant_id", None):
+            payload["tenant_id"] = branch.tenant_id
         order = PurchaseOrder.objects.create(
             order_number=PurchaseOrderService._next_order_number(branch=branch),
             supplier_id=supplier_id,
             branch=branch,
             ordered_by=user,
             created_by=user,
-            **data,
+            **payload,
         )
         for item in items or []:
             PurchaseOrderItem.objects.create(
@@ -63,7 +69,7 @@ class PurchaseOrderService:
                 created_by=user,
             )
         PurchaseOrderService._recalculate_totals(order=order)
-        return PurchaseOrder.active_objects().select_related("supplier", "branch").prefetch_related("items__product").get(pk=order.pk)
+        return PurchaseOrderService.list(user=user).get(pk=order.pk)
 
     @staticmethod
     @transaction.atomic
@@ -92,11 +98,11 @@ class PurchaseOrderService:
                 )
             PurchaseOrderService._recalculate_totals(order=instance)
 
-        return PurchaseOrder.active_objects().select_related("supplier", "branch").prefetch_related("items__product").get(pk=instance.pk)
+        return PurchaseOrderService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
-    def summary():
-        qs = PurchaseOrder.active_objects()
+    def summary(*, user=None, request=None):
+        qs = apply_tenant_scope(PurchaseOrder.active_objects(), user=user, request=request)
         by_status = qs.values("status").annotate(count=Count("id"))
         status_map = {row["status"]: row["count"] for row in by_status}
         return {

@@ -65,6 +65,8 @@ interface PosCartPanelProps {
   onOpenCheckout: () => void;
   onHold: () => void;
   onViewWaiterSales?: () => void;
+  restaurantLabel?: string | null;
+  hotelLabel?: string | null;
 }
 
 export function PosCartPanel({
@@ -99,6 +101,8 @@ export function PosCartPanel({
   onOpenCheckout,
   onHold,
   onViewWaiterSales,
+  restaurantLabel,
+  hotelLabel,
 }: PosCartPanelProps) {
   const hasCart = cart.length > 0;
   const hasWaiter = Boolean(waiterId);
@@ -174,6 +178,23 @@ export function PosCartPanel({
           {itemCount} {itemCount === 1 ? "item" : "items"}
         </Badge>
       </div>
+
+      {restaurantLabel ? (
+        <div className="relative shrink-0 border-b border-border/50 px-3 py-1.5 xl:px-4">
+          <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+            <span className="font-medium">Table order</span>
+            <span className="truncate text-muted-foreground">{restaurantLabel}</span>
+          </div>
+        </div>
+      ) : null}
+      {hotelLabel ? (
+        <div className="relative shrink-0 border-b border-border/50 px-3 py-1.5 xl:px-4">
+          <div className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-950 dark:text-sky-100">
+            <span className="font-medium">Charge room</span>
+            <span className="truncate text-muted-foreground">{hotelLabel}</span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative shrink-0 space-y-1 border-b border-border/50 px-3 py-1.5 xl:space-y-1.5 xl:px-4 xl:py-2">
         <div className="flex items-center gap-2">
@@ -318,7 +339,7 @@ export function PosCartPanel({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 rounded-none p-0 hover:bg-muted/60 xl:h-8 xl:w-8"
+                    className="h-10 w-10 rounded-none p-0 hover:bg-muted/60 active:scale-95 xl:h-8 xl:w-8"
                     onClick={() => onUpdateQty(item.id, -1)}
                   >
                     <Minus className="h-3.5 w-3.5" />
@@ -327,7 +348,7 @@ export function PosCartPanel({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 rounded-none p-0 hover:bg-muted/60 xl:h-8 xl:w-8"
+                    className="h-10 w-10 rounded-none p-0 hover:bg-muted/60 active:scale-95 xl:h-8 xl:w-8"
                     onClick={() => onUpdateQty(item.id, 1)}
                   >
                     <Plus className="h-3.5 w-3.5" />

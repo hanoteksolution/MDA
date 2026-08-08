@@ -12,7 +12,8 @@ from django.utils import timezone
 from apps.authentication.models import Role, User
 from apps.customers.models import Customer
 from apps.inventory.models import Inventory, Warehouse
-from apps.platform.models import Tenant
+from apps.platform.models import SyncIngestReceipt, Tenant
+from apps.platform.services.sync_finance_policy import SyncFinancePolicy
 from apps.products.models import Brand, Category, Product, Unit
 from apps.sales.models import Invoice, InvoiceItem
 from apps.settings_app.models import Branch, Company
@@ -104,18 +105,29 @@ class CatalogSyncEngine:
       warehouse = CatalogSyncEngine._default_warehouse(company)
       branch = CatalogSyncEngine._default_branch(company)
 
-      units = CatalogSyncEngine._filter_since(Unit.active_objects(), since)
-      brands = CatalogSyncEngine._filter_since(Brand.active_objects(), since)
+      units = CatalogSyncEngine._filter_since(
+          Unit.active_objects().filter(tenant=tenant), since
+      )
+      brands = CatalogSyncEngine._filter_since(
+          Brand.active_objects().filter(tenant=tenant), since
+      )
       categories = CatalogSyncEngine._filter_since(
-          Category.active_objects().select_related("parent"), since
+          Category.active_objects().filter(tenant=tenant).select_related("parent"), since
       )
       products = CatalogSyncEngine._filter_since(
-          Product.active_objects().select_related("category", "brand", "unit"), since
+          Product.active_objects()
+          .filter(tenant=tenant)
+          .select_related("category", "brand", "unit"),
+          since,
       )
 
       inv_by_product: dict[str, Decimal] = {}
       if warehouse:
-          for row in Inventory.active_objects().filter(warehouse=warehouse).select_related("product"):
+          for row in (
+              Inventory.active_objects()
+              .filter(warehouse=warehouse, tenant=tenant)
+              .select_related("product")
+          ):
               inv_by_product[str(row.product_id)] = row.quantity
 
       subscription = None
@@ -125,7 +137,7 @@ class CatalogSyncEngine:
 
           subscription = PlatformService.enrich_alert_payload(sub)
 
-      customers_qs = Customer.active_objects().select_related("branch")
+      customers_qs = Customer.active_objects().filter(tenant=tenant).select_related("branch")
       if branch:
           customers_qs = customers_qs.filter(branch=branch)
       customers_qs = CatalogSyncEngine._filter_since(customers_qs, since)
@@ -277,7 +289,9 @@ class CatalogSyncEngine:
           ],
           "invoices": [
               {
+                  "local_id": str(inv.id),
                   "invoice_number": inv.invoice_number,
+                  "idempotency_key": inv.idempotency_key or "",
                   "issue_date": inv.issue_date.isoformat(),
                   "status": inv.status,
                   "subtotal": float(inv.subtotal),
@@ -313,6 +327,8 @@ class CatalogSyncEngine:
 
       bootstrap_roles_and_permissions()
 
+      company = CatalogSyncEngine._local_company()
+      tenant = company.tenant if company else None
       stats = {
           "units": 0,
           "brands": 0,
@@ -325,29 +341,32 @@ class CatalogSyncEngine:
       }
 
       for row in data.get("units", []):
-          if CatalogSyncEngine._upsert_unit(row):
+          if CatalogSyncEngine._upsert_unit(row, tenant=tenant):
               stats["units"] += 1
 
       for row in data.get("brands", []):
-          if CatalogSyncEngine._upsert_brand(row):
+          if CatalogSyncEngine._upsert_brand(row, tenant=tenant):
               stats["brands"] += 1
 
       for row in data.get("categories", []):
           if not row.get("parent_name"):
-              if CatalogSyncEngine._upsert_category(row, parent=None):
+              if CatalogSyncEngine._upsert_category(row, parent=None, tenant=tenant):
                   stats["categories"] += 1
       for row in data.get("categories", []):
           if row.get("parent_name"):
-              parent = Category.active_objects().filter(name=row["parent_name"]).first()
-              if CatalogSyncEngine._upsert_category(row, parent=parent):
+              parent_qs = Category.active_objects().filter(name=row["parent_name"])
+              if tenant is not None:
+                  parent_qs = parent_qs.filter(tenant=tenant)
+              parent = parent_qs.first()
+              if CatalogSyncEngine._upsert_category(row, parent=parent, tenant=tenant):
                   stats["categories"] += 1
 
       for row in data.get("products", []):
-          if CatalogSyncEngine._upsert_product(row):
+          if CatalogSyncEngine._upsert_product(row, tenant=tenant):
               stats["products"] += 1
 
       for row in data.get("customers", []):
-          if CatalogSyncEngine._upsert_customer(row, user=user):
+          if CatalogSyncEngine._upsert_customer(row, user=user, tenant=tenant):
               stats["customers"] += 1
 
       for row in data.get("users", []):
@@ -359,10 +378,12 @@ class CatalogSyncEngine:
           CatalogSyncEngine._save_shop_waiters(waiters, user=user)
           stats["waiters"] = len(waiters)
 
-      warehouse = CatalogSyncEngine._default_warehouse(CatalogSyncEngine._local_company())
+      warehouse = CatalogSyncEngine._default_warehouse(company)
       if warehouse:
           for row in data.get("products", []):
-              if "quantity" in row and CatalogSyncEngine._upsert_inventory(row, warehouse, user):
+              if "quantity" in row and CatalogSyncEngine._upsert_inventory(
+                  row, warehouse, user, tenant=tenant
+              ):
                   stats["inventory"] += 1
 
       sub = data.get("subscription")
@@ -379,23 +400,53 @@ class CatalogSyncEngine:
   @staticmethod
   @transaction.atomic
   def apply_shop_push(*, tenant: Tenant, payload: dict, user=None) -> dict:
+      rejected = SyncFinancePolicy.validate_push_payload(payload)
+      payload = SyncFinancePolicy.sanitize_push_payload(payload)
       company = CatalogSyncEngine._company_for_tenant(tenant)
       branch = CatalogSyncEngine._default_branch(company)
       warehouse = CatalogSyncEngine._default_warehouse(company)
-      stats = {"customers": 0, "invoices": 0, "inventory": 0, "waiters": 0}
+      device_id = payload.get("device_id") or ""
+      stats = {
+          "customers": 0,
+          "invoices": 0,
+          "inventory": 0,
+          "waiters": 0,
+          "idempotent_replays": 0,
+          "finance_keys_rejected": rejected,
+          "skipped_foreign_skus": 0,
+      }
 
       for row in payload.get("customers", []):
-          if CatalogSyncEngine._upsert_customer(row, branch=branch, user=user):
+          if CatalogSyncEngine._upsert_customer(
+              row, branch=branch, user=user, tenant=tenant
+          ):
               stats["customers"] += 1
 
       if warehouse:
           for row in payload.get("inventory", []):
-              if CatalogSyncEngine._upsert_inventory(row, warehouse, user):
+              sku = (row.get("sku") or "").strip()
+              applied = CatalogSyncEngine._upsert_inventory(
+                  row, warehouse, user, tenant=tenant
+              )
+              if applied:
                   stats["inventory"] += 1
+              elif sku and not Product.active_objects().filter(
+                  tenant=tenant, sku=sku
+              ).exists():
+                  stats["skipped_foreign_skus"] += 1
 
       if branch:
           for row in payload.get("invoices", []):
-              if CatalogSyncEngine._upsert_invoice(row, branch=branch, user=user):
+              applied, idempotent = CatalogSyncEngine._upsert_invoice(
+                  row,
+                  branch=branch,
+                  tenant=tenant,
+                  user=user,
+                  device_id=device_id,
+              )
+              if idempotent:
+                  stats["idempotent_replays"] += 1
+              elif applied:
                   stats["invoices"] += 1
 
       waiters = payload.get("waiters")
@@ -458,88 +509,132 @@ class CatalogSyncEngine:
       return True
 
   @staticmethod
-  def _upsert_unit(row: dict) -> bool:
+  def _upsert_unit(row: dict, *, tenant=None) -> bool:
       abbr = row.get("abbreviation", "").strip()
       if not abbr:
           return False
-      existing = Unit.active_objects().filter(abbreviation=abbr).first()
+      qs = Unit.active_objects().filter(abbreviation=abbr)
+      if tenant is not None:
+          qs = qs.filter(tenant=tenant)
+      existing = qs.first()
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
           return False
-      Unit.objects.update_or_create(
-          abbreviation=abbr,
-          defaults={
-              "name": row.get("name", abbr),
-              "is_active": row.get("is_active", True),
-              "deleted_at": None,
-          },
-      )
+      defaults = {
+          "name": row.get("name", abbr),
+          "is_active": row.get("is_active", True),
+          "deleted_at": None,
+      }
+      if tenant is not None:
+          defaults["tenant"] = tenant
+          Unit.objects.update_or_create(tenant=tenant, abbreviation=abbr, defaults=defaults)
+      else:
+          Unit.objects.update_or_create(abbreviation=abbr, defaults=defaults)
       return True
 
   @staticmethod
-  def _upsert_brand(row: dict) -> bool:
+  def _upsert_brand(row: dict, *, tenant=None) -> bool:
       name = row.get("name", "").strip()
       if not name:
           return False
-      existing = Brand.active_objects().filter(name=name).first()
+      qs = Brand.active_objects().filter(name=name)
+      if tenant is not None:
+          qs = qs.filter(tenant=tenant)
+      existing = qs.first()
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
           return False
-      Brand.objects.update_or_create(
-          name=name,
-          defaults={
-              "description": row.get("description", ""),
-              "is_active": row.get("is_active", True),
-              "deleted_at": None,
-          },
-      )
+      defaults = {
+          "description": row.get("description", ""),
+          "is_active": row.get("is_active", True),
+          "deleted_at": None,
+      }
+      if tenant is not None:
+          defaults["tenant"] = tenant
+          Brand.objects.update_or_create(tenant=tenant, name=name, defaults=defaults)
+      else:
+          Brand.objects.update_or_create(name=name, defaults=defaults)
       return True
 
   @staticmethod
-  def _upsert_category(row: dict, parent: Category | None) -> bool:
+  def _upsert_category(row: dict, parent: Category | None, *, tenant=None) -> bool:
       name = row.get("name", "").strip()
       if not name:
           return False
-      existing = Category.active_objects().filter(name=name).first()
+      qs = Category.active_objects().filter(name=name)
+      if tenant is not None:
+          qs = qs.filter(tenant=tenant)
+      existing = qs.first()
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
           return False
-      Category.objects.update_or_create(
-          name=name,
-          defaults={
-              "parent": parent,
-              "description": row.get("description", ""),
-              "is_active": row.get("is_active", True),
-              "deleted_at": None,
-          },
-      )
+      defaults = {
+          "parent": parent,
+          "description": row.get("description", ""),
+          "is_active": row.get("is_active", True),
+          "deleted_at": None,
+      }
+      if tenant is not None:
+          defaults["tenant"] = tenant
+          Category.objects.update_or_create(tenant=tenant, name=name, defaults=defaults)
+      else:
+          Category.objects.update_or_create(name=name, defaults=defaults)
       return True
 
   @staticmethod
-  def _upsert_product(row: dict) -> bool:
+  def _upsert_product(row: dict, *, tenant=None) -> bool:
       sku = row.get("sku", "").strip()
       if not sku:
           return False
-      existing = Product.active_objects().filter(sku=sku).first()
+      qs = Product.active_objects().filter(sku=sku)
+      if tenant is not None:
+          qs = qs.filter(tenant=tenant)
+      existing = qs.first()
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
           return False
 
-      category = Category.active_objects().filter(name=row.get("category_name", "")).first()
+      cat_qs = Category.active_objects().filter(name=row.get("category_name", ""))
+      if tenant is not None:
+          cat_qs = cat_qs.filter(tenant=tenant)
+      category = cat_qs.first()
       if not category:
-          category, _ = Category.objects.get_or_create(
-              name=row.get("category_name") or "General",
-              defaults={"is_active": True},
-          )
+          cat_defaults = {"is_active": True}
+          if tenant is not None:
+              cat_defaults["tenant"] = tenant
+              category, _ = Category.objects.get_or_create(
+                  tenant=tenant,
+                  name=row.get("category_name") or "General",
+                  defaults=cat_defaults,
+              )
+          else:
+              category, _ = Category.objects.get_or_create(
+                  name=row.get("category_name") or "General",
+                  defaults=cat_defaults,
+              )
 
-      unit = Unit.active_objects().filter(abbreviation=row.get("unit_abbreviation", "")).first()
+      unit_qs = Unit.active_objects().filter(abbreviation=row.get("unit_abbreviation", ""))
+      if tenant is not None:
+          unit_qs = unit_qs.filter(tenant=tenant)
+      unit = unit_qs.first()
       if not unit:
           abbr = row.get("unit_abbreviation") or "ea"
-          unit, _ = Unit.objects.get_or_create(
-              abbreviation=abbr,
-              defaults={"name": abbr.title(), "is_active": True},
-          )
+          unit_defaults = {"name": abbr.title(), "is_active": True}
+          if tenant is not None:
+              unit_defaults["tenant"] = tenant
+              unit, _ = Unit.objects.get_or_create(
+                  tenant=tenant, abbreviation=abbr, defaults=unit_defaults
+              )
+          else:
+              unit, _ = Unit.objects.get_or_create(abbreviation=abbr, defaults=unit_defaults)
 
       brand = None
       brand_name = (row.get("brand_name") or "").strip()
       if brand_name:
-          brand, _ = Brand.objects.get_or_create(name=brand_name, defaults={"is_active": True})
+          brand_defaults = {"is_active": True}
+          if tenant is not None:
+              brand_defaults["tenant"] = tenant
+              brand, _ = Brand.objects.get_or_create(
+                  tenant=tenant, name=brand_name, defaults=brand_defaults
+              )
+          else:
+              brand, _ = Brand.objects.get_or_create(name=brand_name, defaults=brand_defaults)
 
       barcode = row.get("barcode") or None
       defaults = {
@@ -557,77 +652,121 @@ class CatalogSyncEngine:
       }
       if barcode:
           defaults["barcode"] = barcode
-
-      Product.objects.update_or_create(sku=sku, defaults=defaults)
+      if tenant is not None:
+          defaults["tenant"] = tenant
+          Product.objects.update_or_create(tenant=tenant, sku=sku, defaults=defaults)
+      else:
+          Product.objects.update_or_create(sku=sku, defaults=defaults)
       return True
 
   @staticmethod
-  def _upsert_customer(row: dict, *, branch: Branch | None = None, user=None) -> bool:
+  def _upsert_customer(row: dict, *, branch: Branch | None = None, user=None, tenant=None) -> bool:
       code = row.get("customer_code", "").strip()
       if not code:
           return False
-      existing = Customer.active_objects().filter(customer_code=code).first()
+      qs = Customer.active_objects().filter(customer_code=code)
+      if tenant is not None:
+          qs = qs.filter(tenant=tenant)
+      existing = qs.first()
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
           return False
       if branch is None:
           branch = CatalogSyncEngine._default_branch(CatalogSyncEngine._local_company())
-      Customer.objects.update_or_create(
-          customer_code=code,
-          defaults={
-              "full_name": row.get("full_name", code),
-              "email": row.get("email", ""),
-              "phone": row.get("phone", ""),
-              "address": row.get("address", ""),
-              "customer_type": row.get("customer_type", "retail"),
-              "credit_limit": Decimal(str(row.get("credit_limit", 0))),
-              "is_active": row.get("is_active", True),
-              "branch": branch,
-              "deleted_at": None,
-              "updated_by": user,
-          },
-      )
+      if tenant is None and branch is not None:
+          tenant = getattr(branch, "tenant", None) or (
+              branch.company.tenant if getattr(branch, "company", None) else None
+          )
+      defaults = {
+          "full_name": row.get("full_name", code),
+          "email": row.get("email", ""),
+          "phone": row.get("phone", ""),
+          "address": row.get("address", ""),
+          "customer_type": row.get("customer_type", "retail"),
+          "credit_limit": Decimal(str(row.get("credit_limit", 0))),
+          "is_active": row.get("is_active", True),
+          "branch": branch,
+          "deleted_at": None,
+          "updated_by": user,
+      }
+      if tenant is not None:
+          defaults["tenant"] = tenant
+          Customer.objects.update_or_create(
+              tenant=tenant, customer_code=code, defaults=defaults
+          )
+      else:
+          Customer.objects.update_or_create(customer_code=code, defaults=defaults)
       return True
 
   @staticmethod
-  def _upsert_inventory(row: dict, warehouse: Warehouse, user=None) -> bool:
+  def _upsert_inventory(row: dict, warehouse: Warehouse, user=None, *, tenant=None) -> bool:
       sku = row.get("sku", "").strip()
       if not sku:
           return False
-      product = Product.active_objects().filter(sku=sku).first()
+      product_qs = Product.active_objects().filter(sku=sku)
+      if tenant is not None:
+          product_qs = product_qs.filter(tenant=tenant)
+      product = product_qs.first()
       if not product:
           return False
-      inv = Inventory.active_objects().filter(product=product, warehouse=warehouse).first()
+      inv_qs = Inventory.active_objects().filter(product=product, warehouse=warehouse)
+      if tenant is not None:
+          inv_qs = inv_qs.filter(tenant=tenant)
+      inv = inv_qs.first()
       if inv and _is_newer(row.get("updated_at", ""), inv.updated_at):
           return False
       qty = Decimal(str(row.get("quantity", 0)))
+      defaults = {"quantity": qty, "updated_by": user, "deleted_at": None}
+      if tenant is not None:
+          defaults["tenant"] = tenant
       Inventory.objects.update_or_create(
           product=product,
           warehouse=warehouse,
-          defaults={"quantity": qty, "updated_by": user, "deleted_at": None},
+          defaults=defaults,
       )
       return True
 
   @staticmethod
-  def _upsert_invoice(row: dict, *, branch: Branch, user=None) -> bool:
+  def _upsert_invoice(row: dict, *, branch: Branch, tenant: Tenant, user=None, device_id: str = "") -> tuple[bool, bool]:
+      """Apply invoice from shop push. Returns (applied, idempotent_replay)."""
+      idempotency_key = (row.get("idempotency_key") or "").strip()
+      if idempotency_key:
+          if SyncIngestReceipt.objects.filter(
+              tenant=tenant, idempotency_key=idempotency_key
+          ).exists():
+              return False, True
+
       number = row.get("invoice_number", "").strip()
       if not number:
-          return False
-      existing = Invoice.active_objects().filter(branch=branch, invoice_number=number).first()
+          return False, False
+      existing = (
+          Invoice.active_objects()
+          .filter(branch=branch, invoice_number=number, tenant=tenant)
+          .first()
+      )
       if existing and _is_newer(row.get("updated_at", ""), existing.updated_at):
-          return False
+          return False, False
 
       customer_code = row.get("customer_code", "").strip()
       customer = None
       if customer_code:
-          customer = Customer.active_objects().filter(customer_code=customer_code).first()
+          customer = (
+              Customer.active_objects()
+              .filter(tenant=tenant, customer_code=customer_code)
+              .first()
+          )
       if not customer:
           name = row.get("customer_name") or "Walk-in Customer"
-          customer = Customer.active_objects().filter(full_name__iexact=name).first()
+          customer = (
+              Customer.active_objects()
+              .filter(tenant=tenant, full_name__iexact=name)
+              .first()
+          )
       if not customer:
           customer = Customer.objects.create(
               customer_code=customer_code or f"SYNC-{number}",
               full_name=row.get("customer_name") or "Walk-in Customer",
               branch=branch,
+              tenant=tenant,
               created_by=user,
           )
 
@@ -637,28 +776,41 @@ class CatalogSyncEngine:
       else:
           issue_date = issue_raw
 
+      defaults = {
+          "customer": customer,
+          "status": row.get("status", Invoice.STATUS_PAID),
+          "issue_date": issue_date,
+          "subtotal": Decimal(str(row.get("subtotal", 0))),
+          "discount_amount": Decimal(str(row.get("discount_amount", 0))),
+          "tax_amount": Decimal(str(row.get("tax_amount", 0))),
+          "total_amount": Decimal(str(row.get("total_amount", 0))),
+          "amount_paid": Decimal(str(row.get("amount_paid", 0))),
+          "notes": row.get("notes", ""),
+          "updated_by": user,
+          "deleted_at": None,
+          "tenant": tenant,
+      }
+      if idempotency_key:
+          defaults["idempotency_key"] = idempotency_key
+
       invoice, created = Invoice.objects.update_or_create(
           branch=branch,
           invoice_number=number,
-          defaults={
-              "customer": customer,
-              "status": row.get("status", Invoice.STATUS_PAID),
-              "issue_date": issue_date,
-              "subtotal": Decimal(str(row.get("subtotal", 0))),
-              "discount_amount": Decimal(str(row.get("discount_amount", 0))),
-              "tax_amount": Decimal(str(row.get("tax_amount", 0))),
-              "total_amount": Decimal(str(row.get("total_amount", 0))),
-              "amount_paid": Decimal(str(row.get("amount_paid", 0))),
-              "notes": row.get("notes", ""),
-              "updated_by": user,
-              "deleted_at": None,
-          },
+          defaults=defaults,
       )
+      # Ensure tenant stamp even if invoice existed without tenant
+      if invoice.tenant_id != tenant.id:
+          invoice.tenant = tenant
+          invoice.save(update_fields=["tenant", "updated_at"])
 
       if created or row.get("items"):
           invoice.items.all().delete()
           for item in row.get("items", []):
-              product = Product.active_objects().filter(sku=item.get("sku", "")).first()
+              product = (
+                  Product.active_objects()
+                  .filter(tenant=tenant, sku=item.get("sku", ""))
+                  .first()
+              )
               if not product:
                   continue
               InvoiceItem.objects.create(
@@ -669,4 +821,16 @@ class CatalogSyncEngine:
                   line_total=Decimal(str(item.get("line_total", 0))),
                   created_by=user,
               )
-      return True
+
+      if idempotency_key:
+          SyncIngestReceipt.objects.get_or_create(
+              tenant=tenant,
+              idempotency_key=idempotency_key,
+              defaults={
+                  "device_id": device_id or row.get("device_id") or "",
+                  "resource_type": SyncIngestReceipt.RESOURCE_INVOICE,
+                  "resource_id": str(invoice.id),
+              },
+          )
+
+      return True, False

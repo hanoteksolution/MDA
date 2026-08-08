@@ -1,11 +1,25 @@
 from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.permissions import AllowAny
 
 urlpatterns = [
+    path(
+        "schema/",
+        SpectacularAPIView.as_view(permission_classes=[AllowAny]),
+        name="schema",
+    ),
+    path(
+        "docs/",
+        SpectacularSwaggerView.as_view(url_name="schema", permission_classes=[AllowAny]),
+        name="swagger-ui",
+    ),
     path("health/", include("api.v1.health.urls")),
     path("sync/", include("api.v1.sync.urls")),
     path("setup/", include("api.v1.setup.urls")),
+    path("onboarding/", include("api.v1.onboarding.urls")),
     path("platform/", include("api.v1.platform.urls")),
     path("auth/", include("api.v1.auth.urls")),
+    path("mobile/", include("api.v1.mobile.urls")),
     path("users/", include("api.v1.users.urls")),
     path("roles/", include("api.v1.roles.urls")),
     path("settings/", include("api.v1.settings.urls")),
@@ -24,4 +38,12 @@ urlpatterns = [
     path("finance/", include("api.v1.finance.urls")),
     path("reports/", include("api.v1.reports.urls")),
     path("futsal/", include("api.v1.futsal.urls")),
+    path("pharmacy/", include("api.v1.pharmacy.urls")),
+    path("gym/", include("api.v1.gym.urls")),
+    path("restaurant/", include("api.v1.restaurant.urls")),
+    path("hotel/", include("api.v1.hotel.urls")),
+    path("property/", include("api.v1.property.urls")),
+    path("housing/", include("api.v1.housing.urls")),
+    path("office/", include("api.v1.office.urls")),
+    path("notifications/", include("api.v1.notifications.urls")),
 ]

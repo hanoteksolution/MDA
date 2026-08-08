@@ -33,6 +33,16 @@ export interface DashboardCharts {
   profit: { month: string; profit: number; expenses: number }[];
 }
 
+export interface DashboardWidget {
+  id: string;
+  module: string;
+  permission: string;
+  title: string;
+  route: string;
+  icon: string;
+  sort_order: number;
+}
+
 export const dashboardApi = {
   kpis: (period = "today") =>
     apiRequest<ApiResponse<DashboardKPIs>>(`/dashboard/kpis/?period=${period}`),
@@ -47,4 +57,7 @@ export const dashboardApi = {
     apiRequest<ApiResponse<DashboardTopProduct[]>>(`/dashboard/top-products/?period=${period}`),
 
   charts: () => apiRequest<ApiResponse<DashboardCharts>>("/dashboard/charts/"),
+
+  widgets: () =>
+    apiRequest<ApiResponse<{ results: DashboardWidget[]; count: number }>>("/dashboard/widgets/"),
 };

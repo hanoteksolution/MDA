@@ -36,6 +36,7 @@ class QuotationListCreateView(APIView):
             status=request.query_params.get("status"),
             customer_id=request.query_params.get("customer_id"),
             branch_id=request.query_params.get("branch_id"),
+            user=request.user,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_quotation(q) for q in items])
 
@@ -66,13 +67,13 @@ class QuotationDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def get(self, request, pk):
-        q = QuotationService.list().get(pk=pk)
+        q = QuotationService.list(user=request.user).get(pk=pk)
         return success_response(data=serialize_quotation(q, include_items=True))
 
     def put(self, request, pk):
         if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        q = QuotationService.list().get(pk=pk)
+        q = QuotationService.list(user=request.user).get(pk=pk)
         data = dict(request.data)
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
@@ -91,7 +92,7 @@ class QuotationDetailView(APIView):
     def delete(self, request, pk):
         if not request.user.has_permission("sales.delete"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        q = QuotationService.list().get(pk=pk)
+        q = QuotationService.list(user=request.user).get(pk=pk)
         QuotationService.delete(instance=q, user=request.user)
         return success_response(message="Quotation deleted.")
 
@@ -109,6 +110,7 @@ class InvoiceListCreateView(APIView):
             date_from=request.query_params.get("date_from"),
             date_to=request.query_params.get("date_to"),
             waiter=request.query_params.get("waiter"),
+            user=request.user,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_invoice(inv) for inv in items])
 
@@ -139,13 +141,13 @@ class InvoiceDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def get(self, request, pk):
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         return success_response(data=serialize_invoice(inv, include_items=True))
 
     def put(self, request, pk):
         if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         data = dict(request.data)
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
@@ -164,7 +166,7 @@ class InvoiceDetailView(APIView):
     def delete(self, request, pk):
         if not request.user.has_permission("sales.delete"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         try:
             InvoiceService.delete(instance=inv, user=request.user)
         except ValueError as e:
@@ -178,7 +180,7 @@ class InvoiceMarkPaidView(APIView):
     def post(self, request, pk):
         if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         payment_method = (request.data or {}).get("payment_method") or "cash"
         try:
             inv = InvoiceService.mark_paid(
@@ -198,7 +200,7 @@ class InvoiceMarkUnpaidView(APIView):
     def post(self, request, pk):
         if not request.user.has_permission("sales.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         try:
             inv = InvoiceService.mark_unpaid(instance=inv, user=request.user)
         except ValueError as e:
@@ -213,7 +215,7 @@ class InvoiceReceiptView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def get(self, request, pk):
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         receipt = PosService.receipt_from_invoice(invoice=inv, user=request.user)
         return success_response(data=receipt)
 
@@ -222,7 +224,7 @@ class InvoiceDeliveryNoteView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def get(self, request, pk):
-        inv = InvoiceService.list().get(pk=pk)
+        inv = InvoiceService.list(user=request.user).get(pk=pk)
         note = PosService.delivery_note_from_invoice(invoice=inv, user=request.user)
         return success_response(data=note)
 
@@ -231,7 +233,7 @@ class SalesSummaryView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("sales.view")]
 
     def get(self, request):
-        return success_response(data=InvoiceService.summary())
+        return success_response(data=InvoiceService.summary(user=request.user))
 
 
 class DailyOpsView(APIView):

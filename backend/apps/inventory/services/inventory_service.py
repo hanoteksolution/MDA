@@ -14,12 +14,14 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.products.models import Product
+from core.tenancy import apply_tenant_scope, stamp_tenant_id
 
 
 class WarehouseService:
     @staticmethod
-    def list_warehouses(*, branch_id=None, is_active=None):
+    def list_warehouses(*, branch_id=None, is_active=None, user=None, request=None):
         qs = Warehouse.active_objects().select_related("branch")
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         if is_active is not None:
@@ -29,9 +31,10 @@ class WarehouseService:
     @staticmethod
     @transaction.atomic
     def create(*, data, user=None):
+        payload = stamp_tenant_id(dict(data), user=user)
         if data.get("is_default"):
             Warehouse.objects.filter(branch_id=data["branch_id"]).update(is_default=False)
-        return Warehouse.objects.create(**data, created_by=user)
+        return Warehouse.objects.create(**payload, created_by=user)
 
     @staticmethod
     @transaction.atomic
@@ -150,25 +153,37 @@ class InventoryService:
         return merged
 
     @staticmethod
-    def list_inventory(*, warehouse_id=None, search=None, low_stock=False, ensure_rows=True, branch_id=None):
+    def list_inventory(
+        *,
+        warehouse_id=None,
+        search=None,
+        low_stock=False,
+        ensure_rows=True,
+        branch_id=None,
+        user=None,
+        request=None,
+    ):
         if ensure_rows:
-            InventoryService.dedupe_inventory(preferred_branch_id=branch_id)
+            InventoryService.dedupe_inventory(preferred_branch_id=branch_id, user=user)
+            wh_qs = apply_tenant_scope(Warehouse.active_objects(), user=user, request=request)
             InventoryService.backfill_missing_inventory(
                 warehouse=(
-                    Warehouse.active_objects().filter(pk=warehouse_id).first()
+                    wh_qs.filter(pk=warehouse_id).first()
                     if warehouse_id
                     else (
-                        Warehouse.active_objects().filter(branch_id=branch_id, is_default=True).first()
+                        wh_qs.filter(branch_id=branch_id, is_default=True).first()
                         if branch_id
                         else None
                     )
-                )
+                ),
+                user=user,
             )
         qs = (
             Inventory.active_objects()
             .select_related("product", "product__category", "warehouse")
             .filter(product__deleted_at__isnull=True)
         )
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)
         if branch_id:
@@ -185,18 +200,27 @@ class InventoryService:
         return qs.order_by("product__name")
 
     @staticmethod
-    def get_low_stock(*, branch_id=None):
-        """Products at or below minimum stock (includes zero / out of stock)."""
-        return InventoryService.list_inventory(low_stock=True, branch_id=branch_id)
+    def get_reorder_candidates(*, branch_id=None, user=None, request=None):
+        """Products at/below minimum stock — hook for future Celery reorder alerts."""
+        return InventoryService.list_inventory(
+            branch_id=branch_id,
+            low_stock=True,
+            ensure_rows=False,
+            user=user,
+            request=request,
+        )
 
     @staticmethod
-    def get_out_of_stock(*, branch_id=None):
-        return InventoryService.list_inventory(branch_id=branch_id).filter(quantity__lte=0)
+    def get_out_of_stock(*, branch_id=None, user=None, request=None):
+        return InventoryService.list_inventory(
+            branch_id=branch_id, user=user, request=request
+        ).filter(quantity__lte=0)
 
     @staticmethod
-    def get_summary(*, branch_id=None):
-        InventoryService.dedupe_inventory(preferred_branch_id=branch_id)
+    def get_summary(*, branch_id=None, user=None, request=None):
+        InventoryService.dedupe_inventory(preferred_branch_id=branch_id, user=user)
         qs = Inventory.active_objects().select_related("product")
+        qs = apply_tenant_scope(qs, user=user, request=request)
         if branch_id:
             qs = qs.filter(warehouse__branch_id=branch_id)
         agg = qs.aggregate(
@@ -247,10 +271,15 @@ class InventoryService:
             return soft
 
         try:
+            tenant_id = (
+                getattr(warehouse, "tenant_id", None)
+                or getattr(product, "tenant_id", None)
+            )
             return Inventory.objects.create(
                 product=product,
                 warehouse=warehouse,
                 quantity=0,
+                tenant_id=tenant_id,
                 created_by=user,
             )
         except IntegrityError:
@@ -272,6 +301,7 @@ class InventoryService:
             branch=branch,
             reason=reason,
             status="confirmed",
+            tenant_id=getattr(warehouse, "tenant_id", None) or getattr(branch, "tenant_id", None),
             created_by=user,
         )
 
@@ -351,7 +381,262 @@ class InventoryService:
             reference_type="invoice",
             reference_id=invoice_id,
             deleted_at__isnull=True,
+            movement_type__in=["sale", "return"],
         ).exists()
+
+    @staticmethod
+    def invoice_reserve_tracked(*, invoice_id) -> bool:
+        return InventoryTransaction.objects.filter(
+            reference_type="invoice",
+            reference_id=invoice_id,
+            transaction_type="reserve",
+            deleted_at__isnull=True,
+        ).exists()
+
+    @staticmethod
+    @transaction.atomic
+    def reserve_invoice_quantities(
+        *,
+        warehouse,
+        quantity_by_product: dict,
+        reference_id,
+        user=None,
+        notes="",
+    ):
+        if not warehouse or not quantity_by_product:
+            return
+        for product_id, qty in quantity_by_product.items():
+            qty = Decimal(str(qty))
+            if qty <= 0:
+                continue
+            product = Product.active_objects().filter(pk=product_id).first() or Product.objects.filter(
+                pk=product_id
+            ).first()
+            if product is None:
+                continue
+            InventoryService.reserve_quantity(
+                product=product,
+                warehouse=warehouse,
+                quantity=qty,
+                reference_type="invoice",
+                reference_id=reference_id,
+                user=user,
+                notes=notes,
+            )
+
+    @staticmethod
+    @transaction.atomic
+    def unreserve_invoice_quantities(
+        *,
+        warehouse,
+        quantity_by_product: dict,
+        reference_id,
+        user=None,
+        notes="",
+    ):
+        if not warehouse or not quantity_by_product:
+            return
+        for product_id, qty in quantity_by_product.items():
+            qty = Decimal(str(qty))
+            if qty <= 0:
+                continue
+            product = Product.active_objects().filter(pk=product_id).first() or Product.objects.filter(
+                pk=product_id
+            ).first()
+            if product is None:
+                continue
+            InventoryService.unreserve_quantity(
+                product=product,
+                warehouse=warehouse,
+                quantity=qty,
+                reference_type="invoice",
+                reference_id=reference_id,
+                user=user,
+                notes=notes,
+            )
+
+    @staticmethod
+    @transaction.atomic
+    def consume_invoice_reserved(
+        *,
+        warehouse,
+        quantity_by_product: dict,
+        reference_id,
+        user=None,
+        notes="",
+    ):
+        if not warehouse or not quantity_by_product:
+            return
+        for product_id, qty in quantity_by_product.items():
+            qty = Decimal(str(qty))
+            if qty <= 0:
+                continue
+            product = Product.active_objects().filter(pk=product_id).first() or Product.objects.filter(
+                pk=product_id
+            ).first()
+            if product is None:
+                continue
+            InventoryService.consume_reserved(
+                product=product,
+                warehouse=warehouse,
+                quantity=qty,
+                reference_type="invoice",
+                reference_id=reference_id,
+                user=user,
+                notes=notes,
+            )
+
+    @staticmethod
+    def _locked_inventory(*, product, warehouse, user=None):
+        if warehouse is None:
+            raise ValueError("No warehouse available for inventory update.")
+        inv = InventoryService.ensure_inventory_record(
+            product=product, warehouse=warehouse, user=user
+        )
+        return Inventory.objects.select_for_update().filter(pk=inv.pk).first()
+
+    @staticmethod
+    @transaction.atomic
+    def reserve_quantity(
+        *,
+        product,
+        warehouse,
+        quantity,
+        reference_type="invoice",
+        reference_id=None,
+        user=None,
+        notes="",
+        allow_negative_available=False,
+    ):
+        """Increase reserved_quantity without changing on-hand quantity.
+
+        Used by POS hold (STEP 12 wiring). available = quantity - reserved.
+        """
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Reserve quantity must be positive.")
+
+        inv = InventoryService._locked_inventory(
+            product=product, warehouse=warehouse, user=user
+        )
+        available = inv.quantity - inv.reserved_quantity
+        if not allow_negative_available and qty > available:
+            raise ValueError(
+                f"Insufficient available stock to reserve for {product.sku} "
+                f"(available={available}, requested={qty})."
+            )
+
+        before = inv.reserved_quantity
+        inv.reserved_quantity = before + qty
+        inv.updated_by = user
+        inv.save(update_fields=["reserved_quantity", "updated_by", "updated_at"])
+
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="reserve",
+            quantity_before=before,
+            quantity_after=inv.reserved_quantity,
+            quantity_change=qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+        )
+        if notes:
+            StockMovement.objects.create(
+                product=product,
+                warehouse=warehouse,
+                movement_type="adjustment",
+                quantity=Decimal("0"),
+                reference_type=reference_type,
+                reference_id=reference_id,
+                notes=f"RESERVE: {notes}",
+                created_by=user,
+            )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def unreserve_quantity(
+        *,
+        product,
+        warehouse,
+        quantity,
+        reference_type="invoice",
+        reference_id=None,
+        user=None,
+        notes="",
+    ):
+        """Decrease reserved_quantity (release hold or convert hold → sale)."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Unreserve quantity must be positive.")
+
+        inv = InventoryService._locked_inventory(
+            product=product, warehouse=warehouse, user=user
+        )
+        before = inv.reserved_quantity
+        if qty > before:
+            qty = before
+        inv.reserved_quantity = before - qty
+        inv.updated_by = user
+        inv.save(update_fields=["reserved_quantity", "updated_by", "updated_at"])
+
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="unreserve",
+            quantity_before=before,
+            quantity_after=inv.reserved_quantity,
+            quantity_change=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+        )
+        if notes:
+            StockMovement.objects.create(
+                product=product,
+                warehouse=warehouse,
+                movement_type="adjustment",
+                quantity=Decimal("0"),
+                reference_type=reference_type,
+                reference_id=reference_id,
+                notes=f"UNRESERVE: {notes}",
+                created_by=user,
+            )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def consume_reserved(
+        *,
+        product,
+        warehouse,
+        quantity,
+        reference_type="invoice",
+        reference_id=None,
+        user=None,
+        notes="",
+    ):
+        """Convert a reservation into a sale: unreserve then deduct on-hand."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            return None
+        InventoryService.unreserve_quantity(
+            product=product,
+            warehouse=warehouse,
+            quantity=qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            user=user,
+            notes=notes,
+        )
+        return InventoryService.apply_sale_delta(
+            product=product,
+            warehouse=warehouse,
+            quantity_delta=-qty,
+            reference_id=reference_id,
+            user=user,
+            notes=notes or "Consume reserved stock",
+        )
 
     @staticmethod
     @transaction.atomic
@@ -361,6 +646,7 @@ class InventoryService:
         warehouse,
         quantity_delta,
         reference_id=None,
+        reference_type="invoice",
         user=None,
         notes="",
     ):
@@ -377,13 +663,8 @@ class InventoryService:
         if warehouse is None:
             raise ValueError("No warehouse available to update stock for this sale.")
 
-        inv = InventoryService.ensure_inventory_record(
+        inv = InventoryService._locked_inventory(
             product=product, warehouse=warehouse, user=user
-        )
-        inv = (
-            Inventory.objects.select_for_update()
-            .filter(pk=inv.pk)
-            .first()
         )
         qty_before = inv.quantity
         qty_after = qty_before + delta
@@ -393,13 +674,14 @@ class InventoryService:
 
         movement_type = "sale" if delta < 0 else "return"
         txn_type = "out" if delta < 0 else "return"
+        ref_type = reference_type or "invoice"
 
         StockMovement.objects.create(
             product=product,
             warehouse=warehouse,
             movement_type=movement_type,
             quantity=delta,
-            reference_type="invoice",
+            reference_type=ref_type,
             reference_id=reference_id,
             notes=notes,
             created_by=user,
@@ -410,10 +692,41 @@ class InventoryService:
             quantity_before=qty_before,
             quantity_after=qty_after,
             quantity_change=delta,
-            reference_type="invoice",
+            reference_type=ref_type,
             reference_id=reference_id,
             created_by=user,
         )
+        # Pharmacy FEFO when batches exist for this product/warehouse.
+        from apps.pharmacy.services.batch_service import BatchService
+
+        if delta < 0:
+            BatchService.deduct_fefo(
+                product=product,
+                warehouse=warehouse,
+                quantity=abs(delta),
+                reference_type=ref_type,
+                reference_id=reference_id,
+                user=user,
+                notes=notes or "POS/sale FEFO",
+            )
+        elif delta > 0 and reference_id:
+            restored = BatchService.restore_for_reference(
+                reference_type=ref_type,
+                reference_id=reference_id,
+                product=product,
+                quantity=delta,
+                user=user,
+            )
+            leftover = delta - restored
+            if leftover > 0:
+                BatchService.receive_stock(
+                    product=product,
+                    warehouse=warehouse,
+                    quantity=leftover,
+                    batch_number=f"RETURN-{reference_id}",
+                    user=user,
+                    notes=notes or "Sale return",
+                )
         return inv
 
     @staticmethod
@@ -452,10 +765,11 @@ class InventoryService:
             )
 
     @staticmethod
-    def list_adjustments():
-        return (
+    def list_adjustments(*, user=None, request=None):
+        qs = (
             InventoryAdjustment.active_objects()
             .select_related("warehouse", "branch")
             .prefetch_related("items__product")
             .order_by("-created_at")
         )
+        return apply_tenant_scope(qs, user=user, request=request)

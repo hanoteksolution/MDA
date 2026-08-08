@@ -13,24 +13,64 @@ from apps.authentication.serializers.auth_serializers import (
     UserSerializer,
 )
 from apps.authentication.services.auth_service import AuthService, RoleService, UserService
+from apps.authentication.services.login_lockout_service import LoginLockoutService
 from apps.platform.services.desktop_provision import DesktopProvisionService
+from apps.platform.services.tenant_resolver import user_matches_host_tenant
 from core.responses.api_response import error_response, success_response
+from core.throttling import AuthRateThrottle
 from permissions.base import HasPermission
+
+
+class MobileTokenRefreshView(TokenRefreshView):
+    """JWT refresh with the standard success envelope for mobile clients."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            return success_response(data=response.data, message="Token refreshed.")
+        return response
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+        locked, lock_details = LoginLockoutService.is_locked(username=username, request=request)
+        if locked:
+            return error_response(
+                message=LoginLockoutService.lockout_message(lock_details),
+                status=status.HTTP_403_FORBIDDEN,
+                code="ACCOUNT_LOCKED",
+                details=lock_details or {},
+            )
         user, result = AuthService.login(
-            username=serializer.validated_data["username"],
+            username=username,
             password=serializer.validated_data["password"],
             request=request,
         )
         if not user:
-            return error_response(message=result, status=status.HTTP_401_UNAUTHORIZED)
+            LoginLockoutService.record_failure(username=username, request=request)
+            return error_response(
+                message=result,
+                status=status.HTTP_401_UNAUTHORIZED,
+                code="INVALID_CREDENTIALS",
+            )
+        LoginLockoutService.record_success(username=username, request=request)
+        host_tenant = getattr(request, "tenant", None)
+        if getattr(request, "tenant_mode", None) == "tenant" and host_tenant is not None:
+            if not user_matches_host_tenant(user, host_tenant):
+                return error_response(
+                    message="This account does not belong to this business domain.",
+                    status=status.HTTP_403_FORBIDDEN,
+                    code="TENANT_HOST_MISMATCH",
+                )
         return success_response(
             data={
                 **result,

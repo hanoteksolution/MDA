@@ -26,6 +26,7 @@ class UserSerializer(serializers.ModelSerializer):
     permission_ids = serializers.SerializerMethodField()
     shop_slug = serializers.SerializerMethodField()
     managed_shop_group = serializers.SerializerMethodField()
+    enabled_modules = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -33,7 +34,8 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "username", "email", "first_name", "last_name",
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
             "is_active", "is_platform_admin", "permissions", "direct_permissions",
-            "permission_ids", "shop_slug", "managed_shop_group", "last_login", "date_joined",
+            "permission_ids", "shop_slug", "managed_shop_group", "enabled_modules",
+            "last_login", "date_joined",
         ]
         read_only_fields = ["id", "last_login", "date_joined"]
 
@@ -65,6 +67,16 @@ class UserSerializer(serializers.ModelSerializer):
             return None
         g = obj.managed_shop_group
         return {"id": str(g.id), "name": g.name, "slug": g.slug}
+
+    def get_enabled_modules(self, obj):
+        from apps.platform.services.module_service import usable_module_codes
+        from core.tenancy import is_platform_unscoped_actor
+
+        if is_platform_unscoped_actor(obj):
+            from apps.platform.services.module_service import MODULE_SEEDS
+
+            return [code for code, *_ in MODULE_SEEDS]
+        return sorted(usable_module_codes(user=obj))
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

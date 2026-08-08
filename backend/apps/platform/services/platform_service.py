@@ -6,12 +6,22 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.platform.models import (
+    BusinessType,
     SubscriptionPayment,
     SubscriptionPlan,
     ShopGroup,
     Tenant,
+    TenantDomain,
+    TenantSettings,
     TenantSubscription,
 )
+from apps.platform.services.domain_utils import (
+    build_tenant_hostname,
+    get_tenant_base_domain,
+    is_reserved_tenant_slug,
+    validate_tenant_slug,
+)
+from apps.platform.services.module_service import sync_tenant_modules
 from apps.platform.services.sync_service import CloudShopSyncService
 from apps.settings_app.models import Branch, Company
 from apps.settings_app.services.settings_service import SettingsService
@@ -42,14 +52,26 @@ DEFAULT_SUBSCRIPTION_PAYMENT = {
 
 
 def _unique_slug(base: str) -> str:
-    slug = slugify(base) or "shop"
-    slug = slug[:90]
-    candidate = slug
+    raw = slugify(base) or "shop"
+    if is_reserved_tenant_slug(raw):
+        raw = f"shop-{raw}"
+    raw = raw[:90]
+    candidate = raw
     n = 1
-    while Tenant.objects.filter(slug=candidate).exists():
-        candidate = f"{slug}-{n}"
+    while Tenant.objects.filter(slug=candidate).exists() or is_reserved_tenant_slug(candidate):
+        candidate = f"{raw}-{n}"[:100]
         n += 1
     return candidate
+
+
+def _resolve_requested_slug(data: dict, *, name: str) -> str:
+    raw = (data.get("slug") or data.get("subdomain") or "").strip()
+    if raw:
+        slug = validate_tenant_slug(raw)
+        if Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists():
+            raise ValueError(f"Subdomain '{slug}' is already taken.")
+        return slug
+    return _unique_slug(name)
 
 
 def _unique_subscription_ref() -> str:
@@ -89,6 +111,250 @@ class PlatformService:
                     "is_active": True,
                 },
             )
+
+    @staticmethod
+    def ensure_default_business_types():
+        seeds = [
+            ("retail", "General Retail", ["pos", "inventory", "sales", "purchases"], 10),
+            ("supermarket", "Supermarket", ["pos", "inventory", "sales", "purchases"], 20),
+            ("pharmacy", "Pharmacy", ["pos", "inventory", "sales", "purchases", "pharmacy"], 30),
+            ("cafeteria", "Cafeteria", ["pos", "inventory", "sales", "restaurant"], 40),
+            ("restaurant", "Restaurant", ["pos", "inventory", "sales", "restaurant"], 50),
+            ("electronics", "Electronics", ["pos", "inventory", "sales", "purchases"], 60),
+            ("fashion", "Fashion", ["pos", "inventory", "sales", "purchases"], 70),
+            ("hardware", "Hardware", ["pos", "inventory", "sales", "purchases"], 80),
+            ("wholesale", "Wholesale", ["pos", "inventory", "sales", "purchases"], 90),
+            ("gym", "Gym / Fitness Center", ["pos", "inventory", "sales", "gym"], 100),
+            ("hotel", "Hotel", ["pos", "inventory", "sales", "hotel"], 105),
+            (
+                "property",
+                "Property Management",
+                ["property_management"],
+                108,
+            ),
+            ("salon", "Salon / Spa", ["pos", "inventory", "sales"], 110),
+            ("futsal", "Futsal", ["pos", "inventory", "sales", "futsal"], 120),
+            ("other", "Other", ["pos", "inventory", "sales"], 200),
+        ]
+        for code, name, modules, sort_order in seeds:
+            BusinessType.objects.get_or_create(
+                code=code,
+                defaults={
+                    "name": name,
+                    "default_modules": modules,
+                    "sort_order": sort_order,
+                    "is_active": True,
+                },
+            )
+
+    @staticmethod
+    def list_business_types(*, active_only=True):
+        PlatformService.ensure_default_business_types()
+        qs = BusinessType.active_objects()
+        if active_only:
+            qs = qs.filter(is_active=True)
+        return qs.order_by("sort_order", "name")
+
+    @staticmethod
+    def business_type_payload(bt: BusinessType) -> dict:
+        return {
+            "id": str(bt.id),
+            "code": bt.code,
+            "name": bt.name,
+            "description": bt.description,
+            "default_modules": bt.default_modules or [],
+            "is_active": bt.is_active,
+            "sort_order": bt.sort_order,
+        }
+
+    @staticmethod
+    def resolve_business_type(*, code: str | None = None, business_type_id=None) -> BusinessType | None:
+        PlatformService.ensure_default_business_types()
+        if business_type_id:
+            return BusinessType.active_objects().filter(pk=business_type_id).first()
+        if code:
+            return BusinessType.active_objects().filter(code=str(code).strip().lower()).first()
+        return BusinessType.active_objects().filter(code="retail").first()
+
+    @staticmethod
+    def provision_tenant_defaults(*, tenant: Tenant, user=None) -> tuple[TenantSettings, TenantDomain]:
+        settings_row, _ = TenantSettings.objects.get_or_create(
+            tenant=tenant,
+            defaults={"created_by": user},
+        )
+        primary = (
+            TenantDomain.active_objects()
+            .filter(tenant=tenant, is_primary=True)
+            .first()
+        )
+        if not primary:
+            hostname = build_tenant_hostname(tenant.slug)
+            # Soft-collide: if domain exists for another tenant, suffix.
+            if TenantDomain.objects.filter(domain=hostname, deleted_at__isnull=True).exclude(tenant=tenant).exists():
+                hostname = build_tenant_hostname(f"{tenant.slug}-{str(tenant.id)[:8]}")
+            primary = TenantDomain.objects.create(
+                tenant=tenant,
+                domain=hostname,
+                subdomain=tenant.slug,
+                is_primary=True,
+                is_custom=False,
+                is_verified=True,
+                verified_at=timezone.now(),
+                is_active=True,
+                created_by=user,
+            )
+        sync_tenant_modules(tenant=tenant, user=user)
+        # Apply business preset snapshot when provided (or default = business type code)
+        from apps.platform.services.business_preset_service import BusinessPresetService
+
+        preset_code = None
+        # Caller may pass via tenant.settings.extras later; check attribute stash
+        preset_code = getattr(tenant, "_onboarding_preset_code", None)
+        if not preset_code and tenant.business_type_id:
+            preset_code = tenant.business_type.code
+        if preset_code:
+            preset = BusinessPresetService.resolve(code=preset_code)
+            if preset:
+                BusinessPresetService.apply_to_tenant(
+                    tenant=tenant, preset=preset, user=user
+                )
+        return settings_row, primary
+
+    @staticmethod
+    def settings_payload(row: TenantSettings) -> dict:
+        return {
+            "id": str(row.id),
+            "tenant_id": str(row.tenant_id),
+            "date_format": row.date_format,
+            "time_format": row.time_format,
+            "fiscal_year_start_month": row.fiscal_year_start_month,
+            "default_tax_rate": float(row.default_tax_rate or 0),
+            "invoice_prefix": row.invoice_prefix,
+            "receipt_footer": row.receipt_footer,
+            "low_stock_alert_enabled": row.low_stock_alert_enabled,
+            "expiry_alert_days": row.expiry_alert_days,
+            "branding": row.branding or {},
+            "pos_defaults": row.pos_defaults or {},
+            "extras": row.extras or {},
+            "accounting_cutover_date": (
+                row.accounting_cutover_date.isoformat() if row.accounting_cutover_date else None
+            ),
+            "accounting_posting_enabled": bool(row.accounting_posting_enabled),
+        }
+
+    @staticmethod
+    def domain_payload(domain: TenantDomain) -> dict:
+        return {
+            "id": str(domain.id),
+            "tenant_id": str(domain.tenant_id),
+            "domain": domain.domain,
+            "subdomain": domain.subdomain,
+            "is_primary": domain.is_primary,
+            "is_custom": domain.is_custom,
+            "is_verified": domain.is_verified,
+            "verified_at": domain.verified_at.isoformat() if domain.verified_at else None,
+            "is_active": domain.is_active,
+            "url": f"https://{domain.domain}",
+        }
+
+    @staticmethod
+    def tenant_foundation_payload(tenant: Tenant) -> dict:
+        bt = tenant.business_type
+        settings_row = getattr(tenant, "settings", None)
+        if settings_row is None:
+            settings_row = TenantSettings.objects.filter(tenant=tenant, deleted_at__isnull=True).first()
+        domains = list(
+            TenantDomain.active_objects().filter(tenant=tenant).order_by("-is_primary", "domain")
+        )
+        primary = next((d for d in domains if d.is_primary), domains[0] if domains else None)
+        from apps.platform.services.module_service import enabled_module_codes, sync_tenant_modules
+
+        sync_tenant_modules(tenant=tenant)
+        return {
+            "status": tenant.status,
+            "currency": tenant.currency,
+            "language": tenant.language,
+            "timezone": tenant.timezone,
+            "business_type": PlatformService.business_type_payload(bt) if bt else None,
+            "business_type_code": bt.code if bt else None,
+            "primary_domain": PlatformService.domain_payload(primary) if primary else None,
+            "domains": [PlatformService.domain_payload(d) for d in domains],
+            "settings": PlatformService.settings_payload(settings_row) if settings_row else None,
+            "base_domain": get_tenant_base_domain(),
+            "enabled_modules": sorted(enabled_module_codes(tenant=tenant)),
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def update_tenant_settings(*, tenant: Tenant, data: dict, user=None) -> TenantSettings:
+        row, _ = TenantSettings.objects.get_or_create(tenant=tenant, defaults={"created_by": user})
+        scalar_fields = (
+            "date_format",
+            "time_format",
+            "invoice_prefix",
+            "receipt_footer",
+        )
+        for key in scalar_fields:
+            if key in data:
+                setattr(row, key, data.get(key) or "")
+        if "fiscal_year_start_month" in data:
+            month = int(data["fiscal_year_start_month"] or 1)
+            if month < 1 or month > 12:
+                raise ValueError("fiscal_year_start_month must be 1–12.")
+            row.fiscal_year_start_month = month
+        if "default_tax_rate" in data:
+            row.default_tax_rate = data["default_tax_rate"] or 0
+        if "accounting_cutover_date" in data:
+            raw = data.get("accounting_cutover_date")
+            if raw in (None, ""):
+                row.accounting_cutover_date = None
+            else:
+                from django.utils.dateparse import parse_date
+
+                parsed = parse_date(str(raw)) if not hasattr(raw, "isoformat") else raw
+                if parsed is None:
+                    raise ValueError("accounting_cutover_date must be YYYY-MM-DD.")
+                row.accounting_cutover_date = parsed
+        if "accounting_posting_enabled" in data:
+            row.accounting_posting_enabled = bool(data["accounting_posting_enabled"])
+        if "low_stock_alert_enabled" in data:
+            row.low_stock_alert_enabled = bool(data["low_stock_alert_enabled"])
+        if "expiry_alert_days" in data:
+            row.expiry_alert_days = int(data["expiry_alert_days"] or 30)
+        for key in ("branding", "pos_defaults", "extras"):
+            if key in data and isinstance(data[key], dict):
+                setattr(row, key, data[key])
+        row.updated_by = user
+        row.save()
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def add_tenant_domain(*, tenant: Tenant, data: dict, user=None) -> TenantDomain:
+        raw_domain = (data.get("domain") or "").strip().lower()
+        subdomain = (data.get("subdomain") or "").strip().lower()
+        is_custom = bool(data.get("is_custom", True))
+        if not raw_domain:
+            if not subdomain:
+                raise ValueError("domain or subdomain is required.")
+            raw_domain = build_tenant_hostname(subdomain)
+            is_custom = False
+        if TenantDomain.objects.filter(domain=raw_domain, deleted_at__isnull=True).exists():
+            raise ValueError(f"Domain '{raw_domain}' is already in use.")
+        make_primary = bool(data.get("is_primary"))
+        if make_primary:
+            TenantDomain.objects.filter(tenant=tenant, is_primary=True).update(is_primary=False)
+        return TenantDomain.objects.create(
+            tenant=tenant,
+            domain=raw_domain,
+            subdomain=subdomain or (raw_domain.split(".")[0] if not is_custom else ""),
+            is_primary=make_primary or not TenantDomain.active_objects().filter(tenant=tenant).exists(),
+            is_custom=is_custom,
+            is_verified=not is_custom,
+            verified_at=timezone.now() if not is_custom else None,
+            is_active=True,
+            created_by=user,
+        )
 
     @staticmethod
     def resolve_user_tenant(user):
@@ -156,8 +422,8 @@ class PlatformService:
     def list_tenants_for_user(user, *, active_only=False):
         ids = PlatformService.accessible_tenant_ids(user)
         qs = Tenant.objects.filter(id__in=ids, deleted_at__isnull=True).select_related(
-            "subscription__plan", "shop_group"
-        ).prefetch_related("companies")
+            "subscription__plan", "shop_group", "business_type", "settings"
+        ).prefetch_related("companies", "domains")
         if active_only:
             qs = qs.filter(is_active=True)
         return qs.order_by("name")
@@ -296,15 +562,22 @@ class PlatformService:
     @transaction.atomic
     def create_tenant_for_company(*, company: Company, contact_email: str = "", plan_code: str = "starter"):
         PlatformService.ensure_default_plans()
+        PlatformService.ensure_default_business_types()
         plan = SubscriptionPlan.objects.get(code=plan_code)
+        business_type = PlatformService.resolve_business_type(code="retail")
         tenant = Tenant.objects.create(
             name=company.name,
             slug=_unique_slug(company.name),
             contact_email=contact_email or company.email,
             contact_phone=company.phone,
             sync_secret=secrets.token_urlsafe(24),
+            status=Tenant.STATUS_TRIAL,
             is_active=True,
+            business_type=business_type,
+            currency="USD",
+            language="en",
         )
+        PlatformService.provision_tenant_defaults(tenant=tenant)
         company.tenant = tenant
         company.save(update_fields=["tenant", "updated_at"])
         expires = timezone.localdate() + timedelta(days=30)
@@ -320,7 +593,9 @@ class PlatformService:
 
     @staticmethod
     def list_tenants(*, active_only=False):
-        qs = Tenant.objects.select_related("subscription__plan").prefetch_related("companies")
+        qs = Tenant.objects.select_related(
+            "subscription__plan", "business_type", "settings"
+        ).prefetch_related("companies", "domains")
         if active_only:
             qs = qs.filter(is_active=True)
         return qs.order_by("name")
@@ -394,6 +669,12 @@ class PlatformService:
 
     @staticmethod
     def tenant_overview(tenant: Tenant, *, period: str = "month"):
+        PlatformService.provision_tenant_defaults(tenant=tenant)
+        tenant = (
+            Tenant.objects.select_related("business_type", "settings", "shop_group", "subscription__plan")
+            .prefetch_related("domains", "companies")
+            .get(pk=tenant.pk)
+        )
         company = tenant.companies.filter(deleted_at__isnull=True).first()
         branch = None
         warehouse = None
@@ -506,12 +787,38 @@ class PlatformService:
                 "slug": tenant.slug,
                 "sync_secret": tenant.sync_secret,
                 "is_active": tenant.is_active,
+                "status": tenant.status,
                 "contact_email": tenant.contact_email,
                 "contact_phone": tenant.contact_phone,
                 "country": tenant.country,
+                "timezone": tenant.timezone,
+                "currency": tenant.currency,
+                "language": tenant.language,
+                "business_type_code": tenant.business_type.code if tenant.business_type_id else None,
+                "business_type": (
+                    PlatformService.business_type_payload(tenant.business_type)
+                    if tenant.business_type_id
+                    else None
+                ),
                 "last_synced_at": snap.synced_at.isoformat() if snap else None,
                 "shop_group_id": str(group.id) if group else None,
                 "shop_group_name": group.name if group else None,
+                "is_demo": bool(tenant.is_demo),
+                "demo_status": tenant.demo_status or None,
+                "demo_expires_at": (
+                    tenant.demo_expires_at.isoformat() if tenant.demo_expires_at else None
+                ),
+                **{
+                    k: v
+                    for k, v in PlatformService.tenant_foundation_payload(tenant).items()
+                    if k
+                    in (
+                        "primary_domain",
+                        "domains",
+                        "settings",
+                        "base_domain",
+                    )
+                },
             },
             "subscription": PlatformService._subscription_payload(tenant),
             "company": {"id": str(company.id), "name": company.name} if company else None,
@@ -677,6 +984,10 @@ class PlatformService:
                     PlatformService.assign_subscription(subscription=sub, tenant=tenant, user=user)
         sub.updated_by = user
         sub.save()
+        if sub.tenant_id and ("plan_code" in data or "tenant_id" in data):
+            from apps.platform.services.entitlement_service import EntitlementService
+
+            EntitlementService.apply_plan_entitlements(tenant=sub.tenant, user=user)
         return sub
 
     @staticmethod
@@ -690,8 +1001,33 @@ class PlatformService:
             tenant.contact_phone = data["contact_phone"]
         if "country" in data:
             tenant.country = data["country"]
-        if "is_active" in data:
+        if "timezone" in data and data["timezone"]:
+            tenant.timezone = data["timezone"]
+        if "currency" in data and data["currency"]:
+            tenant.currency = str(data["currency"]).upper()[:8]
+        if "language" in data and data["language"]:
+            tenant.language = str(data["language"]).lower()[:16]
+        if "business_type_code" in data or "business_type_id" in data:
+            bt = PlatformService.resolve_business_type(
+                code=data.get("business_type_code"),
+                business_type_id=data.get("business_type_id"),
+            )
+            if not bt and (data.get("business_type_code") or data.get("business_type_id")):
+                raise ValueError("Unknown business type.")
+            tenant.business_type = bt
+        if "tenant_status" in data and data["tenant_status"]:
+            status_value = str(data["tenant_status"]).lower()
+            allowed = {c[0] for c in Tenant.STATUS_CHOICES}
+            if status_value not in allowed:
+                raise ValueError(f"Invalid tenant status '{status_value}'.")
+            tenant.status = status_value
+            tenant.sync_active_flag()
+        elif "is_active" in data:
             tenant.is_active = bool(data["is_active"])
+            if tenant.is_active and tenant.status in (Tenant.STATUS_SUSPENDED, Tenant.STATUS_CANCELLED):
+                tenant.status = Tenant.STATUS_ACTIVE
+            elif not tenant.is_active:
+                tenant.status = Tenant.STATUS_SUSPENDED
         if "shop_group_id" in data:
             # Group managers cannot move shops out of (or into) another group.
             if user and user.managed_shop_group_id and not PlatformService.is_global_platform_admin(user):
@@ -701,6 +1037,7 @@ class PlatformService:
                 tenant.shop_group = ShopGroup.objects.get(pk=gid) if gid else None
         tenant.updated_by = user
         tenant.save()
+        PlatformService.provision_tenant_defaults(tenant=tenant, user=user)
 
         company = tenant.companies.filter(deleted_at__isnull=True).first()
         if company:
@@ -714,6 +1051,11 @@ class PlatformService:
                 company.address = data["address"]
             company.updated_by = user
             company.save()
+
+        if "settings" in data and isinstance(data["settings"], dict):
+            PlatformService.update_tenant_settings(
+                tenant=tenant, data=data["settings"], user=user
+            )
 
         subscription_id = data.get("subscription_id")
         plan_code = data.get("plan_code")
@@ -966,17 +1308,42 @@ class PlatformService:
             shop_group and (data.get("owner") or {}).get("role_slug") == "shop_group_manager"
         )
 
+        PlatformService.ensure_default_business_types()
+        business_type = PlatformService.resolve_business_type(
+            code=data.get("business_type_code"),
+            business_type_id=data.get("business_type_id"),
+        )
+        slug = _resolve_requested_slug(data, name=data["name"])
+        currency = str(data.get("currency") or "USD").upper()[:8]
+        language = str(data.get("language") or "en").lower()[:16]
+        tz = (data.get("timezone") or "UTC").strip() or "UTC"
+
         tenant = Tenant.objects.create(
             name=data["name"],
-            slug=_unique_slug(data["name"]),
+            slug=slug,
             contact_email=data.get("contact_email", ""),
             contact_phone=data.get("contact_phone", ""),
             country=data.get("country", ""),
+            timezone=tz,
+            currency=currency,
+            language=language,
+            status=Tenant.STATUS_TRIAL,
+            business_type=business_type,
             sync_secret=secrets.token_urlsafe(24),
             is_active=True,
             shop_group=shop_group,
             created_by=user,
         )
+        preset_code = (data.get("preset_code") or "").strip().lower() or (
+            business_type.code if business_type else None
+        )
+        if preset_code:
+            tenant._onboarding_preset_code = preset_code  # noqa: SLF001 — ephemeral provision hint
+        PlatformService.provision_tenant_defaults(tenant=tenant, user=user)
+        if isinstance(data.get("settings"), dict):
+            PlatformService.update_tenant_settings(
+                tenant=tenant, data=data["settings"], user=user
+            )
         company = Company.objects.create(
             name=data["name"],
             legal_name=data.get("legal_name", ""),
@@ -992,6 +1359,7 @@ class PlatformService:
             code=data.get("branch_code", "BR01"),
             is_default=True,
             is_active=True,
+            tenant=tenant,
             created_by=user,
         )
         Warehouse.objects.create(
@@ -1000,6 +1368,7 @@ class PlatformService:
             name="Main Warehouse",
             is_default=True,
             is_active=True,
+            tenant=tenant,
             created_by=user,
         )
 
@@ -1042,10 +1411,17 @@ class PlatformService:
             created_sub.contact_user = owner_user
             created_sub.save(update_fields=["contact_user", "updated_at"])
 
+        from apps.platform.services.entitlement_service import EntitlementService
+
+        EntitlementService.apply_plan_entitlements(tenant=tenant, user=user)
+
         return tenant, owner_user
 
     @staticmethod
     def plan_payload(plan: SubscriptionPlan) -> dict:
+        from apps.platform.services.entitlement_service import EntitlementService
+
+        EntitlementService.ensure_default_plan_modules()
         return {
             "code": plan.code,
             "name": plan.name,
@@ -1054,6 +1430,7 @@ class PlatformService:
             "max_branches": plan.max_branches,
             "description": plan.description,
             "is_active": plan.is_active,
+            "modules": sorted(EntitlementService.plan_module_codes(plan=plan)),
         }
 
     @staticmethod

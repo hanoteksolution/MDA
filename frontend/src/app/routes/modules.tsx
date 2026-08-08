@@ -18,4 +18,12 @@ export { PlatformSubscriptionsPage } from "@/modules/platform/pages/PlatformSubs
 export { PlatformTenantsPage } from "@/modules/platform/pages/PlatformTenantsPage";
 export { PlatformTenantDetailPage } from "@/modules/platform/pages/PlatformTenantDetailPage";
 export { PlatformShopDetailPage } from "@/modules/platform/pages/PlatformShopDetailPage";
+export { PlatformDemosPage } from "@/modules/platform/pages/PlatformDemosPage";
 export { FutsalPage } from "@/modules/futsal/pages/FutsalPage";
+export { PharmacyPage } from "@/modules/pharmacy/pages/PharmacyPage";
+export { GymPage } from "@/modules/gym/pages/GymPage";
+export { RestaurantPage } from "@/modules/restaurant/pages/RestaurantPage";
+export { HotelPage } from "@/modules/hotel/pages/HotelPage";
+export { PropertyPage } from "@/modules/property/pages/PropertyPage";
+export { HousingPage } from "@/modules/housing/pages/HousingPage";
+export { OfficePage } from "@/modules/office/pages/OfficePage";

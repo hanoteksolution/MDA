@@ -1,4 +1,4 @@
-from apps.inventory.models import Inventory, InventoryAdjustment, Warehouse
+from apps.inventory.models import Inventory, InventoryAdjustment, StockTransfer, Warehouse
 
 
 def serialize_warehouse(w: Warehouse) -> dict:
@@ -45,3 +45,34 @@ def serialize_adjustment(adj: InventoryAdjustment) -> dict:
         "items_count": adj.items.count(),
         "created_at": adj.created_at.isoformat(),
     }
+
+
+def serialize_transfer(transfer: StockTransfer, *, include_lines=False) -> dict:
+    data = {
+        "id": str(transfer.id),
+        "transfer_number": transfer.transfer_number,
+        "source_warehouse_id": str(transfer.source_warehouse_id),
+        "source_warehouse_name": transfer.source_warehouse.name,
+        "destination_warehouse_id": str(transfer.destination_warehouse_id),
+        "destination_warehouse_name": transfer.destination_warehouse.name,
+        "branch_id": str(transfer.branch_id),
+        "branch_name": transfer.branch.name,
+        "status": transfer.status,
+        "notes": transfer.notes,
+        "confirmed_at": transfer.confirmed_at.isoformat() if transfer.confirmed_at else None,
+        "confirmed_by": transfer.confirmed_by.username if transfer.confirmed_by_id else None,
+        "lines_count": transfer.lines.count(),
+        "created_at": transfer.created_at.isoformat(),
+    }
+    if include_lines:
+        data["lines"] = [
+            {
+                "id": str(line.id),
+                "product_id": str(line.product_id),
+                "product_name": line.product.name,
+                "product_sku": line.product.sku,
+                "quantity": float(line.quantity),
+            }
+            for line in transfer.lines.select_related("product")
+        ]
+    return data

@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, ScanBarcode, Wifi, WifiOff,
   SlidersHorizontal, ArrowUpDown, MapPin, CheckCircle2,
-  ShoppingCart, LayoutGrid,
+  ShoppingCart, LayoutGrid, Armchair, BedDouble,
 } from "lucide-react";
 import { useSetPageMeta } from "@/contexts/PageMetaContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { cn, formatCurrency } from "@/utils/cn";
 import { productsApi } from "@/services/api/catalog";
 import { customersApi } from "@/services/api/partners";
@@ -16,12 +17,15 @@ import { useAuthStore } from "@/store/authStore";
 import type { Product } from "@/types/models/catalog";
 import type { Category } from "@/types/models/catalog";
 import { usePosCart, roundMoney } from "../hooks/usePosCart";
+import { usePosProfile } from "../hooks/usePosProfile";
 import { PosProductCard } from "../components/PosProductCard";
 import { PosCartPanel } from "../components/PosCartPanel";
 import { PosCheckoutPanel } from "../components/PosCheckoutPanel";
 import { PosHeldSalesPanel } from "../components/PosHeldSalesPanel";
 import { PosWaiterSalesPanel } from "../components/PosWaiterSalesPanel";
-import { posApi, type PosWaiter } from "@/services/api/pos";
+import { posApi, type PosProfile, type PosWaiter } from "@/services/api/pos";
+import { restaurantApi, type RestaurantOrder } from "@/services/api/restaurant";
+import { hotelApi, type HotelOpenFolio } from "@/services/api/hotel";
 import { salesApi } from "@/services/api/sales";
 import { printHeldSaleSlip } from "../receipt/printCartSlip";
 import { invoiceToHeldSale } from "../utils/heldSales";
@@ -35,6 +39,8 @@ export function PosPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [categoryId, setCategoryId] = useState<string>("all");
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -46,10 +52,22 @@ export function PosPage() {
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [waiterSalesOpen, setWaiterSalesOpen] = useState(false);
   const [waiters, setWaiters] = useState<PosWaiter[]>([]);
+  const [posProfile, setPosProfile] = useState<PosProfile | null>(null);
+  const [restaurantOrderId, setRestaurantOrderId] = useState<string | null>(null);
+  const [restaurantLabel, setRestaurantLabel] = useState<string | null>(null);
+  const [hotelFolioId, setHotelFolioId] = useState<string | null>(null);
+  const [hotelLabel, setHotelLabel] = useState<string | null>(null);
+  const [floorOpen, setFloorOpen] = useState(false);
+  const [floorOrders, setFloorOrders] = useState<RestaurantOrder[]>([]);
+  const [floorLoading, setFloorLoading] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
+  const [openFolios, setOpenFolios] = useState<HotelOpenFolio[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const { showTables, showChargeToRoom } = usePosProfile(posProfile);
 
   const {
     cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, discountMode, taxRate,
-    orderNotes, setOrderNotes, totals, addToCart, updateQty, removeLine,
+    orderNotes, setOrderNotes, totals, addToCart, updateQty, removeLine, replaceCart,
     clearCart, toggleFavorite, holdSale, resumeHeldSale, deleteHeldSale, replaceHeldSales, completeSale,
     sessionCustomerId: customerId,
     setSessionCustomerId: setCustomerId,
@@ -87,7 +105,7 @@ export function PosPage() {
     const load = async () => {
       try {
         const [prodRes, catRes, custRes] = await Promise.all([
-          productsApi.list({ page_size: 200, is_active: "true" }),
+          productsApi.list({ page_size: 60, is_active: "true" }),
           productsApi.categories(),
           customersApi.list({ page_size: 50, is_active: "true" }),
         ]);
@@ -99,13 +117,16 @@ export function PosPage() {
       }
     };
     load();
-    posApi.profile().then((res) => setWaiters(res.data.waiters ?? [])).catch(() => {});
+    posApi.profile().then((res) => {
+      setWaiters(res.data.waiters ?? []);
+      setPosProfile(res.data);
+    }).catch(() => {});
   }, []);
 
   const refreshCatalog = useCallback(async () => {
     try {
       const [prodRes, catRes, custRes] = await Promise.all([
-        productsApi.list({ page_size: 200, is_active: "true" }),
+        productsApi.list({ page_size: 60, is_active: "true" }),
         productsApi.categories(),
         customersApi.list({ page_size: 50, is_active: "true" }),
       ]);
@@ -120,6 +141,27 @@ export function PosPage() {
   useAutoRefresh(refreshCatalog, { intervalMs: 45_000 });
 
   useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const handle = window.setTimeout(() => {
+      void productsApi
+        .search(q, {
+          limit: 50,
+          category: categoryId === "all" ? undefined : categoryId,
+        })
+        .then((res) => setSearchResults(res.data ?? []))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [search, categoryId]);
+
+  useEffect(() => {
     const onOnline = () => setIsOnline(true);
     const onOffline = () => setIsOnline(false);
     window.addEventListener("online", onOnline);
@@ -132,7 +174,11 @@ export function PosPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter((p) => {
+    const source = searchResults ?? products;
+    if (searchResults !== null) {
+      return source;
+    }
+    return source.filter((p) => {
       const matchSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
@@ -141,7 +187,7 @@ export function PosPage() {
       const matchCat = categoryId === "all" || p.category_id === categoryId;
       return matchSearch && matchCat;
     });
-  }, [products, search, categoryId]);
+  }, [products, search, categoryId, searchResults]);
 
   const handleAdd = useCallback(
     (product: Product) => {
@@ -158,6 +204,10 @@ export function PosPage() {
   const handleCheckoutComplete = useCallback(
     (receipt: PosReceipt) => {
       completeSale(receipt.payment_method, receipt.total_amount, receipt.invoice_number);
+      setRestaurantOrderId(null);
+      setRestaurantLabel(null);
+      setHotelFolioId(null);
+      setHotelLabel(null);
       setCheckoutMsg(`Sale ${receipt.invoice_number} completed`);
       setTimeout(() => setCheckoutMsg(null), 3000);
       requestDataRefresh();
@@ -166,6 +216,89 @@ export function PosPage() {
     },
     [completeSale, refreshCatalog, syncHoldsFromServer]
   );
+
+  const openFloorPicker = useCallback(async () => {
+    if (!user?.branch?.id) return;
+    setFloorOpen(true);
+    setFloorLoading(true);
+    try {
+      const res = await restaurantApi.orders(1, user.branch.id);
+      const open = (res.data.results || []).filter((o) =>
+        ["open", "sent", "ready", "served"].includes(o.status)
+      );
+      setFloorOrders(open);
+    } catch {
+      setFloorOrders([]);
+    } finally {
+      setFloorLoading(false);
+    }
+  }, [user?.branch?.id]);
+
+  const openRoomPicker = useCallback(async () => {
+    if (!user?.branch?.id) return;
+    setRoomsOpen(true);
+    setRoomsLoading(true);
+    try {
+      const res = await hotelApi.openFolios(user.branch.id);
+      setOpenFolios(res.data.results || []);
+    } catch {
+      setOpenFolios([]);
+    } finally {
+      setRoomsLoading(false);
+    }
+  }, [user?.branch?.id]);
+
+  const selectHotelFolio = useCallback((folio: HotelOpenFolio) => {
+    setHotelFolioId(folio.folio_id);
+    setHotelLabel(
+      folio.room_code
+        ? `Room ${folio.room_code} · ${folio.guest_name || folio.reservation_number}`
+        : folio.guest_name || folio.reservation_number
+    );
+    setRoomsOpen(false);
+    setCheckoutMsg(`Charging to ${folio.room_code || "room"}`);
+    setTimeout(() => setCheckoutMsg(null), 2500);
+  }, []);
+
+  const loadRestaurantOrder = useCallback(
+    async (orderId: string) => {
+      try {
+        const res = await restaurantApi.orderForPos(orderId);
+        const payload = res.data;
+        replaceCart(
+          (payload.items || []).map((i) => ({
+            id: i.product_id,
+            name: i.name,
+            sku: i.sku || "",
+            price: i.unit_price,
+            qty: i.quantity,
+          }))
+        );
+        setOrderNotes(payload.notes || "");
+        setRestaurantOrderId(payload.order.id);
+        setRestaurantLabel(
+          payload.order.table_code
+            ? `Table ${payload.order.table_code} · ${payload.order.order_number}`
+            : payload.order.order_number
+        );
+        setFloorOpen(false);
+        setCheckoutMsg(`Loaded ${payload.order.order_number}`);
+        setTimeout(() => setCheckoutMsg(null), 2500);
+      } catch (err) {
+        setCheckoutMsg(err instanceof Error ? err.message : "Could not load table order");
+        setTimeout(() => setCheckoutMsg(null), 3000);
+      }
+    },
+    [replaceCart, setOrderNotes]
+  );
+
+  const clearPosCart = useCallback(() => {
+    clearCart();
+    setRestaurantOrderId(null);
+    setRestaurantLabel(null);
+    setHotelFolioId(null);
+    setHotelLabel(null);
+  }, [clearCart]);
 
   const handleCreateCustomer = useCallback(
     async (data: { full_name: string; phone?: string }) => {
@@ -251,7 +384,7 @@ export function PosPage() {
         hold_invoice_id: activeHoldId ?? undefined,
       });
       receiptNumber = res.data.number;
-      clearCart();
+      clearPosCart();
       await syncHoldsFromServer();
     } catch (err) {
       // Offline / API failure — keep browser hold so the sale is not lost
@@ -307,7 +440,7 @@ export function PosPage() {
     taxRate,
     customers,
     user?.branch,
-    clearCart,
+    clearPosCart,
     holdSale,
     syncHoldsFromServer,
     activeHoldId,
@@ -392,7 +525,7 @@ export function PosPage() {
           break;
         case "F4":
           e.preventDefault();
-          clearCart();
+          clearPosCart();
           break;
         case "F5":
           e.preventDefault();
@@ -402,7 +535,7 @@ export function PosPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cart.length, clearCart, handleHold]);
+  }, [cart.length, clearPosCart, handleHold]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -432,7 +565,7 @@ export function PosPage() {
                 Point of Sale
               </p>
               <p className="text-xs font-medium tracking-tight text-foreground xl:text-sm">
-                {filtered.length} products ready
+                {searchLoading ? "Searching…" : `${filtered.length} products ready`}
               </p>
             </div>
           </div>
@@ -449,6 +582,30 @@ export function PosPage() {
               F2
             </kbd>
           </div>
+          {showTables ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5 rounded-xl"
+              onClick={() => void openFloorPicker()}
+            >
+              <Armchair className="h-4 w-4" />
+              Pay table
+            </Button>
+          ) : null}
+          {showChargeToRoom ? (
+            <Button
+              type="button"
+              variant={hotelFolioId ? "default" : "outline"}
+              size="sm"
+              className="shrink-0 gap-1.5 rounded-xl"
+              onClick={() => void openRoomPicker()}
+            >
+              <BedDouble className="h-4 w-4" />
+              {hotelFolioId ? "Room" : "Charge room"}
+            </Button>
+          ) : null}
 
           <Button
             variant="secondary"
@@ -527,7 +684,7 @@ export function PosPage() {
             type="button"
             onClick={() => setCategoryId("all")}
             className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 xl:px-4 xl:py-2 xl:text-[13px]",
+              "shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-all duration-200 min-h-10 xl:min-h-0 xl:px-4 xl:py-2 xl:text-[13px]",
               categoryId === "all"
                 ? "pos-category-active"
                 : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
@@ -541,7 +698,7 @@ export function PosPage() {
               type="button"
               onClick={() => setCategoryId(cat.id)}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 xl:px-4 xl:py-2 xl:text-[13px]",
+                "shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-all duration-200 min-h-10 xl:min-h-0 xl:px-4 xl:py-2 xl:text-[13px]",
                 categoryId === cat.id
                   ? "pos-category-active"
                   : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
@@ -590,17 +747,12 @@ export function PosPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-16 text-center xl:py-28"
-            >
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-sm ring-1 ring-border/60">
-                <Search className="h-7 w-7 text-muted-foreground/60" />
-              </div>
-              <p className="text-base font-semibold tracking-tight">No products found</p>
-              <p className="mt-1.5 text-sm text-muted-foreground">Try another search term or category</p>
-            </motion.div>
+            <EmptyState
+              icon={<Search className="h-7 w-7" />}
+              title="No products found"
+              description="Try another search term or category"
+              className="xl:py-28"
+            />
           ) : (
             <motion.div layout className="pos-product-grid">
               <AnimatePresence mode="popLayout">
@@ -698,6 +850,8 @@ export function PosPage() {
             onOpenCheckout={() => setCheckoutOpen(true)}
             onHold={handleHold}
             onViewWaiterSales={() => setWaiterSalesOpen(true)}
+            restaurantLabel={restaurantLabel}
+            hotelLabel={hotelLabel}
           />
           </motion.div>
         )}
@@ -723,10 +877,113 @@ export function PosPage() {
         waiterName={waiterName}
         waiters={waiters}
         holdInvoiceId={activeHoldId ?? undefined}
+        restaurantOrderId={restaurantOrderId ?? undefined}
+        restaurantLabel={restaurantLabel ?? undefined}
+        hotelFolioId={hotelFolioId ?? undefined}
+        hotelLabel={hotelLabel ?? undefined}
         onClose={() => setCheckoutOpen(false)}
         onSaveDraft={handleHold}
         onComplete={handleCheckoutComplete}
       />
+
+      {floorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Open table orders</h3>
+              <Button size="sm" variant="ghost" onClick={() => setFloorOpen(false)}>
+                Close
+              </Button>
+            </div>
+            {floorLoading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : floorOrders.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No open floor tickets.</p>
+            ) : (
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
+                {floorOrders.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-xl border border-border px-3 py-2.5 text-left text-sm hover:bg-muted/50"
+                      onClick={() => void loadRestaurantOrder(o.id)}
+                    >
+                      <span>
+                        <span className="font-medium">{o.order_number}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          {o.table_code || "Takeaway"} · {o.status}
+                        </span>
+                      </span>
+                      <span className="tabular-nums">{formatCurrency(o.subtotal)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {roomsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Charge to room</h3>
+              <Button size="sm" variant="ghost" onClick={() => setRoomsOpen(false)}>
+                Close
+              </Button>
+            </div>
+            {hotelFolioId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mb-3 w-full"
+                onClick={() => {
+                  setHotelFolioId(null);
+                  setHotelLabel(null);
+                }}
+              >
+                Clear room charge
+              </Button>
+            ) : null}
+            {roomsLoading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : openFolios.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No in-house guests with open folios.
+              </p>
+            ) : (
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
+                {openFolios.map((f) => (
+                  <li key={f.folio_id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm hover:bg-muted/50",
+                        hotelFolioId === f.folio_id
+                          ? "border-primary bg-primary/5"
+                          : "border-border"
+                      )}
+                      onClick={() => selectHotelFolio(f)}
+                    >
+                      <span>
+                        <span className="font-medium">Room {f.room_code || "—"}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          {f.guest_name || f.reservation_number}
+                        </span>
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatCurrency(f.balance)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

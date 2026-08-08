@@ -1,20 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
+  BedDouble,
+  Building2,
   Calendar,
   DollarSign,
   Download,
+  Dumbbell,
   FileDown,
   FileOutput,
   FileSpreadsheet,
   Filter,
   Loader2,
   Package,
+  Pill,
   Printer,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Users,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useSalesReportPrint } from "../hooks/useSalesReportPrint";
 import { useReportPrint } from "../hooks/useReportPrint";
@@ -28,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency } from "@/utils/cn";
-import { reportsApi, type ReportResult } from "@/services/api/reports";
+import { reportsApi, type ReportPack, type ReportResult } from "@/services/api/reports";
 import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 
 const REPORT_CATEGORIES = [
@@ -66,6 +71,52 @@ const REPORT_CATEGORIES = [
     description: "Profit & loss and expense breakdown",
     icon: BarChart3,
     reports: ["Profit & Loss", "Expense Breakdown"],
+  },
+  {
+    id: "gym",
+    title: "Gym Reports",
+    description: "Members, subscriptions, attendance, and classes",
+    icon: Dumbbell,
+    reports: ["Active Members", "Subscription Summary", "Attendance Log", "Class Bookings", "Plan Catalog"],
+  },
+  {
+    id: "pharmacy",
+    title: "Pharmacy Reports",
+    description: "Batch stock, expiry, and FEFO dispenses",
+    icon: Pill,
+    reports: ["Batch Stock", "Expiring Soon", "FEFO Dispenses"],
+  },
+  {
+    id: "hotel",
+    title: "Hotel Reports",
+    description: "Occupancy, in-house guests, and open folios",
+    icon: BedDouble,
+    reports: [
+      "Room Occupancy",
+      "In-House Guests",
+      "Open Folios",
+      "Arrivals & Departures",
+    ],
+  },
+  {
+    id: "restaurant",
+    title: "Restaurant Reports",
+    description: "Tables, open tickets, and menu catalog",
+    icon: UtensilsCrossed,
+    reports: ["Table Status", "Open Orders", "Orders by Status", "Menu Catalog"],
+  },
+  {
+    id: "property",
+    title: "Property Reports",
+    description: "Units, housing/office leases, and pending charges",
+    icon: Building2,
+    reports: [
+      "Unit Occupancy",
+      "Units by Kind",
+      "Housing Leases",
+      "Office Leases",
+      "Pending Charges",
+    ],
   },
   {
     id: "custom",
@@ -106,6 +157,26 @@ const CATEGORY_THEMES = {
   finance: {
     badge: "bg-indigo-500/10 text-indigo-700 border-indigo-300/40",
     chipActive: "bg-indigo-600 text-white hover:bg-indigo-600",
+  },
+  gym: {
+    badge: "bg-orange-500/10 text-orange-700 border-orange-300/40",
+    chipActive: "bg-orange-600 text-white hover:bg-orange-600",
+  },
+  pharmacy: {
+    badge: "bg-teal-500/10 text-teal-700 border-teal-300/40",
+    chipActive: "bg-teal-600 text-white hover:bg-teal-600",
+  },
+  hotel: {
+    badge: "bg-rose-500/10 text-rose-700 border-rose-300/40",
+    chipActive: "bg-rose-600 text-white hover:bg-rose-600",
+  },
+  restaurant: {
+    badge: "bg-lime-500/10 text-lime-800 border-lime-300/40",
+    chipActive: "bg-lime-600 text-white hover:bg-lime-600",
+  },
+  property: {
+    badge: "bg-stone-500/10 text-stone-700 border-stone-300/40",
+    chipActive: "bg-stone-700 text-white hover:bg-stone-700",
   },
   custom: {
     badge: "bg-muted text-foreground border-border",
@@ -150,6 +221,7 @@ function AnimatedMetricValue({
 }
 
 export function ReportsPage() {
+  const [categories, setCategories] = useState(REPORT_CATEGORIES);
   const [selected, setSelected] = useState<string>("sales");
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
@@ -175,7 +247,42 @@ export function ReportsPage() {
   } = useReportPrint(dateFrom, dateTo);
 
   const printBusy = salesPrintBusy || reportPrintBusy;
-  const category = REPORT_CATEGORIES.find((c) => c.id === selected);
+  const category = categories.find((c) => c.id === selected);
+
+  useEffect(() => {
+    reportsApi
+      .catalog()
+      .then((res) => {
+        const iconById: Record<string, typeof DollarSign> = {
+          sales: DollarSign,
+          inventory: Package,
+          purchases: TrendingUp,
+          customers: Users,
+          finance: BarChart3,
+          gym: Dumbbell,
+          pharmacy: Pill,
+          hotel: BedDouble,
+          restaurant: UtensilsCrossed,
+          property: Building2,
+        };
+        const mapped = res.data.map((pack: ReportPack) => {
+          const fallback = REPORT_CATEGORIES.find((c) => c.id === pack.id);
+          return {
+            id: pack.id,
+            title: pack.title,
+            description: pack.description,
+            icon: iconById[pack.id] ?? BarChart3,
+            reports: pack.reports,
+          };
+        });
+        if (mapped.length) {
+          setCategories([...mapped, REPORT_CATEGORIES.find((c) => c.id === "custom")!]);
+        }
+      })
+      .catch(() => {
+        setCategories(REPORT_CATEGORIES);
+      });
+  }, []);
 
   const loadReport = (reportName: string) => {
     if (selected === "custom") return;
@@ -305,18 +412,27 @@ export function ReportsPage() {
   }));
 
   const exportCsv = () => {
-    if (!reportData?.rows.length) return;
-    const header = reportData.columns.join(",");
-    const rowsCsv = reportData.rows.map((r) =>
-      reportData.columns.map((c) => JSON.stringify(r[c] ?? "")).join(",")
-    );
-    const blob = new Blob([[header, ...rowsCsv].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${selected}-${activeReport?.replace(/\s+/g, "-").toLowerCase()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!reportData?.rows.length || !activeReport || selected === "custom") return;
+    void reportsApi
+      .exportCsv({
+        category: selected,
+        report: activeReport,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      })
+      .catch(() => {
+        const header = reportData.columns.join(",");
+        const rowsCsv = reportData.rows.map((r) =>
+          reportData.columns.map((c) => JSON.stringify(r[c] ?? "")).join(",")
+        );
+        const blob = new Blob([[header, ...rowsCsv].join("\n")], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${selected}-${activeReport.replace(/\s+/g, "-").toLowerCase()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
   };
 
   return (
@@ -401,7 +517,7 @@ export function ReportsPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="xl:col-span-4 space-y-3">
-          {REPORT_CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const Icon = cat.icon;
             return (
               <button

@@ -331,6 +331,7 @@ class DailyOpsService:
         branch = _resolve_branch(data.get("branch_id"))
         expense = Expense.objects.create(
             branch=branch,
+            tenant_id=getattr(branch, "tenant_id", None),
             expense_date=data.get("expense_date") or timezone.localdate(),
             category=data.get("category") or "other",
             description=(data.get("description") or "").strip(),
@@ -343,6 +344,9 @@ class DailyOpsService:
             raise ValueError("Description is required.")
         if expense.amount <= 0:
             raise ValueError("Amount must be greater than zero.")
+        from apps.finance.services.journal_service import JournalService
+
+        JournalService.post_expense(expense=expense, user=user)
         return DailyOpsService._expense_payload(expense)
 
     @staticmethod
@@ -366,10 +370,30 @@ class DailyOpsService:
             raise ValueError("Amount must be greater than zero.")
         expense.updated_by = user
         expense.save()
+
+        from apps.finance.models import AccountingEvent
+        from apps.finance.services.journal_service import JournalService
+        from apps.finance.services.reversal_service import AccountingReversalService
+
+        AccountingReversalService.reverse_expense_journal(
+            expense=expense, user=user, reason="Expense updated"
+        )
+        revision = (
+            AccountingEvent.active_objects()
+            .filter(source_type="expense", source_id=expense.id)
+            .count()
+            + 1
+        )
+        JournalService.post_expense(expense=expense, user=user, revision=revision)
         return DailyOpsService._expense_payload(expense)
 
     @staticmethod
     def delete_expense(*, expense_id, user=None):
         expense = Expense.active_objects().get(pk=expense_id)
+        from apps.finance.services.reversal_service import AccountingReversalService
+
+        AccountingReversalService.reverse_expense_journal(
+            expense=expense, user=user, reason="Expense deleted"
+        )
         expense.soft_delete(user=user)
         return True

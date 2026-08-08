@@ -34,6 +34,35 @@ export interface Unit {
   is_active: boolean;
 }
 
+export interface ProductAttributeValue {
+  definition_id: string;
+  code: string;
+  name: string;
+  data_type: string;
+  value: string | number | boolean | string[] | null;
+  option_id?: string | null;
+  is_pos_visible?: boolean;
+}
+
+export interface AttributeDefinition {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  data_type: string;
+  is_required: boolean;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_pos_visible: boolean;
+  is_reportable: boolean;
+  is_active: boolean;
+  sort_order: number;
+  tenant_id: string | null;
+  is_system: boolean;
+  source?: string;
+  options: { id: string; value: string; label: string; sort_order: number; is_active: boolean }[];
+}
+
 export interface Product {
   id: string;
   sku: string;
@@ -51,9 +80,11 @@ export interface Product {
   description: string;
   image: string;
   is_active: boolean;
+  requires_prescription?: boolean;
   total_stock?: number;
   warehouse_id?: string | null;
   warehouse_name?: string | null;
+  attributes?: ProductAttributeValue[];
   created_at: string;
 }
 
@@ -118,7 +149,9 @@ export interface ProductFormData {
   description?: string;
   image?: string;
   is_active?: boolean;
+  requires_prescription?: boolean;
   initial_stock?: number;
   stock?: number;
   warehouse_id?: string;
+  attributes?: { definition_id?: string; code?: string; value: unknown }[] | Record<string, unknown>;
 }

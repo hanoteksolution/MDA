@@ -4,6 +4,7 @@ import { AppShell } from "@/layouts/AppShell/AppShell";
 import { AuthLayout, ProtectedRoute } from "@/layouts/AuthLayout/AuthLayout";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { SetupPage } from "@/pages/auth/SetupPage";
+import { OnboardingPage } from "@/pages/auth/OnboardingPage";
 import { ConnectionPage } from "@/pages/auth/ConnectionPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
@@ -39,7 +40,15 @@ import {
   PlatformTenantsPage,
   PlatformTenantDetailPage,
   PlatformShopDetailPage,
+  PlatformDemosPage,
   FutsalPage,
+  PharmacyPage,
+  GymPage,
+  RestaurantPage,
+  HotelPage,
+  PropertyPage,
+  HousingPage,
+  OfficePage,
 } from "@/app/routes/modules";
 import {
   CustomerFormPage,
@@ -70,6 +79,7 @@ export function AppRouter() {
       <Routes>
         <Route element={<AuthLayout />}>
           <Route path="/setup" element={<SetupPage />} />
+          <Route path="/onboard" element={<OnboardingPage />} />
           <Route path="/connection" element={<ConnectionPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -89,7 +99,7 @@ export function AppRouter() {
           <Route
             path="/products"
             element={
-              <PermissionGuard permission="products.view">
+              <PermissionGuard permission="products.view" module="inventory">
                 <ProductsPage />
               </PermissionGuard>
             }
@@ -97,7 +107,7 @@ export function AppRouter() {
           <Route
             path="/products/new"
             element={
-              <PermissionGuard permission="products.create">
+              <PermissionGuard permission="products.create" module="inventory">
                 <ProductFormPage />
               </PermissionGuard>
             }
@@ -105,7 +115,7 @@ export function AppRouter() {
           <Route
             path="/products/:id/edit"
             element={
-              <PermissionGuard permission="products.update">
+              <PermissionGuard permission="products.update" module="inventory">
                 <ProductEditPage />
               </PermissionGuard>
             }
@@ -113,7 +123,7 @@ export function AppRouter() {
           <Route
             path="/categories"
             element={
-              <PermissionGuard permission="products.view">
+              <PermissionGuard permission="products.view" module="inventory">
                 <CategoriesPage />
               </PermissionGuard>
             }
@@ -123,7 +133,7 @@ export function AppRouter() {
           <Route
             path="/inventory"
             element={
-              <PermissionGuard permission="inventory.view">
+              <PermissionGuard permission="inventory.view" module="inventory">
                 <InventoryDashboardPage />
               </PermissionGuard>
             }
@@ -131,7 +141,7 @@ export function AppRouter() {
           <Route
             path="/inventory/stock"
             element={
-              <PermissionGuard permission="inventory.view">
+              <PermissionGuard permission="inventory.view" module="inventory">
                 <StockPage />
               </PermissionGuard>
             }
@@ -139,7 +149,7 @@ export function AppRouter() {
           <Route
             path="/inventory/adjustments"
             element={
-              <PermissionGuard permission="inventory.adjust">
+              <PermissionGuard permission="inventory.adjust" module="inventory">
                 <AdjustmentsPage />
               </PermissionGuard>
             }
@@ -147,7 +157,7 @@ export function AppRouter() {
           <Route
             path="/inventory/warehouses"
             element={
-              <PermissionGuard permission="inventory.view">
+              <PermissionGuard permission="inventory.view" module="inventory">
                 <WarehousesPage />
               </PermissionGuard>
             }
@@ -157,7 +167,7 @@ export function AppRouter() {
           <Route
             path="/pos"
             element={
-              <PermissionGuard permission="pos.access">
+              <PermissionGuard permission="pos.access" module="pos">
                 <PosPage />
               </PermissionGuard>
             }
@@ -165,7 +175,7 @@ export function AppRouter() {
           <Route
             path="/purchases"
             element={
-              <PermissionGuard permission="purchases.view">
+              <PermissionGuard permission="purchases.view" module="purchases">
                 <PurchasesPage />
               </PermissionGuard>
             }
@@ -173,7 +183,7 @@ export function AppRouter() {
           <Route
             path="/purchases/new"
             element={
-              <PermissionGuard permission="purchases.create">
+              <PermissionGuard permission="purchases.create" module="purchases">
                 <PurchaseFormPage />
               </PermissionGuard>
             }
@@ -181,7 +191,7 @@ export function AppRouter() {
           <Route
             path="/purchases/:id/edit"
             element={
-              <PermissionGuard permission="purchases.update">
+              <PermissionGuard permission="purchases.update" module="purchases">
                 <PurchaseEditPage />
               </PermissionGuard>
             }
@@ -189,7 +199,7 @@ export function AppRouter() {
           <Route
             path="/sales"
             element={
-              <PermissionGuard permission="sales.view">
+              <PermissionGuard permission="sales.view" module="sales">
                 <SalesPage />
               </PermissionGuard>
             }
@@ -197,7 +207,7 @@ export function AppRouter() {
           <Route
             path="/daily-ops"
             element={
-              <PermissionGuard permission="sales.view">
+              <PermissionGuard permission="sales.view" module="sales">
                 <DailyOpsPage />
               </PermissionGuard>
             }
@@ -205,7 +215,7 @@ export function AppRouter() {
           <Route
             path="/receipts"
             element={
-              <PermissionGuard permission="sales.view">
+              <PermissionGuard permission="sales.view" module="sales">
                 <ReceiptManagementPage />
               </PermissionGuard>
             }
@@ -229,7 +239,7 @@ export function AppRouter() {
           <Route
             path="/waiter-performance"
             element={
-              <PermissionGuard permission={["pos.access", "sales.view"]}>
+              <PermissionGuard permission={["pos.access", "sales.view"]} module="pos">
                 <WaiterPerformancePage />
               </PermissionGuard>
             }
@@ -269,7 +279,7 @@ export function AppRouter() {
           <Route
             path="/customers"
             element={
-              <PermissionGuard permission="customers.view">
+              <PermissionGuard permission="customers.view" module="sales">
                 <CustomersPage />
               </PermissionGuard>
             }
@@ -277,7 +287,7 @@ export function AppRouter() {
           <Route
             path="/customers/new"
             element={
-              <PermissionGuard permission="customers.create">
+              <PermissionGuard permission="customers.create" module="sales">
                 <CustomerFormPage />
               </PermissionGuard>
             }
@@ -285,7 +295,7 @@ export function AppRouter() {
           <Route
             path="/customers/:id/edit"
             element={
-              <PermissionGuard permission="customers.update">
+              <PermissionGuard permission="customers.update" module="sales">
                 <CustomerEditPage />
               </PermissionGuard>
             }
@@ -293,7 +303,7 @@ export function AppRouter() {
           <Route
             path="/suppliers"
             element={
-              <PermissionGuard permission="suppliers.view">
+              <PermissionGuard permission="suppliers.view" module="purchases">
                 <SuppliersPage />
               </PermissionGuard>
             }
@@ -301,7 +311,7 @@ export function AppRouter() {
           <Route
             path="/suppliers/new"
             element={
-              <PermissionGuard permission="suppliers.create">
+              <PermissionGuard permission="suppliers.create" module="purchases">
                 <SupplierFormPage />
               </PermissionGuard>
             }
@@ -309,7 +319,7 @@ export function AppRouter() {
           <Route
             path="/suppliers/:id/edit"
             element={
-              <PermissionGuard permission="suppliers.update">
+              <PermissionGuard permission="suppliers.update" module="purchases">
                 <SupplierEditPage />
               </PermissionGuard>
             }
@@ -325,8 +335,64 @@ export function AppRouter() {
           <Route
             path="/futsal"
             element={
-              <PermissionGuard permission="futsal.view">
+              <PermissionGuard permission="futsal.view" module="futsal">
                 <FutsalPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/pharmacy"
+            element={
+              <PermissionGuard permission="pharmacy.view" module="pharmacy">
+                <PharmacyPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/gym"
+            element={
+              <PermissionGuard permission="gym.view" module="gym">
+                <GymPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/restaurant"
+            element={
+              <PermissionGuard permission="restaurant.view" module="restaurant">
+                <RestaurantPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/hotel"
+            element={
+              <PermissionGuard permission="hotel.view" module="hotel">
+                <HotelPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/property"
+            element={
+              <PermissionGuard permission="property_management.view" module="property_management">
+                <PropertyPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/housing"
+            element={
+              <PermissionGuard permission="housing_rental.view" module="housing_rental">
+                <HousingPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/office"
+            element={
+              <PermissionGuard permission="office_rental.view" module="office_rental">
+                <OfficePage />
               </PermissionGuard>
             }
           />
@@ -367,6 +433,14 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="platform.view">
                 <PlatformShopDetailPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/demos"
+            element={
+              <PermissionGuard permission="platform.view">
+                <PlatformDemosPage />
               </PermissionGuard>
             }
           />

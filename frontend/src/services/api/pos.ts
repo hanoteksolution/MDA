@@ -1,7 +1,14 @@
 import type { ApiResponse } from "@/types/models";
 import { apiRequest } from "./http";
 
-export type PaymentMethod = "cash" | "card" | "mobile" | "bank" | "split" | "on_account";
+export type PaymentMethod =
+  | "cash"
+  | "card"
+  | "mobile"
+  | "bank"
+  | "split"
+  | "on_account"
+  | "charge_to_room";
 
 export interface PosMerchant {
   id: string;
@@ -25,6 +32,9 @@ export interface PosProfile {
   default_payment_method: PaymentMethod;
   receipt_footer: string;
   return_policy?: string;
+  code?: string;
+  capabilities?: Record<string, boolean>;
+  enabled_modules?: string[];
 }
 
 export interface PosReceiptItem {
@@ -100,6 +110,7 @@ export interface PosCheckoutPayload {
   discount_amount?: number;
   tax_rate: number;
   payment_method: PaymentMethod;
+  payments?: { method: PaymentMethod; amount: number; reference?: string }[];
   merchant_id?: string;
   amount_tendered?: number;
   payment_reference?: string;
@@ -108,6 +119,67 @@ export interface PosCheckoutPayload {
   notes?: string;
   /** Resumed on-hold invoice — converts it in place, keeping the receipt number. */
   hold_invoice_id?: string;
+  idempotency_key?: string;
+  /** Explicit cashier shift; defaults to the current user's open session. */
+  cashier_session_id?: string;
+  /** Open restaurant floor ticket to mark paid after checkout. */
+  restaurant_order_id?: string;
+  /** Open hotel folio — posts F&B to guest room (charge-to-room). */
+  hotel_folio_id?: string;
+  hotel_reservation_id?: string;
+  /** Active pharmacy prescription covering Rx-required cart lines. */
+  prescription_id?: string;
+}
+
+export interface CashierSession {
+  id: string;
+  branch_id: string;
+  cashier_id: string;
+  cashier_name: string;
+  opened_at: string;
+  closed_at: string | null;
+  opening_float: number;
+  closing_cash_counted: number | null;
+  expected_cash: number | null;
+  cash_variance: number | null;
+  total_sales: number;
+  total_refunds: number;
+  status: "open" | "closed";
+  notes: string;
+}
+
+export interface SaleRefundItem {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+}
+
+export interface SaleRefund {
+  id: string;
+  refund_number: string;
+  original_invoice_id: string;
+  original_invoice_number: string;
+  branch_id: string;
+  cashier_session_id: string | null;
+  reason: string;
+  total_amount: number;
+  processed_by_id: string | null;
+  created_at: string;
+  items?: SaleRefundItem[];
+}
+
+export interface PosRefundPayload {
+  invoice_id: string;
+  items: { product_id: string; quantity: number }[];
+  reason?: string;
+  cashier_session_id?: string;
+}
+
+export interface PosRefundResult {
+  refund: SaleRefund;
+  invoice: { id: string; number: string; amount_refunded: number; total_amount: number };
 }
 
 export interface PosCheckoutResult {
@@ -270,4 +342,43 @@ export const posApi = {
       `/pos/waiter-performance/${qs ? `?${qs}` : ""}`
     );
   },
+
+  listSessions: (params: { branch_id?: string; status?: "open" | "closed" } = {}) => {
+    const q = new URLSearchParams();
+    if (params.branch_id) q.set("branch_id", params.branch_id);
+    if (params.status) q.set("status", params.status);
+    const qs = q.toString();
+    return apiRequest<ApiResponse<CashierSession[]>>(`/pos/sessions/${qs ? `?${qs}` : ""}`);
+  },
+
+  currentSession: (params: { branch_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.branch_id) q.set("branch_id", params.branch_id);
+    const qs = q.toString();
+    return apiRequest<ApiResponse<CashierSession | null>>(
+      `/pos/sessions/current/${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  openSession: (data: { branch_id?: string; opening_float?: number; notes?: string } = {}) =>
+    apiRequest<ApiResponse<CashierSession>>("/pos/sessions/open/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  closeSession: (data: {
+    session_id: string;
+    closing_cash_counted: number;
+    notes?: string;
+  }) =>
+    apiRequest<ApiResponse<CashierSession>>("/pos/sessions/close/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  refund: (data: PosRefundPayload) =>
+    apiRequest<ApiResponse<PosRefundResult>>("/pos/refunds/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

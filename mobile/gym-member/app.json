@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "MDA Gym Member",
+    "slug": "mda-gym-member",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mdagym",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.safaritechno.mda.gymmember"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.safaritechno.mda.gymmember"
+    }
+  }
+}

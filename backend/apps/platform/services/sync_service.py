@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.platform.models import ShopSyncSnapshot, Tenant
 from apps.platform.services.sync_catalog import CatalogSyncEngine, parse_since
+from apps.platform.services.sync_outbox_service import SyncOutboxService
 from apps.settings_app.models import Branch, Company
 from apps.settings_app.services.settings_service import SettingsService
 from core.services.analytics_service import AnalyticsService
@@ -56,6 +57,7 @@ class ShopSyncService:
             "last_status": ShopSyncService._get_setting(SYNC_KEYS["last_status"]),
             "last_message": ShopSyncService._get_setting(SYNC_KEYS["last_message"]),
             "initial_pull_done": ShopSyncService._get_setting(SYNC_KEYS["initial_pull_done"]) == "1",
+            "queue": SyncOutboxService.summary(),
         }
 
     @staticmethod
@@ -221,6 +223,7 @@ class ShopSyncService:
                     "synced_at": now,
                     "pulled": pulled_stats,
                     "message": msg,
+                    "queue": SyncOutboxService.summary(),
                 }
 
             # Then push local sales / customers / stock / waiters to cloud.
@@ -232,6 +235,13 @@ class ShopSyncService:
                 headers,
                 push_payload,
             )
+
+            invoice_ids = [
+                inv.get("local_id")
+                for inv in push_payload.get("invoices", [])
+                if inv.get("local_id")
+            ]
+            SyncOutboxService.mark_invoices_synced(invoice_ids=invoice_ids)
 
             ShopSyncService._set_setting(SYNC_KEYS["last_at"], now, user)
             ShopSyncService._set_setting(SYNC_KEYS["last_status"], "success", user)
@@ -258,9 +268,11 @@ class ShopSyncService:
                 },
                 "cloud": push_result.get("data", {}),
                 "message": msg,
+                "queue": SyncOutboxService.summary(),
             }
         except Exception as exc:
             err_msg = str(exc)[:500]
+            SyncOutboxService.mark_push_failed(err_msg)
             ShopSyncService._set_setting(SYNC_KEYS["last_status"], "error", user)
             ShopSyncService._set_setting(SYNC_KEYS["last_message"], err_msg, user)
             raise
@@ -416,9 +428,40 @@ class ShopSyncService:
 
 class CloudShopSyncService:
     @staticmethod
+    def _tenant_from_sync(*, tenant_slug: str, sync_secret: str) -> Tenant:
+        """Resolve tenant from desktop sync headers (constant-time secret check)."""
+        slug = (tenant_slug or "").strip()
+        secret = (sync_secret or "").strip()
+        if not slug or not secret:
+            raise Tenant.DoesNotExist("Missing sync credentials.")
+        tenant = (
+            Tenant.objects.select_related("subscription__plan")
+            .filter(slug=slug, is_active=True, deleted_at__isnull=True)
+            .first()
+        )
+        if not tenant or not tenant.sync_secret:
+            raise Tenant.DoesNotExist("Invalid shop sync credentials.")
+        if not secrets.compare_digest(str(tenant.sync_secret), secret):
+            raise Tenant.DoesNotExist("Invalid shop sync credentials.")
+        return tenant
+
+    @staticmethod
+    def verify(*, tenant_slug: str, sync_secret: str) -> dict:
+        tenant = CloudShopSyncService._tenant_from_sync(
+            tenant_slug=tenant_slug, sync_secret=sync_secret
+        )
+        return {
+            "ok": True,
+            "tenant_id": str(tenant.id),
+            "tenant_slug": tenant.slug,
+            "tenant_name": tenant.name,
+            "status": tenant.status,
+        }
+
+    @staticmethod
     def receive_push(*, tenant_slug: str, sync_secret: str, payload: dict) -> ShopSyncSnapshot:
-        tenant = Tenant.objects.select_related("subscription__plan").get(
-            slug=tenant_slug, sync_secret=sync_secret, is_active=True
+        tenant = CloudShopSyncService._tenant_from_sync(
+            tenant_slug=tenant_slug, sync_secret=sync_secret
         )
         apply_stats = CatalogSyncEngine.apply_shop_push(tenant=tenant, payload=payload)
         snap = ShopSyncSnapshot.objects.create(
@@ -434,8 +477,8 @@ class CloudShopSyncService:
 
     @staticmethod
     def build_pull(*, tenant_slug: str, sync_secret: str, since: str | None = None) -> dict:
-        tenant = Tenant.objects.select_related("subscription__plan").get(
-            slug=tenant_slug, sync_secret=sync_secret, is_active=True
+        tenant = CloudShopSyncService._tenant_from_sync(
+            tenant_slug=tenant_slug, sync_secret=sync_secret
         )
         since_dt = parse_since(since)
         return CatalogSyncEngine.export_pull_bundle(tenant=tenant, since=since_dt)
@@ -447,12 +490,6 @@ class CloudShopSyncService:
             return None
         month = snap.kpis.get("month") if isinstance(snap.kpis, dict) else None
         return month or snap.kpis
-
-    @staticmethod
-    def _tenant_from_sync(*, tenant_slug: str, sync_secret: str) -> Tenant:
-        return Tenant.objects.select_related("subscription__plan").get(
-            slug=tenant_slug, sync_secret=sync_secret, is_active=True
-        )
 
     @staticmethod
     def report_payment(*, tenant_slug: str, sync_secret: str, payer_phone: str = "", notes: str = "") -> dict:

@@ -10,12 +10,38 @@ from core.models.base import BaseModel
 class Tenant(BaseModel):
     """A shop / organization on the platform (maps to one or more companies)."""
 
+    STATUS_ACTIVE = "active"
+    STATUS_TRIAL = "trial"
+    STATUS_SUSPENDED = "suspended"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_TRIAL, "Trial"),
+        (STATUS_SUSPENDED, "Suspended"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=100, unique=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=50, blank=True)
     country = models.CharField(max_length=100, blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
+    currency = models.CharField(max_length=8, default="USD")
+    language = models.CharField(max_length=16, default="en")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_TRIAL,
+        db_index=True,
+    )
+    business_type = models.ForeignKey(
+        "platform.BusinessType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tenants",
+    )
     is_active = models.BooleanField(default=True, db_index=True)
     sync_secret = models.CharField(max_length=64, blank=True, db_index=True)
     shop_group = models.ForeignKey(
@@ -26,12 +52,38 @@ class Tenant(BaseModel):
         related_name="tenants",
     )
 
+    # SaaS demo lifecycle (PHASE 10) — local `seed_data --demo` is unrelated
+    DEMO_ACTIVE = "ACTIVE"
+    DEMO_EXPIRED = "EXPIRED"
+    DEMO_SUSPENDED = "SUSPENDED"
+    DEMO_CONVERTED = "CONVERTED"
+    DEMO_STATUS_CHOICES = [
+        (DEMO_ACTIVE, "Active"),
+        (DEMO_EXPIRED, "Expired"),
+        (DEMO_SUSPENDED, "Suspended"),
+        (DEMO_CONVERTED, "Converted"),
+    ]
+    is_demo = models.BooleanField(default=False, db_index=True)
+    demo_status = models.CharField(
+        max_length=20,
+        choices=DEMO_STATUS_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    demo_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    demo_converted_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = "tenants"
         ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    def sync_active_flag(self):
+        """Keep legacy is_active aligned with status."""
+        self.is_active = self.status in {self.STATUS_ACTIVE, self.STATUS_TRIAL}
 
 
 class SubscriptionPlan(BaseModel):

@@ -48,7 +48,7 @@ Create the shop and users on the **cloud Platform** first. Do **not** use the lo
    - **Cloud server URL:** e.g. `http://88.222.220.238:8010/api/v1`
    - **Shop slug:** from Platform → All Shops
    - **Sync secret:** from Platform → Edit shop
-3. **Save connection**, then **sign in** with the shop user created on the platform.
+3. **Save connection** (verifies slug + sync secret against cloud `GET /sync/shop-verify/`), then **sign in** with the shop user created on the platform.
 4. First sign-in **provisions** the account locally (role + permissions), then **syncs** catalog/sales when online.
 5. Later sign-ins work **offline** on this PC. Sync runs when the internet is available.
 
@@ -104,8 +104,11 @@ If the shop is offline for days, nothing is lost — all sales stay in local SQL
 | Endpoint | Direction | Auth |
 |----------|-----------|------|
 | `POST /api/v1/sync/run/` | Local bidirectional run | Shop JWT |
-| `POST /api/v1/sync/shop-push/` | Shop → cloud | `X-Tenant-Slug` + `X-Sync-Secret` |
-| `GET /api/v1/sync/shop-pull/?since=ISO` | Cloud → shop | Same headers |
+| `GET/POST /api/v1/sync/shop-verify/` | Prove credentials | `X-Tenant-Slug` + `X-Sync-Secret` |
+| `POST /api/v1/sync/shop-push/` | Shop → cloud (tenant-stamped ingest) | Same headers |
+| `GET /api/v1/sync/shop-pull/?since=ISO` | Cloud → shop (tenant-scoped catalog) | Same headers |
+
+Pull and push are scoped to the authenticated tenant: foreign SKUs are skipped; customers/invoices stamp `tenant_id`.
 
 ---
 

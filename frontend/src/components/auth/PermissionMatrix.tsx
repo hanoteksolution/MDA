@@ -37,7 +37,11 @@ const MODULE_LABELS: Record<string, string> = {
   audit: "Audit",
   platform: "Platform",
   staff: "Staff",
+  trash: "Trash",
   futsal: "Futsal",
+  pharmacy: "Pharmacy",
+  gym: "Gym",
+  restaurant: "Restaurant",
 };
 
 export function PermissionMatrix({

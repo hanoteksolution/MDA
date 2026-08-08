@@ -1,9 +1,10 @@
 from django.db import models
 
 from core.models.base import BaseModel
+from core.models.tenant import TenantScopedModel
 
 
-class Warehouse(BaseModel):
+class Warehouse(TenantScopedModel, BaseModel):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, db_index=True)
     branch = models.ForeignKey(
@@ -22,7 +23,7 @@ class Warehouse(BaseModel):
         return self.name
 
 
-class Inventory(BaseModel):
+class Inventory(TenantScopedModel, BaseModel):
     product = models.ForeignKey(
         "products.Product", on_delete=models.CASCADE, related_name="inventory_items"
     )
@@ -45,7 +46,7 @@ class Inventory(BaseModel):
         return f"{self.product.sku} @ {self.warehouse.code}: {self.quantity}"
 
 
-class StockMovement(BaseModel):
+class StockMovement(TenantScopedModel, BaseModel):
     MOVEMENT_TYPES = [
         ("adjustment", "Adjustment"),
         ("purchase", "Purchase"),
@@ -68,7 +69,7 @@ class StockMovement(BaseModel):
         ordering = ["-created_at"]
 
 
-class InventoryTransaction(BaseModel):
+class InventoryTransaction(TenantScopedModel, BaseModel):
     TRANSACTION_TYPES = [
         ("in", "In"),
         ("out", "Out"),
@@ -91,7 +92,7 @@ class InventoryTransaction(BaseModel):
         ordering = ["-created_at"]
 
 
-class InventoryAdjustment(BaseModel):
+class InventoryAdjustment(TenantScopedModel, BaseModel):
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("confirmed", "Confirmed"),
@@ -120,3 +121,65 @@ class InventoryAdjustmentItem(BaseModel):
 
     class Meta:
         db_table = "inventory_adjustment_items"
+
+
+class StockTransfer(TenantScopedModel, BaseModel):
+    STATUS_DRAFT = "draft"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_CONFIRMED, "Confirmed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    transfer_number = models.CharField(max_length=50, db_index=True)
+    source_warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="transfers_out"
+    )
+    destination_warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="transfers_in"
+    )
+    branch = models.ForeignKey(
+        "settings_app.Branch", on_delete=models.PROTECT, related_name="stock_transfers"
+    )
+    status = models.CharField(
+        max_length=50, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True
+    )
+    notes = models.TextField(blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="confirmed_stock_transfers",
+    )
+
+    class Meta:
+        db_table = "stock_transfers"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "transfer_number"],
+                name="uniq_stock_transfer_tenant_number",
+            ),
+        ]
+
+    def __str__(self):
+        return self.transfer_number
+
+
+class StockTransferLine(BaseModel):
+    transfer = models.ForeignKey(StockTransfer, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey("products.Product", on_delete=models.PROTECT, related_name="transfer_lines")
+    quantity = models.DecimalField(max_digits=18, decimal_places=4)
+
+    class Meta:
+        db_table = "stock_transfer_lines"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transfer", "product"],
+                name="uniq_stock_transfer_line_product",
+            ),
+        ]

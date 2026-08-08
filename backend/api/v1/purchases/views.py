@@ -50,6 +50,7 @@ class PurchaseOrderListCreateView(APIView):
             status=request.query_params.get("status"),
             supplier_id=request.query_params.get("supplier_id"),
             branch_id=request.query_params.get("branch_id"),
+            user=request.user,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_purchase_order(po) for po in items])
 
@@ -74,13 +75,13 @@ class PurchaseOrderDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("purchases.view")]
 
     def get(self, request, pk):
-        po = PurchaseOrderService.list().get(pk=pk)
+        po = PurchaseOrderService.list(user=request.user).get(pk=pk)
         return success_response(data=serialize_purchase_order(po, include_items=True))
 
     def put(self, request, pk):
         if not request.user.has_permission("purchases.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        po = PurchaseOrderService.list().get(pk=pk)
+        po = PurchaseOrderService.list(user=request.user).get(pk=pk)
         if po.status == PurchaseOrder.STATUS_RECEIVED:
             return error_response(message="Received orders cannot be edited.", status=status.HTTP_400_BAD_REQUEST)
         data = _parse_po_data(request.data)
@@ -98,7 +99,7 @@ class PurchaseOrderDetailView(APIView):
     def delete(self, request, pk):
         if not request.user.has_permission("purchases.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        po = PurchaseOrderService.list().get(pk=pk)
+        po = PurchaseOrderService.list(user=request.user).get(pk=pk)
         if po.status not in (PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_CANCELLED):
             return error_response(message="Only draft orders can be deleted.", status=status.HTTP_400_BAD_REQUEST)
         po.soft_delete(user=request.user)
@@ -109,4 +110,72 @@ class PurchaseOrderSummaryView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("purchases.view")]
 
     def get(self, request):
-        return success_response(data=PurchaseOrderService.summary())
+        return success_response(data=PurchaseOrderService.summary(user=request.user))
+
+
+class PurchaseOrderReceivePreviewView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("purchases.view")]
+
+    def get(self, request, pk):
+        from apps.inventory.services.receiving_service import PurchaseReceivingService, ReceivingError
+
+        try:
+            data = PurchaseReceivingService.preview(purchase_order_id=pk, user=request.user)
+        except PurchaseOrder.DoesNotExist:
+            return error_response(message="Purchase order not found.", status=status.HTTP_404_NOT_FOUND)
+        except ReceivingError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=data)
+
+
+class PurchaseOrderReceiveView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("purchases.create")]
+
+    def post(self, request, pk):
+        from datetime import date as date_cls
+        from uuid import UUID
+
+        from apps.inventory.services.receiving_service import (
+            PurchaseReceivingService,
+            ReceiveLineInput,
+            ReceivingError,
+        )
+
+        warehouse_id = request.data.get("warehouse_id")
+        if not warehouse_id:
+            return error_response(message="warehouse_id is required.", status=status.HTTP_400_BAD_REQUEST)
+        raw_lines = request.data.get("lines") or []
+        if not raw_lines:
+            return error_response(message="At least one receive line is required.", status=status.HTTP_400_BAD_REQUEST)
+
+        lines = []
+        try:
+            for item in raw_lines:
+                expiry = item.get("expiry_date")
+                if expiry and isinstance(expiry, str):
+                    expiry = date_cls.fromisoformat(expiry)
+                lines.append(
+                    ReceiveLineInput(
+                        product_id=UUID(str(item["product_id"])),
+                        quantity_received=Decimal(str(item["quantity_received"])),
+                        unit_cost=Decimal(str(item["unit_cost"])) if item.get("unit_cost") is not None else None,
+                        batch_number=item.get("batch_number"),
+                        expiry_date=expiry,
+                    )
+                )
+        except (KeyError, ValueError, TypeError) as exc:
+            return error_response(message=f"Invalid receive line: {exc}", status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            data = PurchaseReceivingService.receive(
+                purchase_order_id=pk,
+                warehouse_id=warehouse_id,
+                lines=lines,
+                user=request.user,
+                notes=request.data.get("notes") or "",
+            )
+        except PurchaseOrder.DoesNotExist:
+            return error_response(message="Purchase order not found.", status=status.HTTP_404_NOT_FOUND)
+        except ReceivingError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=data, message="Goods received.")

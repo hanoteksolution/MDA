@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.db.models import Q
+from django.core.cache import cache
 from django.utils import timezone
 
 from apps.authentication.models import User
@@ -27,6 +28,7 @@ PAYMENT_LABELS = {
     "bank": "Bank Transfer",
     "split": "Split Payment",
     "on_account": "Pay Later / Account",
+    "charge_to_room": "Charge to Room",
     "invoice": "Invoice",
     "hold": "On Hold",
 }
@@ -60,7 +62,14 @@ def _pos_profile_key(user_id) -> str:
     return f"pos_profile_{user_id}"
 
 
-def get_pos_profile(*, user):
+def _pos_profile_cache_key(user_id) -> str:
+    return f"mda:pos_profile:{user_id}"
+
+
+POS_PROFILE_CACHE_TTL = 30
+
+
+def _build_pos_profile(*, user):
     setting = SettingsService.get_by_key(key=_pos_profile_key(user.id))
     if setting:
         profile = setting.value if isinstance(setting.value, dict) else {}
@@ -105,6 +114,48 @@ def get_pos_profile(*, user):
     return profile
 
 
+def get_pos_profile(*, user):
+    cache_key = _pos_profile_cache_key(user.id)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    profile = _build_pos_profile(user=user)
+    # Attach universal POS profile code + capabilities (PHASE 13)
+    from apps.platform.services.module_service import enabled_module_codes
+    from apps.sales.services.pos_profile import get_pos_capabilities
+
+    tenant = getattr(user, "tenant", None)
+    mods = enabled_module_codes(tenant=tenant, user=user) if tenant or user else set()
+    explicit = (profile.get("code") or profile.get("profile_code") or "").strip() or None
+    caps = get_pos_capabilities(enabled_modules=mods, explicit_code=explicit)
+    profile["code"] = caps["code"]
+    profile["capabilities"] = caps["capabilities"]
+    profile["enabled_modules"] = caps["modules"]
+    cache.set(cache_key, profile, POS_PROFILE_CACHE_TTL)
+    return profile
+
+
+def pharmacy_sale_post_kwargs(*, profile=None, user=None) -> dict:
+    """CAE kwargs when checkout should tag as pharmacy revenue / BusinessUnit PHARM."""
+    if profile is None and user is not None:
+        profile = get_pos_profile(user=user)
+    profile = profile or {}
+    code = (profile.get("code") or "").strip().upper()
+    mods = {str(m).lower() for m in (profile.get("enabled_modules") or [])}
+    caps = profile.get("capabilities") or {}
+    if code != "PHARMACY" and not (
+        "pharmacy" in mods and caps.get("batches")
+    ):
+        return {}
+    from apps.finance.events import event_types
+
+    return {
+        "event_type": event_types.PHARMACY_SALE_COMPLETED,
+        "source_module": "pharmacy",
+        "revenue_mapping_key": "PHARMACY_SALES_REVENUE",
+    }
+
+
 def save_pos_profile(*, user, data):
     SettingsService.upsert(
         key=_pos_profile_key(user.id),
@@ -121,6 +172,7 @@ def save_pos_profile(*, user, data):
             category="pos",
             user=user,
         )
+    cache.delete(_pos_profile_cache_key(user.id))
     return data
 
 
@@ -158,13 +210,64 @@ class PosService:
         discount_pct = Decimal(str(data.get("discount_pct") or 0))
         discount_amount_raw = data.get("discount_amount")
         tax_rate = Decimal(str(data.get("tax_rate") or 0))
-        payment_method = data.get("payment_method") or "cash"
+        payment_method = (data.get("payment_method") or "cash").strip().lower()
         merchant_id = data.get("merchant_id")
         order_notes = data.get("notes") or ""
         amount_tendered = data.get("amount_tendered")
         payment_reference = (data.get("payment_reference") or "").strip()
         waiter_id = data.get("waiter_id")
         waiter_name = (data.get("waiter_name") or "").strip()
+        idempotency_key = (data.get("idempotency_key") or "").strip() or None
+        raw_payments = data.get("payments")
+        hotel_folio_id = data.get("hotel_folio_id")
+        hotel_reservation_id = data.get("hotel_reservation_id")
+        is_charge_to_room = (
+            payment_method == "charge_to_room"
+            or bool(hotel_folio_id)
+            or bool(hotel_reservation_id)
+        )
+        # Guest settles at hotel checkout — treat as on-account for AR / stock posting.
+        if is_charge_to_room:
+            payment_method = "on_account"
+
+        if idempotency_key:
+            existing = (
+                Invoice.active_objects()
+                .filter(idempotency_key=idempotency_key, deleted_at__isnull=True)
+                .first()
+            )
+            if existing is not None:
+                company = Company.active_objects().first()
+                branch_existing = existing.branch
+                profile_existing = get_pos_profile(user=user)
+                method, ref = _parse_payment_from_notes(existing.notes or "")
+                from apps.finance.services.posting_service import AccountingPostingService
+
+                AccountingPostingService.post_sale(
+                    invoice=existing,
+                    user=user,
+                    payment_method=method or payment_method,
+                    **pharmacy_sale_post_kwargs(profile=profile_existing, user=user),
+                )
+                receipt = PosService.build_receipt(
+                    invoice=existing,
+                    company=company,
+                    branch=branch_existing,
+                    user=user,
+                    payment_method=method or payment_method,
+                    merchant=None,
+                    profile=profile_existing,
+                    amount_tendered=amount_tendered,
+                    change=None,
+                    payment_reference=ref or payment_reference,
+                    tax_rate=Decimal("0"),
+                    waiter_name=waiter_name,
+                )
+                return {
+                    "invoice": serialize_invoice(existing, include_items=True),
+                    "receipt": receipt,
+                    "idempotent_replay": True,
+                }
 
         profile = get_pos_profile(user=user)
         merchant = None
@@ -185,7 +288,11 @@ class PosService:
                         served_by_user = User.objects.filter(pk=linked_user_id, is_active=True).first()
                     break
 
-        if payment_method == "on_account" and (not customer_id or customer_id == "walkin"):
+        if (
+            payment_method == "on_account"
+            and not is_charge_to_room
+            and (not customer_id or customer_id == "walkin")
+        ):
             raise ValueError("Select a registered customer for pay-later / account sales.")
 
         if not waiter_id and not waiter_name:
@@ -200,6 +307,18 @@ class PosService:
             for item in items
         ]
 
+        from apps.pharmacy.services.rx_pos_service import RxPosError, RxPosService
+
+        try:
+            linked_rx = RxPosService.validate_cart(
+                items=parsed_items,
+                prescription_id=data.get("prescription_id"),
+                user=user,
+                profile=profile,
+            )
+        except RxPosError as exc:
+            raise ValueError(str(exc)) from exc
+
         subtotal = sum(i["quantity"] * i["unit_price"] for i in parsed_items)
         if discount_amount_raw is not None and str(discount_amount_raw).strip() != "":
             discount_amount = min(subtotal, Decimal(str(discount_amount_raw)))
@@ -211,18 +330,78 @@ class PosService:
         after_discount = _money(subtotal - discount_amount)
         total_amount = _money(after_discount + tax_amount)
 
-        payment_note = f"Payment: {payment_method}"
+        # Normalize tenders: payments[] or single payment_method
+        tender_lines = []
+        if isinstance(raw_payments, list) and raw_payments:
+            for row in raw_payments:
+                method = (row.get("method") or "cash").strip().lower()
+                amount = _money(row.get("amount") or 0)
+                if amount <= 0 and method != "on_account":
+                    continue
+                tender_lines.append(
+                    {
+                        "method": method,
+                        "amount": amount,
+                        "reference": (row.get("reference") or "").strip(),
+                    }
+                )
+            if not tender_lines:
+                raise ValueError("Split payment requires at least one positive tender.")
+            paid_sum = sum((t["amount"] for t in tender_lines), Decimal("0"))
+            methods = {t["method"] for t in tender_lines}
+            if methods == {"on_account"} or (len(methods) == 1 and "on_account" in methods):
+                payment_method = "on_account"
+            elif len(methods) > 1:
+                payment_method = "split"
+            else:
+                payment_method = next(iter(methods))
+            if payment_method != "on_account" and paid_sum + Decimal("0.01") < total_amount:
+                raise ValueError(
+                    f"Tenders ({paid_sum}) are less than total ({total_amount})."
+                )
+            if not payment_reference and tender_lines[0].get("reference"):
+                payment_reference = tender_lines[0]["reference"]
+        else:
+            tender_lines = [
+                {
+                    "method": payment_method,
+                    "amount": Decimal("0") if payment_method == "on_account" else total_amount,
+                    "reference": payment_reference,
+                }
+            ]
+
+        if (
+            payment_method == "on_account"
+            and not is_charge_to_room
+            and (not customer_id or customer_id == "walkin")
+        ):
+            raise ValueError("Select a registered customer for pay-later / account sales.")
+
+        receipt_payment_method = "charge_to_room" if is_charge_to_room else payment_method
+        payment_note = f"Payment: {receipt_payment_method}"
         if merchant:
             payment_note += f" | Merchant: {merchant.get('merchant_number', '')} ({merchant.get('company_name', '')})"
         if payment_reference:
             payment_note += f" | Ref: {payment_reference}"
         if waiter_name:
             payment_note += f" | Waiter: {waiter_name}"
+        if is_charge_to_room and hotel_folio_id:
+            payment_note += f" | Folio: {hotel_folio_id}"
+        if linked_rx is not None:
+            payment_note += f" | Rx: {linked_rx.rx_number}"
         notes = f"{order_notes}\n{payment_note}".strip() if order_notes else payment_note
 
         is_on_account = payment_method == "on_account"
         invoice_status = Invoice.STATUS_SENT if is_on_account else Invoice.STATUS_PAID
-        amount_paid = Decimal("0") if is_on_account else total_amount
+        if is_on_account:
+            amount_paid = Decimal("0")
+        elif payment_method == "split":
+            amount_paid = min(
+                total_amount,
+                sum((t["amount"] for t in tender_lines if t["method"] != "on_account"), Decimal("0")),
+            )
+        else:
+            amount_paid = total_amount
         due_date = timezone.localdate() + timedelta(days=30) if is_on_account else None
 
         # Resumed hold: convert the existing on_hold invoice so the receipt
@@ -247,6 +426,21 @@ class PosService:
             "notes": notes,
             "served_by_user": served_by_user,
         }
+        if idempotency_key:
+            invoice_data["idempotency_key"] = idempotency_key
+
+        from apps.sales.services.cashier_session_service import CashierSessionService
+
+        cashier_session = None
+        session_id = data.get("cashier_session_id")
+        if session_id:
+            cashier_session = CashierSessionService.resolve_for_checkout(
+                user=user,
+                session_id=session_id,
+                branch_id=str(branch.id),
+            )
+        else:
+            cashier_session = CashierSessionService.get_open(user=user, branch_id=str(branch.id))
 
         if held_invoice is not None:
             invoice = InvoiceService.update(
@@ -263,8 +457,48 @@ class PosService:
             )
         invoice.tax_amount = tax_amount
         invoice.total_amount = total_amount
-        invoice.save(update_fields=["tax_amount", "total_amount", "updated_at"])
-        invoice = InvoiceService.list().get(pk=invoice.pk)
+        if idempotency_key and not invoice.idempotency_key:
+            invoice.idempotency_key = idempotency_key
+            invoice.save(update_fields=["tax_amount", "total_amount", "idempotency_key", "updated_at"])
+        else:
+            invoice.save(update_fields=["tax_amount", "total_amount", "updated_at"])
+
+        if cashier_session is not None:
+            invoice.cashier_session = cashier_session
+            invoice.save(update_fields=["cashier_session", "updated_at"])
+
+        from apps.sales.models import Payment
+
+        invoice.payments.all().delete()
+        for tender in tender_lines:
+            Payment.objects.create(
+                invoice=invoice,
+                branch=invoice.branch,
+                method=tender["method"] if tender["method"] in dict(Payment.METHOD_CHOICES) else Payment.METHOD_OTHER,
+                amount=tender["amount"],
+                reference=tender.get("reference") or "",
+                tenant_id=invoice.tenant_id,
+                created_by=user,
+            )
+
+        invoice = InvoiceService.list(user=user).get(pk=invoice.pk)
+
+        from apps.finance.services.posting_service import AccountingPostingService
+
+        AccountingPostingService.post_sale(
+            invoice=invoice,
+            user=user,
+            payment_method=payment_method,
+            tender_lines=[
+                {
+                    "method": t["method"],
+                    "amount": str(t["amount"]),
+                    "reference": t.get("reference") or "",
+                }
+                for t in tender_lines
+            ],
+            **pharmacy_sale_post_kwargs(profile=profile, user=user),
+        )
 
         company = Company.active_objects().first()
         change = None
@@ -276,7 +510,7 @@ class PosService:
             company=company,
             branch=branch,
             user=user,
-            payment_method=payment_method,
+            payment_method=receipt_payment_method,
             merchant=merchant,
             profile=profile,
             amount_tendered=amount_tendered,
@@ -285,12 +519,94 @@ class PosService:
             tax_rate=tax_rate,
             waiter_name=waiter_name,
         )
-        return {"invoice": serialize_invoice(invoice, include_items=True), "receipt": receipt}
+        from apps.platform.services.sync_outbox_service import SyncOutboxService
+
+        SyncOutboxService.enqueue_invoice(invoice=invoice, idempotency_key=idempotency_key)
+
+        if linked_rx is not None:
+            from apps.pharmacy.services.prescription_service import PrescriptionService
+
+            fill_quantities = {}
+            for row in parsed_items:
+                pid = str(row["product_id"])
+                fill_quantities[pid] = fill_quantities.get(pid, Decimal("0")) + row["quantity"]
+            PrescriptionService.dispense(
+                prescription_id=linked_rx.id,
+                user=user,
+                notes=f"POS invoice {invoice.invoice_number}",
+                deduct_stock=False,
+                fill_quantities=fill_quantities,
+            )
+
+        result = {
+            "invoice": serialize_invoice(invoice, include_items=True),
+            "receipt": receipt,
+        }
+
+        # Pay-table bridge: mark restaurant floor ticket paid after successful checkout
+        restaurant_order_id = data.get("restaurant_order_id")
+        if restaurant_order_id:
+            from django.core.exceptions import ObjectDoesNotExist
+
+            from apps.restaurant.serializers import serialize_order
+            from apps.restaurant.services import RestaurantError, RestaurantService
+
+            try:
+                order = RestaurantService.get_order(pk=restaurant_order_id, user=user)
+                order = RestaurantService.update_order_status(
+                    order=order,
+                    status=order.STATUS_PAID,
+                    user=user,
+                )
+                result["restaurant_order"] = serialize_order(order)
+            except ObjectDoesNotExist as exc:
+                raise ValueError("Restaurant order not found.") from exc
+            except RestaurantError as exc:
+                raise ValueError(str(exc)) from exc
+
+        # Charge-to-room: post F&B / POS total onto open hotel folio
+        if is_charge_to_room:
+            from django.core.exceptions import ObjectDoesNotExist
+
+            from apps.hotel.serializers import serialize_folio
+            from apps.hotel.services import HotelError, HotelService
+
+            try:
+                folio = None
+                if hotel_folio_id:
+                    folio = HotelService.get_folio(pk=hotel_folio_id, user=user)
+                elif hotel_reservation_id:
+                    reservation = HotelService.get_reservation(
+                        pk=hotel_reservation_id, user=user
+                    )
+                    folio = HotelService.get_folio_for_reservation(
+                        reservation=reservation
+                    )
+                if folio is None:
+                    raise ValueError("No open hotel folio for charge-to-room.")
+                HotelService.charge_pos_sale_to_folio(
+                    folio=folio,
+                    amount=invoice.total_amount,
+                    invoice_number=invoice.invoice_number or "",
+                    user=user,
+                )
+                folio.refresh_from_db()
+                result["hotel_folio"] = serialize_folio(folio)
+            except ObjectDoesNotExist as exc:
+                raise ValueError("Hotel folio / reservation not found.") from exc
+            except HotelError as exc:
+                raise ValueError(str(exc)) from exc
+
+        return result
 
     @staticmethod
     @transaction.atomic
     def hold(*, data, user):
-        """Persist an on-hold cart as an invoice with status on_hold (stock reserved)."""
+        """Persist an on-hold cart as an invoice with status on_hold.
+
+        Stock is reserved via InventoryService.reserve_quantity (does not reduce
+        on-hand quantity). Checkout from hold consumes the reservation.
+        """
         branch_id = data.get("branch_id")
         branch = _resolve_branch(branch_id)
         customer_id = data.get("customer_id")
@@ -382,12 +698,14 @@ class PosService:
         invoice.tax_amount = tax_amount
         invoice.total_amount = total_amount
         invoice.save(update_fields=["tax_amount", "total_amount", "updated_at"])
-        invoice = InvoiceService.list().get(pk=invoice.pk)
+        invoice = InvoiceService.list(user=user).get(pk=invoice.pk)
         return serialize_invoice(invoice, include_items=True)
 
     @staticmethod
-    def list_holds(*, branch_id=None, search=None):
-        qs = InvoiceService.list(payment_state="on_hold", branch_id=branch_id, search=search)
+    def list_holds(*, branch_id=None, search=None, user=None):
+        qs = InvoiceService.list(
+            payment_state="on_hold", branch_id=branch_id, search=search, user=user
+        )
         return [serialize_invoice(inv, include_items=True) for inv in qs]
 
     @staticmethod

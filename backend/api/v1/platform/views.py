@@ -2,8 +2,35 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.platform.models import SubscriptionPayment, SubscriptionPlan, Tenant, TenantSubscription
+from apps.platform.models import (
+    Module,
+    SubscriptionPayment,
+    SubscriptionPlan,
+    Tenant,
+    TenantDomain,
+    TenantModule,
+    TenantSubscription,
+)
+from apps.platform.services.domain_utils import (
+    RESERVED_TENANT_SLUGS,
+    get_tenant_base_domain,
+    validate_tenant_slug,
+)
 from apps.platform.services.platform_service import PlatformService
+from apps.platform.services.module_service import (
+    ModuleDependencyError,
+    ensure_default_modules,
+    module_payload,
+    sync_tenant_modules,
+    tenant_module_payload,
+)
+from apps.platform.services.business_preset_service import BusinessPresetService
+from apps.platform.services.demo_tenant_service import DemoTenantError, DemoTenantService
+from apps.platform.services.tenant_resolver import (
+    normalize_hostname,
+    resolution_public_payload,
+    resolve_tenant_from_hostname,
+)
 from core.responses.api_response import error_response, success_response
 from core.utils.media import save_subscription_qr
 from permissions.base import HasPermission
@@ -150,6 +177,283 @@ class PlatformTenantUsersView(APIView):
         )
 
 
+class PlatformBusinessTypesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        rows = PlatformService.list_business_types()
+        return success_response(
+            data={
+                "items": [PlatformService.business_type_payload(bt) for bt in rows],
+                "base_domain": get_tenant_base_domain(),
+                "reserved_slugs": sorted(RESERVED_TENANT_SLUGS),
+            }
+        )
+
+
+class PlatformModulesCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        ensure_default_modules()
+        rows = Module.active_objects().filter(is_active=True).order_by("sort_order", "name")
+        return success_response(data={"items": [module_payload(m) for m in rows]})
+
+
+class PlatformTenantModulesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        sync_tenant_modules(tenant=tenant, user=request.user)
+        links = (
+            TenantModule.active_objects()
+            .filter(tenant=tenant)
+            .select_related("module")
+            .order_by("module__sort_order", "module__code")
+        )
+        return success_response(
+            data={
+                "items": [tenant_module_payload(link) for link in links],
+                "enabled": [link.module.code for link in links if link.enabled],
+            }
+        )
+
+    def put(self, request, pk):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        enabled = request.data.get("enabled_modules")
+        if enabled is None:
+            enabled = request.data.get("enabled")
+        if not isinstance(enabled, list):
+            return error_response(
+                message="enabled_modules must be a list of module codes.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            sync_tenant_modules(
+                tenant=tenant,
+                enabled_codes=enabled,
+                user=request.user,
+                disable_missing=True,
+                validate_dependencies=True,
+            )
+        except ModuleDependencyError as exc:
+            return error_response(
+                message=str(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+                errors={"code": exc.code, "missing": exc.missing},
+            )
+        links = (
+            TenantModule.active_objects()
+            .filter(tenant=tenant)
+            .select_related("module")
+            .order_by("module__sort_order", "module__code")
+        )
+        return success_response(
+            data={
+                "items": [tenant_module_payload(link) for link in links],
+                "enabled": [link.module.code for link in links if link.enabled],
+            },
+            message="Modules updated.",
+        )
+
+
+class PlatformBusinessPresetsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        bt = request.query_params.get("business_type") or None
+        rows = BusinessPresetService.list_presets(business_type_code=bt)
+        return success_response(
+            data={"items": [BusinessPresetService.serialize(p) for p in rows]}
+        )
+
+
+class PlatformDemoTenantListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        status_filter = request.query_params.get("status") or None
+        DemoTenantService.expire_due()
+        rows = DemoTenantService.list_demos(status=status_filter)
+        return success_response(data={"items": [DemoTenantService.serialize(t) for t in rows]})
+
+    def post(self, request):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            tenant, seed_report = DemoTenantService.create(data=request.data or {}, user=request.user)
+        except DemoTenantError as exc:
+            return error_response(message=exc.message, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data={**DemoTenantService.serialize(tenant), "seed_report": seed_report},
+            message="Demo tenant created.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PlatformDemoTenantActionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, action):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True, is_demo=True).first()
+        if not tenant:
+            return error_response(message="Demo tenant not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            if action == "extend":
+                days = int((request.data or {}).get("days") or 14)
+                tenant = DemoTenantService.extend(tenant=tenant, days=days, user=request.user)
+            elif action == "suspend":
+                tenant = DemoTenantService.suspend(tenant=tenant, user=request.user)
+            elif action == "expire":
+                tenant = DemoTenantService.expire(tenant=tenant, user=request.user)
+            elif action == "convert":
+                plan_code = (request.data or {}).get("plan_code")
+                tenant = DemoTenantService.convert(
+                    tenant=tenant, plan_code=plan_code, user=request.user
+                )
+            else:
+                return error_response(message="Unknown action.", status=status.HTTP_404_NOT_FOUND)
+        except DemoTenantError as exc:
+            return error_response(message=exc.message, status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=DemoTenantService.serialize(tenant),
+            message=f"Demo {action} complete.",
+        )
+
+
+class PlatformTenantSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        settings_row, _ = PlatformService.provision_tenant_defaults(tenant=tenant)
+        return success_response(data=PlatformService.settings_payload(settings_row))
+
+    def put(self, request, pk):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = PlatformService.update_tenant_settings(
+                tenant=tenant, data=request.data, user=request.user
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=PlatformService.settings_payload(row), message="Settings updated.")
+
+
+class PlatformTenantDomainsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        PlatformService.provision_tenant_defaults(tenant=tenant)
+        domains = TenantDomain.active_objects().filter(tenant=tenant).order_by("-is_primary", "domain")
+        return success_response(
+            data={
+                "base_domain": get_tenant_base_domain(),
+                "items": [PlatformService.domain_payload(d) for d in domains],
+            }
+        )
+
+    def post(self, request, pk):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        tenant = Tenant.objects.filter(pk=pk, deleted_at__isnull=True).first()
+        if not tenant or not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            domain = PlatformService.add_tenant_domain(
+                tenant=tenant, data=request.data, user=request.user
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=PlatformService.domain_payload(domain),
+            message="Domain added.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PlatformSlugCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        raw = (request.query_params.get("slug") or request.query_params.get("subdomain") or "").strip()
+        try:
+            slug = validate_tenant_slug(raw)
+        except ValueError as exc:
+            return success_response(
+                data={
+                    "slug": raw,
+                    "available": False,
+                    "reason": str(exc),
+                    "hostname": None,
+                }
+            )
+        taken = Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists()
+        return success_response(
+            data={
+                "slug": slug,
+                "available": not taken,
+                "reason": "already taken" if taken else "",
+                "hostname": f"{slug}.{get_tenant_base_domain()}",
+            }
+        )
+
+
+class PlatformResolveHostView(APIView):
+    """Public host → tenant branding resolution (no secrets)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        explicit = (request.query_params.get("host") or "").strip()
+        hostname = normalize_hostname(
+            explicit
+            or request.META.get("HTTP_X_FORWARDED_HOST")
+            or request.META.get("HTTP_HOST")
+        )
+        # Prefer middleware resolution when host matches request host
+        resolution = getattr(request, "tenant_resolution", None)
+        if explicit or resolution is None or normalize_hostname(resolution.hostname) != hostname:
+            resolution = resolve_tenant_from_hostname(hostname)
+        return success_response(data=resolution_public_payload(resolution))
+
+
 class PlatformSubscriptionListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -290,6 +594,23 @@ class PlatformMySubscriptionAlertView(APIView):
     def get(self, request):
         alert = PlatformService.user_subscription_alert(request.user)
         return success_response(data=alert)
+
+
+class PlatformEntitlementsView(APIView):
+    """Current tenant plan limits, modules, and subscription phase."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.platform.services.entitlement_service import EntitlementService
+
+        tenant = PlatformService.resolve_user_tenant(request.user)
+        payload = EntitlementService.evaluate(tenant=tenant)
+        if tenant and payload.get("has_subscription"):
+            sub = EntitlementService.get_subscription(tenant)
+            if sub and (sub.needs_payment_alert or not sub.is_usable):
+                payload["alert"] = PlatformService.enrich_alert_payload(sub, user=request.user)
+        return success_response(data=payload)
 
 
 class PlatformPlansView(APIView):

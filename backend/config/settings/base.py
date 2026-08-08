@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
+    "drf_spectacular",
     "core",
     "apps.authentication",
     "apps.settings_app",
@@ -34,15 +35,29 @@ INSTALLED_APPS = [
     "apps.sales",
     "apps.platform",
     "apps.futsal",
+    "apps.pharmacy",
+    "apps.gym",
+    "apps.restaurant",
+    "apps.hotel",
+    "apps.property_management",
+    "apps.housing_rental",
+    "apps.office_rental",
+    "apps.finance",
+    "apps.reports",
+    "apps.notifications",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.security_headers.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.platform.middleware.TenantResolutionMiddleware",
+    "apps.platform.middleware_modules.ModuleGateMiddleware",
+    "apps.platform.middleware_subscription.SubscriptionEntitlementMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -101,7 +116,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.authentication.TenantAwareJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -114,6 +129,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/minute",
+        "user": "600/minute",
+        "auth": "20/minute",
+    },
 }
 
 from datetime import timedelta
@@ -137,3 +162,68 @@ CORS_ALLOWED_ORIGINS = config(
 ).split(",")
 
 CORS_ALLOW_CREDENTIALS = True
+
+# SaaS subdomain base: {slug}.erp.safaritechno.com
+TENANT_BASE_DOMAIN = config("TENANT_BASE_DOMAIN", default="erp.safaritechno.com")
+
+# Apex / platform hosts that do not bind a shop tenant
+PLATFORM_HOSTS = config("PLATFORM_HOSTS", default="")
+
+# When True, JWT users on a tenant host must belong to that tenant
+TENANT_HOST_ENFORCEMENT = config("TENANT_HOST_ENFORCEMENT", default=True, cast=bool)
+
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+
+# Central Accounting Engine
+ACCOUNTING_ENGINE_ENABLED = config("ACCOUNTING_ENGINE_ENABLED", default=True, cast=bool)
+ACCOUNTING_STRICT_AFTER_CUTOVER = config(
+    "ACCOUNTING_STRICT_AFTER_CUTOVER", default=True, cast=bool
+)
+
+CELERY_BEAT_SCHEDULE = {
+    "notifications-daily-scans": {
+        "task": "notifications.run_all_scheduled_scans",
+        "schedule": 60 * 60 * 6,
+    },
+    "finance-accounting-health": {
+        "task": "finance.scan_accounting_health",
+        "schedule": 60 * 60 * 24,
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MDA ERP API",
+    "DESCRIPTION": "Multi-tenant ERP REST API for web and mobile clients.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": r"/api/v1",
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
+    "SECURITY": [{"BearerAuth": []}],
+}
+
+# Mobile clients may send this header on platform API hosts (e.g. api.{base_domain}).
+MOBILE_TENANT_SLUG_HEADER = "X-Tenant-Slug"
+
+# Login lockout (STEP 30)
+LOGIN_LOCKOUT_MAX_ATTEMPTS = config("LOGIN_LOCKOUT_MAX_ATTEMPTS", default=5, cast=int)
+LOGIN_LOCKOUT_WINDOW_MINUTES = config("LOGIN_LOCKOUT_WINDOW_MINUTES", default=15, cast=int)
+LOGIN_LOCKOUT_DURATION_MINUTES = config("LOGIN_LOCKOUT_DURATION_MINUTES", default=30, cast=int)
+
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"

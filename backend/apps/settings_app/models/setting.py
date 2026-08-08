@@ -1,6 +1,7 @@
 from django.db import models
 
 from core.models.base import BaseModel
+from core.models.tenant import TenantScopedModel
 
 
 class Company(BaseModel):
@@ -27,7 +28,7 @@ class Company(BaseModel):
         return self.name
 
 
-class Branch(BaseModel):
+class Branch(TenantScopedModel, BaseModel):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="branches")
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)
@@ -46,7 +47,7 @@ class Branch(BaseModel):
         return self.name
 
 
-class Setting(BaseModel):
+class Setting(TenantScopedModel, BaseModel):
     CATEGORY_CHOICES = [
         ("general", "General"),
         ("company", "Company"),

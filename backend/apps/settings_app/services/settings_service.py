@@ -29,6 +29,8 @@ class BranchService:
     @staticmethod
     @transaction.atomic
     def create_branch(*, data, created_by=None):
+        from apps.platform.services.entitlement_service import EntitlementError, EntitlementService
+
         if "company_id" not in data or not data.get("company_id"):
             company_id = getattr(getattr(created_by, "branch", None), "company_id", None)
             if not company_id:
@@ -37,6 +39,14 @@ class BranchService:
             if not company_id:
                 raise ValueError("No company available for this branch.")
             data = {**data, "company_id": company_id}
+
+        company = Company.active_objects().filter(pk=data["company_id"]).first()
+        tenant = getattr(company, "tenant", None) if company else None
+        try:
+            EntitlementService.assert_can_add_branch(tenant=tenant, user=created_by)
+        except EntitlementError as exc:
+            raise ValueError(str(exc)) from exc
+
         return Branch.objects.create(**data, created_by=created_by)
 
     @staticmethod

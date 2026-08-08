@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "MDA Staff",
+    "slug": "mda-staff",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mdastaff",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.safaritechno.mda.staff"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.safaritechno.mda.staff"
+    },
+    "extra": {
+      "apiBase": "http://127.0.0.1:8000/api/v1",
+      "tenantSlug": ""
+    }
+  }
+}

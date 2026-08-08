@@ -10,6 +10,7 @@ import {
   Printer,
   CalendarClock,
   Sparkles,
+  Pill,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,11 +30,11 @@ import {
   type PosReceipt,
   type PosWaiter,
 } from "@/services/api/pos";
+import { pharmacyApi, type Prescription } from "@/services/api/pharmacy";
 import { PosReceiptView } from "./PosReceiptView";
 import { printOrderSlip } from "../receipt/printCartSlip";
 import type { CartLine } from "../hooks/usePosCart";
-
-type CheckoutPayment = Extract<PaymentMethod, "cash" | "mobile" | "on_account">;
+type CheckoutPayment = Extract<PaymentMethod, "cash" | "mobile" | "on_account" | "split">;
 
 const PAYMENT_OPTIONS: {
   id: CheckoutPayment;
@@ -51,10 +52,17 @@ const PAYMENT_OPTIONS: {
   },
   {
     id: "mobile",
-    label: "Mobile Money",
+    label: "Mobile",
     short: "Mobile",
     icon: Smartphone,
-    description: "EVC Plus, Zaad, or other wallet",
+    description: "Mobile money payment",
+  },
+  {
+    id: "split",
+    label: "Split",
+    short: "Split",
+    icon: Sparkles,
+    description: "Split across cash and mobile",
   },
   {
     id: "on_account",
@@ -66,7 +74,7 @@ const PAYMENT_OPTIONS: {
 ];
 
 function normalizeDefault(method?: PaymentMethod): CheckoutPayment {
-  if (method === "mobile" || method === "on_account") return method;
+  if (method === "mobile" || method === "on_account" || method === "split") return method;
   return "cash";
 }
 
@@ -91,6 +99,12 @@ interface PosCheckoutPanelProps {
   waiters?: PosWaiter[];
   /** Resumed on-hold invoice id — checkout converts it, keeping its receipt number. */
   holdInvoiceId?: string;
+  /** Restaurant floor order — marks paid + frees table after checkout. */
+  restaurantOrderId?: string;
+  restaurantLabel?: string;
+  /** Hotel folio — charge sale to guest room. */
+  hotelFolioId?: string;
+  hotelLabel?: string;
   onClose: () => void;
   onSaveDraft?: () => void;
   onComplete: (receipt: PosReceipt) => void;
@@ -115,6 +129,10 @@ export function PosCheckoutPanel({
   waiterId,
   waiterName,
   holdInvoiceId,
+  restaurantOrderId,
+  restaurantLabel,
+  hotelFolioId,
+  hotelLabel,
   onClose,
   onSaveDraft,
   onComplete,
@@ -129,7 +147,15 @@ export function PosCheckoutPanel({
   const [selectedMerchantId, setSelectedMerchantId] = useState("");
   const [amountTendered, setAmountTendered] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
+  const [splitCash, setSplitCash] = useState("");
   const [receipt, setReceipt] = useState<PosReceipt | null>(null);
+  const [prescriptionId, setPrescriptionId] = useState("");
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+
+  const needsPrescription = useMemo(
+    () => cart.some((i) => i.requires_prescription),
+    [cart]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -137,13 +163,19 @@ export function PosCheckoutPanel({
     setError(null);
     setReceipt(null);
     setAmountTendered(grandTotal.toFixed(2));
+    setSplitCash((grandTotal / 2).toFixed(2));
     setPaymentReference("");
+    setPrescriptionId("");
     setLoadingProfile(true);
     posApi
       .profile()
       .then((res) => {
         setProfile(res.data);
-        setPaymentMethod(normalizeDefault(res.data.default_payment_method));
+        if (hotelFolioId) {
+          setPaymentMethod("on_account");
+        } else {
+          setPaymentMethod(normalizeDefault(res.data.default_payment_method));
+        }
         const mobileMerchants = res.data.merchants.filter((m) => m.provider === "mobile");
         const defaultMerchant =
           mobileMerchants.find((m) => m.is_default) ?? mobileMerchants[0];
@@ -153,7 +185,18 @@ export function PosCheckoutPanel({
         setProfile({ merchants: [], default_payment_method: "cash", receipt_footer: "" })
       )
       .finally(() => setLoadingProfile(false));
-  }, [open, grandTotal]);
+  }, [open, grandTotal, hotelFolioId]);
+
+  useEffect(() => {
+    if (!open || !needsPrescription) {
+      setPrescriptions([]);
+      return;
+    }
+    pharmacyApi
+      .prescriptions({ status: "active", page_size: 50 })
+      .then((res) => setPrescriptions(res.data.results || []))
+      .catch(() => setPrescriptions([]));
+  }, [open, needsPrescription]);
 
   const mobileMerchants = useMemo(
     () => profile?.merchants.filter((m) => m.provider === "mobile") ?? [],
@@ -163,20 +206,36 @@ export function PosCheckoutPanel({
   const selectedMerchant =
     profile?.merchants.find((m) => m.id === selectedMerchantId) ?? null;
 
+  const chargingToRoom = Boolean(hotelFolioId);
   const tenderedNum = parseFloat(amountTendered) || 0;
-  const change = paymentMethod === "cash" ? Math.max(0, tenderedNum - grandTotal) : 0;
-  const isOnAccount = paymentMethod === "on_account";
+  const change = paymentMethod === "cash" && !chargingToRoom ? Math.max(0, tenderedNum - grandTotal) : 0;
+  const isOnAccount = paymentMethod === "on_account" && !chargingToRoom;
   const needsCustomer = isOnAccount && customerId === "walkin";
-  const canPayCash = paymentMethod !== "cash" || tenderedNum >= grandTotal;
-  const needsMerchant = paymentMethod === "mobile";
+  const canPayCash = chargingToRoom || paymentMethod !== "cash" || tenderedNum >= grandTotal;
+  const splitCashNum = Number(splitCash || 0);
+  const canPaySplit =
+    chargingToRoom ||
+    paymentMethod !== "split" ||
+    (splitCashNum >= 0 && splitCashNum <= grandTotal + 0.001);
+  const needsMerchant =
+    !chargingToRoom && (paymentMethod === "mobile" || paymentMethod === "split");
   const needsWaiter = !waiterId;
   const canSubmit =
     canPayCash &&
+    canPaySplit &&
     !needsCustomer &&
     !needsWaiter &&
     (!needsMerchant || mobileMerchants.length === 0 || !!selectedMerchantId);
 
-  const activeOption = PAYMENT_OPTIONS.find((o) => o.id === paymentMethod)!;
+  const activeOption = chargingToRoom
+    ? {
+        id: "charge_to_room" as const,
+        label: "Charge to Room",
+        short: "Room",
+        icon: CalendarClock,
+        description: hotelLabel || "Post to guest folio — settle at hotel checkout",
+      }
+    : PAYMENT_OPTIONS.find((o) => o.id === paymentMethod)!;
 
   const buildNotes = () => {
     const parts = [orderNotes].filter(Boolean);
@@ -191,9 +250,24 @@ export function PosCheckoutPanel({
       setError("Select a waiter in the cart before checkout.");
       return;
     }
+    if (needsPrescription && !prescriptionId) {
+      setError("Select an active prescription for Rx-required items.");
+      return;
+    }
     setProcessing(true);
     setError(null);
     try {
+      const cashPart = Number(splitCash || 0);
+      const mobilePart = Math.max(0, Number((grandTotal - cashPart).toFixed(2)));
+      const payments =
+        !chargingToRoom && paymentMethod === "split"
+          ? [
+              ...(cashPart > 0 ? [{ method: "cash" as const, amount: cashPart }] : []),
+              ...(mobilePart > 0
+                ? [{ method: "mobile" as const, amount: mobilePart, reference: paymentReference || undefined }]
+                : []),
+            ]
+          : undefined;
       const res = await posApi.checkout({
         customer_id: customerId === "walkin" ? undefined : customerId,
         branch_id: branchId,
@@ -205,14 +279,25 @@ export function PosCheckoutPanel({
         discount_pct: discountPct,
         discount_amount: discount > 0 ? discount : undefined,
         tax_rate: taxRate,
-        payment_method: paymentMethod,
-        merchant_id: paymentMethod === "mobile" ? selectedMerchantId || undefined : undefined,
-        amount_tendered: paymentMethod === "cash" ? tenderedNum : undefined,
+        payment_method: chargingToRoom ? "charge_to_room" : paymentMethod,
+        payments,
+        merchant_id:
+          !chargingToRoom && (paymentMethod === "mobile" || paymentMethod === "split")
+            ? selectedMerchantId || undefined
+            : undefined,
+        amount_tendered: !chargingToRoom && paymentMethod === "cash" ? tenderedNum : undefined,
         payment_reference: paymentReference || undefined,
         waiter_id: waiterId,
         waiter_name: waiterName || undefined,
         notes: buildNotes(),
         hold_invoice_id: holdInvoiceId,
+        restaurant_order_id: restaurantOrderId,
+        hotel_folio_id: hotelFolioId,
+        prescription_id: needsPrescription ? prescriptionId || undefined : undefined,
+        idempotency_key:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `pos-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       });
       setReceipt(res.data.receipt);
       setStep("success");
@@ -356,6 +441,8 @@ export function PosCheckoutPanel({
                 ) : (
                   <Chip label="Waiter required" muted />
                 )}
+                {restaurantLabel ? <Chip label={restaurantLabel} /> : null}
+                {hotelLabel ? <Chip label={hotelLabel} /> : null}
                 <Chip label={branchName} muted />
               </div>
 
@@ -365,18 +452,29 @@ export function PosCheckoutPanel({
                 </p>
               )}
 
+              {chargingToRoom ? (
+                <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-950 dark:text-sky-100">
+                  <p className="font-medium">Charge to room</p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {hotelLabel || "Guest folio"} — settles with the hotel bill at checkout.
+                  </p>
+                </div>
+              ) : null}
+
               {/* Payment picker */}
               <div className="rounded-[1.25rem] border border-border/60 bg-card p-1.5 shadow-[0_8px_30px_hsl(var(--foreground)/0.04)]">
                 <div className="grid grid-cols-3 gap-1">
                   {PAYMENT_OPTIONS.map(({ id, short, icon: Icon }) => {
-                    const active = paymentMethod === id;
+                    const active = !chargingToRoom && paymentMethod === id;
                     return (
                       <button
                         key={id}
                         type="button"
+                        disabled={chargingToRoom}
                         onClick={() => setPaymentMethod(id)}
                         className={cn(
                           "flex flex-col items-center gap-1.5 rounded-xl px-2 py-3.5 transition-all duration-200",
+                          chargingToRoom && "cursor-not-allowed opacity-40",
                           active
                             ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
                             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -392,6 +490,34 @@ export function PosCheckoutPanel({
 
               {/* Payment details */}
               <div className="rounded-[1.25rem] border border-border/60 bg-card p-5 shadow-[0_8px_30px_hsl(var(--foreground)/0.04)]">
+                {needsPrescription && (
+                  <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <Pill className="h-4 w-4 text-amber-600" />
+                      Prescription required
+                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Cart includes Rx-only medicines. Link an active prescription before paying.
+                    </p>
+                    <Select value={prescriptionId || undefined} onValueChange={setPrescriptionId}>
+                      <SelectTrigger className="h-11 rounded-xl">
+                        <SelectValue placeholder="Select prescription…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {prescriptions.map((rx) => (
+                          <SelectItem key={rx.id} value={rx.id}>
+                            {rx.rx_number} — {rx.patient_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!prescriptions.length && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        No active prescriptions. Create one under Pharmacy first.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="mb-4 flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <activeOption.icon className="h-5 w-5" />
@@ -444,6 +570,36 @@ export function PosCheckoutPanel({
                             )
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === "split" && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                            Cash portion
+                          </label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={splitCash}
+                            onChange={(e) => setSplitCash(e.target.value)}
+                            className="h-12 rounded-xl border-border/60 bg-muted/20 text-center text-xl font-bold tabular-nums"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
+                          <span className="text-sm text-muted-foreground">Mobile portion</span>
+                          <span className="text-lg font-bold tabular-nums">
+                            {formatCurrency(Math.max(0, Number((grandTotal - Number(splitCash || 0)).toFixed(2))))}
+                          </span>
+                        </div>
+                        <Input
+                          placeholder="Mobile reference (optional)"
+                          value={paymentReference}
+                          onChange={(e) => setPaymentReference(e.target.value)}
+                          className="h-11 rounded-xl"
+                        />
                       </div>
                     )}
 

@@ -15,6 +15,7 @@ import {
   type PlatformPlanRow,
   type PlatformShopGroupRow,
   type PlatformSubscriptionRow,
+  type PlatformBusinessTypeRow,
   type PlatformTenantRow,
 } from "@/services/api/platform";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -39,6 +40,11 @@ interface ShopFormState {
   contact_email: string;
   contact_phone: string;
   address: string;
+  subdomain: string;
+  business_type_code: string;
+  currency: string;
+  language: string;
+  timezone: string;
   subscription_mode: ShopSubscriptionMode;
   plan_code: string;
   subscription_status: string;
@@ -60,6 +66,11 @@ const EMPTY_FORM: ShopFormState = {
   contact_email: "",
   contact_phone: "",
   address: "",
+  subdomain: "",
+  business_type_code: "retail",
+  currency: "USD",
+  language: "en",
+  timezone: "UTC",
   subscription_mode: "plan",
   plan_code: "",
   subscription_status: "trial",
@@ -84,6 +95,10 @@ interface ShopEditState {
   address: string;
   country: string;
   is_active: boolean;
+  business_type_code: string;
+  currency: string;
+  language: string;
+  timezone: string;
   has_subscription: boolean;
   subscription_reference: string;
   subscription_expires_at: string;
@@ -113,6 +128,8 @@ export function PlatformShopsPage() {
   const [unassignedSubs, setUnassignedSubs] = useState<PlatformSubscriptionRow[]>([]);
   const [allSubs, setAllSubs] = useState<PlatformSubscriptionRow[]>([]);
   const [plans, setPlans] = useState<PlatformPlanRow[]>([]);
+  const [businessTypes, setBusinessTypes] = useState<PlatformBusinessTypeRow[]>([]);
+  const [baseDomain, setBaseDomain] = useState("erp.safaritechno.com");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -127,6 +144,7 @@ export function PlatformShopsPage() {
     slug: "",
     sync_secret: "",
     last_synced_at: "",
+    primary_domain: "",
   });
 
   const load = () => {
@@ -137,15 +155,17 @@ export function PlatformShopsPage() {
       platformApi.subscriptions(),
       platformApi.plans(),
       platformApi.shopGroups(),
+      platformApi.businessTypes(),
     ];
     Promise.all(requests)
       .then((results) => {
-        const [tenantsRes, unassignedRes, allRes, plansRes, groupsRes] = results as [
+        const [tenantsRes, unassignedRes, allRes, plansRes, groupsRes, businessTypesRes] = results as [
           Awaited<ReturnType<typeof platformApi.tenants>>,
           Awaited<ReturnType<typeof platformApi.subscriptions>>,
           Awaited<ReturnType<typeof platformApi.subscriptions>>,
           Awaited<ReturnType<typeof platformApi.plans>>,
           Awaited<ReturnType<typeof platformApi.shopGroups>>,
+          Awaited<ReturnType<typeof platformApi.businessTypes>>,
         ];
         const groupId = user?.managed_shop_group?.id;
         const scoped = groupId
@@ -156,9 +176,14 @@ export function PlatformShopsPage() {
         setAllSubs(allRes.data);
         setPlans(plansRes.data);
         setShopGroups(groupsRes.data);
+        setBusinessTypes(businessTypesRes.data.items || []);
+        setBaseDomain(businessTypesRes.data.base_domain || "erp.safaritechno.com");
         setForm((prev) => {
           const next = { ...prev };
           if (!next.plan_code && plansRes.data.length) next.plan_code = plansRes.data[0].code;
+          if (!next.business_type_code && businessTypesRes.data.items?.length) {
+            next.business_type_code = businessTypesRes.data.items[0].code;
+          }
           if (isGroupManager && groupId) {
             next.shop_group_mode = "existing";
             next.shop_group_id = groupId;
@@ -214,6 +239,10 @@ export function PlatformShopsPage() {
       address: String(company?.address ?? ""),
       country: String(tenant.country ?? ""),
       is_active: Boolean(tenant.is_active ?? true),
+      business_type_code: String(tenant.business_type_code ?? "retail"),
+      currency: String(tenant.currency ?? "USD"),
+      language: String(tenant.language ?? "en"),
+      timezone: String(tenant.timezone ?? "UTC"),
       has_subscription: hasSubscription,
       subscription_reference: String(subscription?.reference_code ?? ""),
       subscription_expires_at: String(subscription?.expires_at ?? ""),
@@ -224,10 +253,12 @@ export function PlatformShopsPage() {
       subscription_id: "",
       shop_group_id: String(tenant.shop_group_id ?? ""),
     });
+    const primaryDomain = tenant.primary_domain as Record<string, unknown> | undefined;
     setShopSyncInfo({
       slug: String(tenant.slug ?? ""),
       sync_secret: String(tenant.sync_secret ?? ""),
       last_synced_at: String(tenant.last_synced_at ?? ""),
+      primary_domain: String(primaryDomain?.domain ?? ""),
     });
     if (shop.subscription?.id) {
       const sub = allSubs.find((s) => s.id === shop.subscription?.id);
@@ -262,6 +293,10 @@ export function PlatformShopsPage() {
         address: editingShop.address,
         country: editingShop.country,
         is_active: editingShop.is_active,
+        business_type_code: editingShop.business_type_code,
+        currency: editingShop.currency,
+        language: editingShop.language,
+        timezone: editingShop.timezone,
       };
       if (editingShop.has_subscription) {
         if (editingShop.plan_code) payload.plan_code = editingShop.plan_code;
@@ -315,7 +350,12 @@ export function PlatformShopsPage() {
         contact_email: form.contact_email,
         contact_phone: form.contact_phone,
         address: form.address,
+        business_type_code: form.business_type_code || "retail",
+        currency: form.currency || "USD",
+        language: form.language || "en",
+        timezone: form.timezone || "UTC",
       };
+      if (form.subdomain.trim()) payload.subdomain = form.subdomain.trim();
       if (form.subscription_mode === "existing" && form.subscription_id) {
         payload.subscription_id = form.subscription_id;
       } else if (form.subscription_mode === "plan" && form.plan_code) {
@@ -532,6 +572,43 @@ export function PlatformShopsPage() {
                   <Input
                     value={editingShop.country}
                     onChange={(e) => setEditingShop({ ...editingShop, country: e.target.value })}
+                  />
+                </FormField>
+                <FormField label="Business type">
+                  <Select
+                    value={editingShop.business_type_code}
+                    onValueChange={(v) =>
+                      setEditingShop({ ...editingShop, business_type_code: v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businessTypes.map((bt) => (
+                        <SelectItem key={bt.code} value={bt.code}>
+                          {bt.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label="Currency">
+                  <Input
+                    value={editingShop.currency}
+                    onChange={(e) => setEditingShop({ ...editingShop, currency: e.target.value })}
+                  />
+                </FormField>
+                <FormField label="Language">
+                  <Input
+                    value={editingShop.language}
+                    onChange={(e) => setEditingShop({ ...editingShop, language: e.target.value })}
+                  />
+                </FormField>
+                <FormField label="Timezone">
+                  <Input
+                    value={editingShop.timezone}
+                    onChange={(e) => setEditingShop({ ...editingShop, timezone: e.target.value })}
                   />
                 </FormField>
                 <FormField label="Address" className="md:col-span-2">
@@ -786,6 +863,9 @@ export function PlatformShopsPage() {
               <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4 text-sm">
                 <p className="font-medium">Shop sync credentials (copy to shop PC)</p>
                 <p className="mt-2 font-mono">Slug: {shopSyncInfo.slug}</p>
+                {shopSyncInfo.primary_domain && (
+                  <p className="mt-1 font-mono">Domain: {shopSyncInfo.primary_domain}</p>
+                )}
                 <p className="mt-1 break-all font-mono">Secret: {shopSyncInfo.sync_secret}</p>
                 <p className="mt-2 text-muted-foreground">
                   Last synced: {shopSyncInfo.last_synced_at || "Never"}
@@ -845,6 +925,39 @@ export function PlatformShopsPage() {
             <FormGrid>
               <FormField label="Shop name" required>
                 <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </FormField>
+              <FormField label="Subdomain" hint={`Optional · {subdomain}.${baseDomain}`}>
+                <Input
+                  placeholder="arabica"
+                  value={form.subdomain}
+                  onChange={(e) => setForm({ ...form, subdomain: e.target.value })}
+                />
+              </FormField>
+              <FormField label="Business type">
+                <Select
+                  value={form.business_type_code}
+                  onValueChange={(v) => setForm({ ...form, business_type_code: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businessTypes.map((bt) => (
+                      <SelectItem key={bt.code} value={bt.code}>
+                        {bt.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Currency">
+                <Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+              </FormField>
+              <FormField label="Language">
+                <Input value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
+              </FormField>
+              <FormField label="Timezone">
+                <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
               </FormField>
               <FormField label="Contact email">
                 <Input

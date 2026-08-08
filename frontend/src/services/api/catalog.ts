@@ -1,6 +1,7 @@
 import type { ApiResponse } from "@/types/models";
 import type {
   ApiListResponse,
+  AttributeDefinition,
   Brand,
   Category,
   InventoryAdjustment,
@@ -18,6 +19,11 @@ export const productsApi = {
   list: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Product>>(`/products/${qs(params)}`),
 
+  search: (q: string, params: { limit?: number; category?: string } = {}) =>
+    apiRequest<ApiResponse<Product[]>>(
+      `/products/search/${qs({ q, limit: params.limit ?? 40, category: params.category })}`
+    ),
+
   get: (id: string) => apiRequest<ApiResponse<Product>>(`/products/${id}/`),
 
   create: (data: ProductFormData) =>
@@ -31,6 +37,29 @@ export const productsApi = {
 
   uploadImage: (file: File) =>
     apiUpload<ApiResponse<{ url: string; path: string }>>("/products/upload-image/", file),
+
+  attributes: () =>
+    apiRequest<ApiResponse<AttributeDefinition[]>>("/products/attributes/"),
+
+  applicableAttributes: (params: { category_id?: string; business_type_id?: string } = {}) =>
+    apiRequest<ApiResponse<AttributeDefinition[]>>(
+      `/products/attributes/applicable/${qs(params)}`
+    ),
+
+  createAttribute: (data: Partial<AttributeDefinition> & { code: string; name: string }) =>
+    apiRequest<ApiResponse<AttributeDefinition>>("/products/attributes/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  assignCategoryAttribute: (
+    categoryId: string,
+    data: { definition_id: string; is_required?: boolean | null; sort_order?: number }
+  ) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(
+      `/products/categories/${categoryId}/attributes/`,
+      { method: "PUT", body: JSON.stringify(data) }
+    ),
 
   categories: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Category>>(`/categories/${qs({ page_size: 100, ...params })}`),
@@ -93,6 +122,31 @@ export const inventoryApi = {
 
   createWarehouse: (data: Partial<Warehouse>) =>
     apiRequest<ApiResponse<Warehouse>>("/warehouses/", { method: "POST", body: JSON.stringify(data) }),
+
+  transfers: (params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(`/inventory/transfers/${qs(params)}`),
+
+  createTransfer: (data: {
+    source_warehouse_id: string;
+    destination_warehouse_id: string;
+    branch_id?: string;
+    notes?: string;
+    lines?: { product_id: string; quantity: number }[];
+  }) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/inventory/transfers/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  confirmTransfer: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/inventory/transfers/${id}/confirm/`, {
+      method: "POST",
+    }),
+
+  cancelTransfer: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/inventory/transfers/${id}/cancel/`, {
+      method: "POST",
+    }),
 };
 
 export type { PaginatedResponse };

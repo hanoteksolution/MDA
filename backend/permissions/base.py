@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from apps.platform.services.module_service import tenant_has_module
+
 
 def HasPermission(codename: str):
     """Return a DRF permission class that checks a single permission codename."""
@@ -13,6 +15,23 @@ def HasPermission(codename: str):
     _HasPermission.__name__ = f"HasPermission_{codename.replace('.', '_')}"
     _HasPermission.__qualname__ = _HasPermission.__name__
     return _HasPermission
+
+
+def HasModule(code: str):
+    """Return a DRF permission class that requires an enabled tenant module."""
+
+    class _HasModule(permissions.BasePermission):
+        message = f"Module '{code}' is not enabled for this business."
+
+        def has_permission(self, request, view):
+            if not request.user or not request.user.is_authenticated:
+                return False
+            return tenant_has_module(code, user=request.user, request=request)
+
+    safe = (code or "none").replace(".", "_").replace("-", "_")
+    _HasModule.__name__ = f"HasModule_{safe}"
+    _HasModule.__qualname__ = _HasModule.__name__
+    return _HasModule
 
 
 def require_permission(codename: str):

@@ -12,9 +12,12 @@ const PUBLIC_ENDPOINTS = [
   "/auth/desktop-status/",
   "/auth/desktop-provision/",
   "/setup/",
+  "/onboarding/",
   "/sync/config/",
+  "/platform/resolve-host/",
+  "/health/",
 ];
-const AUTH_ROUTES = ["/login", "/forgot-password", "/setup", "/connection"];
+const AUTH_ROUTES = ["/login", "/forgot-password", "/setup", "/connection", "/onboard"];
 
 let logoutInProgress = false;
 let refreshPromise: Promise<string | null> | null = null;
@@ -152,7 +155,7 @@ export async function apiRequest<T>(
     );
   }
 
-  let data: { message?: string } & T;
+  let data: { message?: string; code?: string } & T;
   try {
     data = await response.json();
   } catch {
@@ -183,6 +186,14 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error(data.message || "Too many requests. Please wait a moment and try again.");
+    }
+    if (response.status === 403 && data.code === "ACCOUNT_LOCKED") {
+      throw new Error(
+        data.message || "Account temporarily locked due to too many failed login attempts."
+      );
+    }
     throw new Error(data.message || "Request failed");
   }
 

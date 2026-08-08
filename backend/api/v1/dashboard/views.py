@@ -52,6 +52,30 @@ class DashboardChartsView(APIView):
         return success_response(data=AnalyticsService.get_chart_data(branch_id=branch_id))
 
 
+class DashboardWidgetsView(APIView):
+    """PHASE 08 — module-gated widget registry (not BusinessType-driven)."""
+
+    permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
+
+    def get(self, request):
+        from apps.platform.services.dashboard_widget_service import DashboardWidgetService
+
+        user = request.user
+        role_slug = getattr(getattr(user, "role", None), "slug", None) or ""
+        is_super_admin = bool(
+            getattr(user, "is_platform_admin", False)
+            or getattr(user, "is_superuser", False)
+            or role_slug in ("super_admin", "platform_admin")
+        )
+        widgets = DashboardWidgetService.list_for_actor(
+            user=user,
+            request=request,
+            tenant=getattr(user, "tenant", None),
+            is_super_admin=is_super_admin,
+        )
+        return success_response(data={"results": widgets, "count": len(widgets)})
+
+
 class DashboardAlertsView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
 

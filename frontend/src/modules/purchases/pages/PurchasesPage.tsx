@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
-import { ClipboardList, Truck, Clock, DollarSign, Plus, Pencil, Trash2, Printer, Download, Loader2, FileOutput } from "lucide-react";
+import { ClipboardList, Truck, Clock, DollarSign, Plus, Pencil, Trash2, Printer, Download, Loader2, FileOutput, PackageCheck } from "lucide-react";
 import { usePurchaseOrderPrint } from "../hooks/usePurchaseOrderPrint";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { purchasesApi, suppliersApi } from "@/services/api/partners";
-import { productsApi } from "@/services/api/catalog";
+import { inventoryApi, productsApi } from "@/services/api/catalog";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
 import type { PurchaseOrder, PurchaseSummary } from "@/types/models/partners";
@@ -43,6 +43,7 @@ export function PurchasesPage() {
   );
   const { loadingId, printPurchaseOrder, downloadPurchaseOrder } = usePurchaseOrderPrint();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
 
   useEffect(() => {
     purchasesApi.summary()
@@ -50,6 +51,42 @@ export function PurchasesPage() {
       .catch(() => setSummary(null))
       .finally(() => setSummaryLoading(false));
   }, []);
+
+  const handleReceiveRemaining = async (po: PurchaseOrder) => {
+    if (!confirm(`Receive remaining goods for ${po.order_number} into the default warehouse?`)) {
+      return;
+    }
+    setReceivingId(po.id);
+    try {
+      const [preview, warehouses] = await Promise.all([
+        purchasesApi.receivePreview(po.id),
+        inventoryApi.warehouses(),
+      ]);
+      const warehouse =
+        warehouses.data.results.find((w) => w.is_default) || warehouses.data.results[0];
+      if (!warehouse) {
+        throw new Error("No warehouse available. Create a warehouse first.");
+      }
+      const lines = (preview.data.lines || [])
+        .filter((l) => l.quantity_remaining > 0)
+        .map((l) => ({
+          product_id: l.product_id,
+          quantity_received: l.quantity_remaining,
+          unit_cost: l.unit_cost,
+        }));
+      if (!lines.length) {
+        await appDialog.alert("Nothing left to receive on this purchase order.");
+        return;
+      }
+      await purchasesApi.receive(po.id, { warehouse_id: warehouse.id, lines });
+      reload();
+      purchasesApi.summary().then((sum) => setSummary(sum.data)).catch(() => {});
+    } catch (err) {
+      await appDialog.alert(err instanceof Error ? err.message : "Could not receive goods.");
+    } finally {
+      setReceivingId(null);
+    }
+  };
 
   const handleDelete = async (po: PurchaseOrder) => {
     if (!confirm(`Delete purchase order ${po.order_number}?\n\nThis cannot be undone from here.`)) {
@@ -117,6 +154,17 @@ export function PurchasesPage() {
               onClick={() => void downloadPurchaseOrder(r.id, r.order_number)}
             >
               <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Receive remaining goods"
+              disabled={r.status === "cancelled" || r.status === "received" || receivingId === r.id}
+              loading={receivingId === r.id}
+              onClick={() => void handleReceiveRemaining(r)}
+            >
+              <PackageCheck className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(`/purchases/${r.id}/edit`)}>
               <Pencil className="h-4 w-4" />

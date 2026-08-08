@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
+import { Inbox } from "lucide-react";
 import { cn } from "@/utils/cn";
 import {
   Table,
@@ -11,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { FilterBar, type FilterConfig } from "./FilterBar";
 import { Pagination } from "./Pagination";
 import { downloadTablePdf, printTable } from "@/utils/tableExport";
@@ -169,7 +171,7 @@ export function DataTable<T>({
               {columns.map((col) => (
                 <TableHead
                   key={col.key}
-                  className={cn("text-xs font-semibold uppercase tracking-wide text-muted-foreground", col.className)}
+                  className={cn("text-[11px] font-semibold uppercase tracking-wide text-muted-foreground", col.className)}
                 >
                   {col.header}
                 </TableHead>
@@ -188,12 +190,14 @@ export function DataTable<T>({
                 </TableRow>
               ))
             ) : displayData.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-36 text-center text-sm text-muted-foreground"
-                >
-                  {emptyMessage}
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={columns.length} className="p-0">
+                  <EmptyState
+                    compact
+                    icon={<Inbox className="h-5 w-5" />}
+                    title={emptyMessage}
+                    description="Try adjusting filters or create a new record."
+                  />
                 </TableCell>
               </TableRow>
             ) : (

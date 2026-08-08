@@ -50,6 +50,7 @@ class PosHoldListCreateView(APIView):
         data = PosService.list_holds(
             branch_id=request.query_params.get("branch_id"),
             search=request.query_params.get("search"),
+            user=request.user,
         )
         return success_response(data=data)
 
@@ -201,3 +202,115 @@ class PosReceiptNumberView(APIView):
         except ValueError as e:
             return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         return success_response(data=data, message="Receipt number allocated.")
+
+
+class PosSessionListView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def get(self, request):
+        from apps.sales.services.cashier_session_service import CashierSessionService
+
+        qs = CashierSessionService.list(
+            user=request.user,
+            request=request,
+            branch_id=request.query_params.get("branch_id"),
+            status=request.query_params.get("status"),
+        )
+        return success_response(
+            data=[CashierSessionService.serialize(s) for s in qs[:100]]
+        )
+
+
+class PosSessionCurrentView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def get(self, request):
+        from apps.sales.services.cashier_session_service import CashierSessionService
+
+        session = CashierSessionService.get_open(
+            user=request.user,
+            branch_id=request.query_params.get("branch_id"),
+        )
+        if session is None:
+            return success_response(data=None, message="No open session.")
+        return success_response(data=CashierSessionService.serialize(session))
+
+
+class PosSessionOpenView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def post(self, request):
+        from apps.sales.services.cashier_session_service import (
+            CashierSessionError,
+            CashierSessionService,
+        )
+
+        try:
+            session = CashierSessionService.open_session(
+                user=request.user,
+                branch_id=request.data.get("branch_id"),
+                opening_float=request.data.get("opening_float") or 0,
+                notes=request.data.get("notes") or "",
+            )
+        except CashierSessionError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=CashierSessionService.serialize(session),
+            message="Cashier session opened.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PosSessionCloseView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def post(self, request):
+        from apps.sales.services.cashier_session_service import (
+            CashierSessionError,
+            CashierSessionService,
+        )
+
+        session_id = request.data.get("session_id")
+        if not session_id:
+            return error_response(message="session_id is required.", status=status.HTTP_400_BAD_REQUEST)
+        try:
+            session = CashierSessionService.close_session(
+                session_id=session_id,
+                user=request.user,
+                closing_cash_counted=request.data.get("closing_cash_counted"),
+                notes=request.data.get("notes") or "",
+            )
+        except CashierSessionError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=CashierSessionService.serialize(session),
+            message="Cashier session closed.",
+        )
+
+
+class PosRefundView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("sales.refund")]
+
+    def post(self, request):
+        from apps.sales.services.refund_service import RefundError, RefundService
+
+        data = request.data
+        invoice_id = data.get("invoice_id")
+        items = data.get("items") or []
+        if not invoice_id:
+            return error_response(message="invoice_id is required.", status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ShopSyncService.assert_subscription_usable()
+        except ValueError as e:
+            return error_response(message=str(e), status=status.HTTP_402_PAYMENT_REQUIRED)
+        try:
+            result = RefundService.refund_invoice(
+                invoice_id=invoice_id,
+                items=items,
+                reason=data.get("reason") or "",
+                user=request.user,
+                cashier_session_id=data.get("cashier_session_id"),
+            )
+        except RefundError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=result, message="Refund processed.", status=status.HTTP_201_CREATED)

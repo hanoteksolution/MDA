@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -33,7 +33,7 @@ import {
 } from "@/services/api/platform";
 import { cn, formatCurrency } from "@/utils/cn";
 
-type Tab = "overview" | "products" | "sales" | "users" | "performance";
+type Tab = "overview" | "modules" | "products" | "sales" | "users" | "performance";
 
 const SHOP_USER_ROLES = [
   { slug: "admin", name: "Shop Admin (desktop POS)" },
@@ -64,6 +64,11 @@ export function PlatformShopDetailPage() {
   const [savingUser, setSavingUser] = useState(false);
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [userFormError, setUserFormError] = useState("");
+  const [moduleItems, setModuleItems] = useState<
+    { code: string; name: string; enabled: boolean; category: string; dependencies?: string[] }[]
+  >([]);
+  const [moduleBusy, setModuleBusy] = useState(false);
+  const [moduleMsg, setModuleMsg] = useState<string | null>(null);
 
   const load = () => {
     if (!shopId) return;
@@ -79,9 +84,54 @@ export function PlatformShopDetailPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadModules = () => {
+    if (!shopId) return;
+    platformApi
+      .tenantModules(shopId)
+      .then((res) => setModuleItems(res.data.items ?? []))
+      .catch(() => setModuleItems([]));
+  };
+
   useEffect(() => {
     load();
   }, [shopId, period]);
+
+  useEffect(() => {
+    if (tab === "modules") loadModules();
+  }, [tab, shopId]);
+
+  const toggleModule = (code: string) => {
+    setModuleItems((prev) =>
+      prev.map((m) => (m.code === code ? { ...m, enabled: !m.enabled } : m))
+    );
+  };
+
+  const moduleGaps = useMemo(() => {
+    const enabled = new Set(moduleItems.filter((m) => m.enabled).map((m) => m.code));
+    return moduleItems
+      .filter((m) => m.enabled && (m.dependencies || []).some((d) => !enabled.has(d)))
+      .map((m) => ({
+        code: m.code,
+        missing: (m.dependencies || []).filter((d) => !enabled.has(d)),
+      }));
+  }, [moduleItems]);
+
+  const saveModules = async () => {
+    if (!shopId) return;
+    setModuleBusy(true);
+    setModuleMsg(null);
+    try {
+      const enabled = moduleItems.filter((m) => m.enabled).map((m) => m.code);
+      const res = await platformApi.updateTenantModules(shopId, enabled);
+      setModuleItems(res.data.items ?? []);
+      setModuleMsg("Modules saved. Dependencies may auto-enable required modules.");
+    } catch (err) {
+      setModuleMsg(err instanceof Error ? err.message : "Could not update modules.");
+      loadModules();
+    } finally {
+      setModuleBusy(false);
+    }
+  };
 
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,6 +236,7 @@ export function PlatformShopDetailPage() {
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
+    { id: "modules", label: "Modules", count: moduleItems.filter((m) => m.enabled).length || undefined },
     { id: "products", label: "Products", count: data?.catalog?.products_count },
     { id: "sales", label: "Sales", count: sales.length },
     { id: "users", label: "Users", count: users.length },
@@ -343,8 +394,28 @@ export function PlatformShopDetailPage() {
                   <div className="platform-meta-row">
                     <span className="text-muted-foreground">Status</span>
                     <Badge variant={tenant?.is_active ? "success" : "secondary"}>
-                      {tenant?.is_active ? "Active" : "Inactive"}
+                      {tenant?.status || (tenant?.is_active ? "Active" : "Inactive")}
                     </Badge>
+                  </div>
+                  <div className="platform-meta-row">
+                    <span className="text-muted-foreground">Business type</span>
+                    <span className="font-medium">
+                      {(tenant?.business_type as { name?: string } | undefined)?.name ||
+                        tenant?.business_type_code ||
+                        "—"}
+                    </span>
+                  </div>
+                  <div className="platform-meta-row">
+                    <span className="text-muted-foreground">Domain</span>
+                    <span className="font-medium font-mono text-xs">
+                      {(tenant?.primary_domain as { domain?: string } | undefined)?.domain ||
+                        tenant?.slug ||
+                        "—"}
+                    </span>
+                  </div>
+                  <div className="platform-meta-row">
+                    <span className="text-muted-foreground">Currency</span>
+                    <span className="font-medium">{tenant?.currency || "—"}</span>
                   </div>
                   <div className="platform-meta-row">
                     <span className="text-muted-foreground">Email</span>
@@ -406,6 +477,59 @@ export function PlatformShopDetailPage() {
                     <p className="text-sm text-muted-foreground">No subscription assigned.</p>
                   )}
                 </div>
+              </div>
+            )}
+
+            {tab === "modules" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Enable capabilities for this tenant. Required dependencies are added automatically.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" size="sm" onClick={loadModules}>
+                      Refresh
+                    </Button>
+                    <Button type="button" size="sm" onClick={saveModules} disabled={moduleBusy}>
+                      {moduleBusy ? "Saving…" : "Save modules"}
+                    </Button>
+                  </div>
+                </div>
+                {moduleMsg ? <p className="text-sm text-muted-foreground">{moduleMsg}</p> : null}
+                {moduleGaps.length ? (
+                  <p className="text-sm text-amber-700 dark:text-amber-400">
+                    Unusable until dependencies are enabled:{" "}
+                    {moduleGaps.map((g) => `${g.code} needs ${g.missing.join(", ")}`).join("; ")}.
+                  </p>
+                ) : null}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {moduleItems.map((m) => (
+                    <label
+                      key={m.code}
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 px-4 py-3"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={m.enabled}
+                        onChange={() => toggleModule(m.code)}
+                      />
+                      <span>
+                        <span className="font-medium">{m.name}</span>
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">{m.code}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground capitalize">
+                          {m.category}
+                          {m.dependencies?.length
+                            ? ` · needs ${m.dependencies.join(", ")}`
+                            : ""}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {!moduleItems.length ? (
+                  <p className="text-sm text-muted-foreground">No modules loaded.</p>
+                ) : null}
               </div>
             )}
 

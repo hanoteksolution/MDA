@@ -19,6 +19,7 @@ export { CreatableSelect } from "./forms/CreatableSelect";
 
 export { TabNav } from "./layout/TabNav";
 export { EmptyState } from "./layout/EmptyState";
+export { LoadingState } from "./layout/LoadingState";
 
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "./ui/card";
 export { Button } from "./ui/button";

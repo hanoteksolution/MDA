@@ -1,4 +1,4 @@
-# VPS overrides — public port 8010, nginx front-end
+# VPS overrides — bind Postgres locally, reuse legacy Docker volumes if present
 name: mda
 
 services:
@@ -7,15 +7,5 @@ services:
       - "127.0.0.1:5437:5432"
 
   web:
-    build:
-      context: .
-      dockerfile: infrastructure/docker/Dockerfile.web
-    image: mda-web
-    container_name: mda_web
-    restart: unless-stopped
     ports:
       - "8010:80"
-    volumes:
-      - mda_media:/var/www/media:ro
-    depends_on:
-      - api

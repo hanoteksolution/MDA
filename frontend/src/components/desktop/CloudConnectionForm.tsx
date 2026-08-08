@@ -54,6 +54,25 @@ export function CloudConnectionForm({ onSaved, showBackLink = false }: CloudConn
         tenant_slug: form.tenant_slug.trim(),
         sync_secret: form.sync_secret.trim(),
       };
+      if (!normalized.cloud_api_base || !normalized.tenant_slug || !normalized.sync_secret) {
+        throw new Error("Cloud URL, shop slug, and sync secret are required.");
+      }
+      const verifyUrl = `${normalized.cloud_api_base}/sync/shop-verify/`;
+      const verifyRes = await fetch(verifyUrl, {
+        method: "GET",
+        headers: {
+          "X-Tenant-Slug": normalized.tenant_slug,
+          "X-Sync-Secret": normalized.sync_secret,
+          Accept: "application/json",
+        },
+      });
+      if (!verifyRes.ok) {
+        throw new Error(
+          verifyRes.status === 403
+            ? "Invalid shop slug or sync secret."
+            : `Could not verify connection (${verifyRes.status}).`
+        );
+      }
       await persistDesktopConnection(normalized);
       setForm(normalized);
       setSaved(true);

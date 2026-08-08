@@ -246,9 +246,16 @@ export interface PlatformTenantRow {
   name: string;
   slug: string;
   is_active: boolean;
+  status?: string;
+  currency?: string;
+  language?: string;
+  timezone?: string;
   contact_email: string;
   shop_group_id?: string | null;
   shop_group_name?: string | null;
+  business_type_code?: string | null;
+  business_type?: PlatformBusinessTypeRow | null;
+  primary_domain?: PlatformTenantDomainRow | null;
   subscription: {
     id?: string;
     reference_code?: string;
@@ -268,8 +275,86 @@ export interface PlatformTenantRow {
   };
 }
 
+export interface PlatformDemoTenantRow {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  is_demo: boolean;
+  demo_status: string | null;
+  demo_expires_at: string | null;
+  demo_converted_at?: string | null;
+  business_type_code: string | null;
+  business_type_name?: string | null;
+  modules: string[];
+  is_active: boolean;
+  contact_email: string;
+  created_at?: string | null;
+  seed_report?: Record<string, unknown>;
+}
+
+export interface PlatformBusinessTypeRow {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  default_modules?: string[];
+  is_active: boolean;
+  sort_order?: number;
+}
+
+export interface PlatformTenantDomainRow {
+  id: string;
+  tenant_id: string;
+  domain: string;
+  subdomain: string;
+  is_primary: boolean;
+  is_custom: boolean;
+  is_verified: boolean;
+  verified_at?: string | null;
+  is_active: boolean;
+  url: string;
+}
+
+export interface PlatformTenantSettingsRow {
+  id: string;
+  tenant_id: string;
+  date_format: string;
+  time_format: string;
+  fiscal_year_start_month: number;
+  default_tax_rate: number;
+  invoice_prefix: string;
+  receipt_footer: string;
+  low_stock_alert_enabled: boolean;
+  expiry_alert_days: number;
+  branding: Record<string, unknown>;
+  pos_defaults: Record<string, unknown>;
+  extras: Record<string, unknown>;
+}
+
 export const ALERT_TEMPLATE_PLACEHOLDERS =
   "{shop_name}, {plan}, {monthly_fee}, {days_left}, {grace_days}, {expires_at}, {reference}, {contact_user}, {status}, {last_paid_at}";
+
+export interface TenantEntitlements {
+  has_subscription: boolean;
+  phase: "none" | "active" | "warning" | "grace" | "expired" | "suspended";
+  can_read: boolean;
+  can_write: boolean;
+  plan_code: string | null;
+  plan_name: string | null;
+  max_users: number | null;
+  max_branches: number | null;
+  modules: string[];
+  enabled_modules?: string[];
+  trial_or_demo?: boolean;
+  users_used: number;
+  branches_used: number;
+  days_until_expiry: number | null;
+  grace_days_remaining: number | null;
+  expires_at: string | null;
+  status: string | null;
+  is_usable: boolean;
+}
 
 export const platformApi = {
   tenants: (period = "month") =>
@@ -277,6 +362,132 @@ export const platformApi = {
 
   tenant: (id: string, period = "month") =>
     platformCloudRequest<ApiResponse<Record<string, unknown>>>(`/platform/tenants/${id}/?period=${period}`),
+
+  businessTypes: () =>
+    platformCloudRequest<
+      ApiResponse<{
+        items: PlatformBusinessTypeRow[];
+        base_domain: string;
+        reserved_slugs: string[];
+      }>
+    >("/platform/business-types/"),
+
+  modules: () =>
+    platformCloudRequest<
+      ApiResponse<{
+        items: {
+          id: string;
+          code: string;
+          name: string;
+          category: string;
+          description: string;
+          dependencies?: string[];
+          route?: string;
+        }[];
+      }>
+    >("/platform/modules/"),
+
+  businessPresets: (params: { business_type?: string } = {}) => {
+    const q = params.business_type
+      ? `?business_type=${encodeURIComponent(params.business_type)}`
+      : "";
+    return platformCloudRequest<
+      ApiResponse<{
+        items: {
+          id: string;
+          code: string;
+          name: string;
+          description: string;
+          business_type_code: string | null;
+          modules: string[];
+        }[];
+      }>
+    >(`/platform/business-presets/${q}`);
+  },
+
+  demoTenants: (params: { status?: string } = {}) => {
+    const q = params.status ? `?status=${encodeURIComponent(params.status)}` : "";
+    return platformCloudRequest<ApiResponse<{ items: PlatformDemoTenantRow[] }>>(
+      `/platform/demo-tenants/${q}`
+    );
+  },
+
+  createDemoTenant: (payload: {
+    name: string;
+    business_type_code?: string;
+    preset_code?: string;
+    duration_days?: number;
+    contact_email?: string;
+    modules?: string[];
+    generate_data?: boolean;
+    plan_code?: string;
+  }) =>
+    platformCloudRequest<ApiResponse<PlatformDemoTenantRow & { seed_report?: Record<string, unknown> }>>(
+      "/platform/demo-tenants/",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+
+  demoTenantAction: (
+    id: string,
+    action: "extend" | "suspend" | "expire" | "convert",
+    payload: Record<string, unknown> = {}
+  ) =>
+    platformCloudRequest<ApiResponse<PlatformDemoTenantRow>>(
+      `/platform/demo-tenants/${id}/${action}/`,
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+
+  tenantModules: (tenantId: string) =>
+    platformCloudRequest<
+      ApiResponse<{
+        items: {
+          code: string;
+          name: string;
+          enabled: boolean;
+          category: string;
+          dependencies?: string[];
+        }[];
+        enabled: string[];
+      }>
+    >(`/platform/tenants/${tenantId}/modules/`),
+
+  updateTenantModules: (tenantId: string, enabled_modules: string[]) =>
+    platformCloudRequest<
+      ApiResponse<{
+        items: { code: string; name: string; enabled: boolean; category: string }[];
+        enabled: string[];
+      }>
+    >(`/platform/tenants/${tenantId}/modules/`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled_modules }),
+    }),
+
+  checkSlug: (slug: string) =>
+    platformCloudRequest<
+      ApiResponse<{ slug: string; available: boolean; reason: string; hostname: string | null }>
+    >(`/platform/slug-check/?slug=${encodeURIComponent(slug)}`),
+
+  tenantSettings: (tenantId: string) =>
+    platformCloudRequest<ApiResponse<PlatformTenantSettingsRow>>(
+      `/platform/tenants/${tenantId}/settings/`
+    ),
+
+  updateTenantSettings: (tenantId: string, data: Record<string, unknown>) =>
+    platformCloudRequest<ApiResponse<PlatformTenantSettingsRow>>(
+      `/platform/tenants/${tenantId}/settings/`,
+      { method: "PUT", body: JSON.stringify(data) }
+    ),
+
+  tenantDomains: (tenantId: string) =>
+    platformCloudRequest<
+      ApiResponse<{ base_domain: string; items: PlatformTenantDomainRow[] }>
+    >(`/platform/tenants/${tenantId}/domains/`),
+
+  addTenantDomain: (tenantId: string, data: Record<string, unknown>) =>
+    platformCloudRequest<ApiResponse<PlatformTenantDomainRow>>(
+      `/platform/tenants/${tenantId}/domains/`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
 
   updateShop: (id: string, data: Record<string, unknown>) =>
     platformCloudRequest<ApiResponse<Record<string, unknown>>>(`/platform/tenants/${id}/`, {
@@ -486,6 +697,9 @@ export const platformApi = {
     platformCloudRequest<ApiResponse<PlatformShopOverview>>(
       `/platform/tenants/${id}/?period=${period}`
     ),
+
+  entitlements: () =>
+    apiRequest<ApiResponse<TenantEntitlements>>("/platform/entitlements/"),
 };
 export const staffPerformanceApi = {
   list: (params: {

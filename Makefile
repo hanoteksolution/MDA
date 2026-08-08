@@ -23,7 +23,10 @@ endif
 .DEFAULT_GOAL := help
 
 .PHONY: help install install-backend install-frontend install-desktop setup env migrate bootstrap seed seed-demo reset-data \
-        run-backend run-frontend dev dev-desktop build build-desktop bundle-desktop-api check-rust test clean shell \
+        run-backend run-frontend dev dev-desktop build build-desktop bundle-desktop-api check-rust \
+        test test-unit test-integration test-critical test-isolation \
+        docker-build docker-up docker-down docker-smoke check-health \
+        clean shell \
         createsuperuser backup restore restore-list
 
 ## help — Show available commands
@@ -46,6 +49,14 @@ help:
 	@echo   make build-desktop    Build Windows installer (portable, no Python required)
 	@echo   make install-desktop  Install Tauri CLI dependencies
 	@echo   make test             Run backend tests (pytest)
+	@echo   make test-unit          Unit tests only
+	@echo   make test-integration   Integration tests only
+	@echo   make test-critical      Critical business-path tests
+	@echo   make test-isolation     Tenant isolation tests
+	@echo   make docker-build       Build Docker images (API + web)
+	@echo   make docker-up          Start staging stack (Compose)
+	@echo   make docker-smoke       Run deploy smoke checks
+	@echo   make check-health       Readiness probe (exit 1 if degraded)
 	@echo   make shell            Django shell
 	@echo   make createsuperuser  Create Django superuser
 	@echo   make clean            Remove build artifacts and caches
@@ -156,6 +167,42 @@ build-desktop: check-rust bundle-desktop-api
 ## test — Backend test suite
 test:
 	cd $(BACKEND_DIR) && pytest
+
+## test-unit — Unit tests only
+test-unit:
+	cd $(BACKEND_DIR) && pytest tests/unit/
+
+## test-integration — Integration tests only
+test-integration:
+	cd $(BACKEND_DIR) && pytest tests/integration/ -m integration
+
+## test-critical — Critical business-path tests
+test-critical:
+	cd $(BACKEND_DIR) && pytest -m critical
+
+## test-isolation — Tenant isolation tests
+test-isolation:
+	cd $(BACKEND_DIR) && pytest -m isolation
+
+## docker-build — Build production Docker images
+docker-build:
+	docker compose -f docker-compose.yml -f docker-compose.staging.yml build
+
+## docker-up — Start staging stack in background
+docker-up:
+	docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
+## docker-down — Stop staging stack
+docker-down:
+	docker compose -f docker-compose.yml -f docker-compose.staging.yml down
+
+## docker-smoke — HTTP smoke checks against running stack
+docker-smoke:
+	./scripts/smoke_deploy.sh http://127.0.0.1:8010
+
+## check-health — Readiness probe for cron / monitoring
+check-health:
+	./scripts/check_health.sh http://127.0.0.1:8010
 
 ## shell — Django interactive shell
 shell:

@@ -9,6 +9,7 @@ export interface CartLine {
   qty: number;
   image?: string;
   maxStock?: number;
+  requires_prescription?: boolean;
 }
 
 export interface RecentSale {
@@ -244,6 +245,7 @@ export function usePosCart() {
           qty: 1,
           image: product.image,
           maxStock: stock,
+          requires_prescription: Boolean(product.requires_prescription),
         },
       ];
     });
@@ -264,6 +266,11 @@ export function usePosCart() {
 
   const removeLine = useCallback((id: string) => {
     setCart((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const replaceCart = useCallback((lines: CartLine[]) => {
+    setCart(lines.filter((l) => l?.id && l.qty > 0));
+    setActiveHoldId(null);
   }, []);
 
   const clearCart = useCallback(() => {
@@ -433,6 +440,7 @@ export function usePosCart() {
     addToCart,
     updateQty,
     removeLine,
+    replaceCart,
     clearCart,
     toggleFavorite,
     holdSale,

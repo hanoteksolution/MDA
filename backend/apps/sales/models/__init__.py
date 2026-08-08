@@ -1,4 +1,15 @@
-from apps.sales.models.sales import DocumentSequence, Expense, Invoice, InvoiceItem, Quotation, QuotationItem
+from apps.sales.models.sales import (
+    CashierSession,
+    DocumentSequence,
+    Expense,
+    Invoice,
+    InvoiceItem,
+    Payment,
+    Quotation,
+    QuotationItem,
+    SaleRefund,
+    SaleRefundItem,
+)
 
 __all__ = [
     "DocumentSequence",
@@ -6,6 +17,10 @@ __all__ = [
     "QuotationItem",
     "Invoice",
     "InvoiceItem",
+    "Payment",
     "Expense",
+    "CashierSession",
+    "SaleRefund",
+    "SaleRefundItem",
 ]
 

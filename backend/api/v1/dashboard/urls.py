@@ -7,6 +7,7 @@ from api.v1.dashboard.views import (
     DashboardLowStockView,
     DashboardRecentSalesView,
     DashboardTopProductsView,
+    DashboardWidgetsView,
 )
 
 urlpatterns = [
@@ -15,5 +16,6 @@ urlpatterns = [
     path("low-stock/", DashboardLowStockView.as_view(), name="dashboard-low-stock"),
     path("top-products/", DashboardTopProductsView.as_view(), name="dashboard-top-products"),
     path("charts/", DashboardChartsView.as_view(), name="dashboard-charts"),
+    path("widgets/", DashboardWidgetsView.as_view(), name="dashboard-widgets"),
     path("alerts/", DashboardAlertsView.as_view(), name="dashboard-alerts"),
 ]

@@ -18,8 +18,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { productsApi, inventoryApi } from "@/services/api/catalog";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
-import type { Product, ProductFormData } from "@/types/models/catalog";
+import type { AttributeDefinition, Product, ProductFormData } from "@/types/models/catalog";
 import { appDialog } from "@/components/feedback/AppDialog";
+
+function attrValueToInput(value: unknown): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) return value.join(",");
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
 
 export function ProductsPage() {
   const navigate = useNavigate();
@@ -207,9 +214,12 @@ export function ProductFormPage({ editId }: { editId?: string }) {
   const [form, setForm] = useState({
     sku: "", barcode: "", name: "", category_id: "", brand_id: "",
     unit_id: "", cost_price: "", selling_price: "", minimum_stock: "5",
-    description: "", image: "", is_active: true, initial_stock: "0", warehouse_id: "",
+    description: "", image: "", is_active: true, requires_prescription: false,
+    initial_stock: "0", warehouse_id: "",
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [applicableAttrs, setApplicableAttrs] = useState<AttributeDefinition[]>([]);
+  const [attrValues, setAttrValues] = useState<Record<string, string>>({});
 
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState<string | null>(null);
@@ -262,6 +272,21 @@ export function ProductFormPage({ editId }: { editId?: string }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    productsApi
+      .applicableAttributes({ category_id: form.category_id || undefined })
+      .then((res) => {
+        if (!cancelled) setApplicableAttrs(res.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setApplicableAttrs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.category_id]);
+
+  useEffect(() => {
     if (!editId) return;
     productsApi.get(editId).then((res) => {
       const p = res.data;
@@ -271,9 +296,15 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         unit_id: p.unit_id, cost_price: String(p.cost_price),
         selling_price: String(p.selling_price), minimum_stock: String(p.minimum_stock),
         description: p.description, image: p.image || "", is_active: p.is_active,
+        requires_prescription: Boolean(p.requires_prescription),
         initial_stock: String(p.total_stock ?? 0),
         warehouse_id: p.warehouse_id || "",
       });
+      const vals: Record<string, string> = {};
+      for (const a of p.attributes || []) {
+        vals[a.definition_id] = attrValueToInput(a.value);
+      }
+      setAttrValues(vals);
       setImagePreview(null);
       setLoading(false);
     });
@@ -283,6 +314,24 @@ export function ProductFormPage({ editId }: { editId?: string }) {
     e.preventDefault();
     setSaving(true);
     try {
+      const attributes = applicableAttrs.map((def) => {
+        const raw = attrValues[def.id] ?? "";
+        let value: unknown = raw;
+        if (def.data_type === "bool") {
+          value = raw === "true" || raw === "1";
+        } else if (def.data_type === "int") {
+          value = raw === "" ? null : parseInt(raw, 10);
+        } else if (def.data_type === "decimal") {
+          value = raw === "" ? null : parseFloat(raw);
+        } else if (def.data_type === "multi_select") {
+          value = raw
+            ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+            : [];
+        } else if (raw === "") {
+          value = null;
+        }
+        return { definition_id: def.id, value };
+      });
       const payload: ProductFormData = {
         sku: form.sku.trim() || undefined,
         barcode: form.barcode || undefined,
@@ -296,8 +345,10 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         description: form.description,
         image: form.image || undefined,
         is_active: form.is_active,
+        requires_prescription: form.requires_prescription,
         warehouse_id: form.warehouse_id || undefined,
         initial_stock: parseFloat(form.initial_stock) || 0,
+        attributes,
       };
       if (editId) {
         payload.stock = parseFloat(form.initial_stock) || 0;
@@ -457,6 +508,85 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                 />
               </FormPanelSection>
 
+              {applicableAttrs.length > 0 && (
+                <FormPanelSection
+                  icon={<Sparkles className="h-4 w-4" />}
+                  title="Additional attributes"
+                  description="Fields from your business type and category."
+                >
+                  <FormGrid>
+                    {applicableAttrs.map((def) => (
+                      <FormField
+                        key={def.id}
+                        label={def.name}
+                        required={def.is_required}
+                        hint={def.description || undefined}
+                      >
+                        {def.data_type === "bool" ? (
+                          <select
+                            value={attrValues[def.id] ?? ""}
+                            onChange={(e) =>
+                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
+                            }
+                            className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
+                            required={def.is_required}
+                          >
+                            <option value="">—</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                          </select>
+                        ) : def.data_type === "select" ? (
+                          <select
+                            value={attrValues[def.id] ?? ""}
+                            onChange={(e) =>
+                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
+                            }
+                            className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
+                            required={def.is_required}
+                          >
+                            <option value="">Select…</option>
+                            {def.options.map((o) => (
+                              <option key={o.id} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : def.data_type === "multi_select" ? (
+                          <Input
+                            value={attrValues[def.id] ?? ""}
+                            onChange={(e) =>
+                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
+                            }
+                            placeholder="Comma-separated values"
+                            className="h-11 rounded-xl"
+                            required={def.is_required}
+                          />
+                        ) : (
+                          <Input
+                            type={
+                              def.data_type === "int" || def.data_type === "decimal"
+                                ? "number"
+                                : def.data_type === "date"
+                                  ? "date"
+                                  : def.data_type === "datetime"
+                                    ? "datetime-local"
+                                    : "text"
+                            }
+                            step={def.data_type === "decimal" ? "0.0001" : undefined}
+                            value={attrValues[def.id] ?? ""}
+                            onChange={(e) =>
+                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
+                            }
+                            className="h-11 rounded-xl"
+                            required={def.is_required}
+                          />
+                        )}
+                      </FormField>
+                    ))}
+                  </FormGrid>
+                </FormPanelSection>
+              )}
+
               <FormPanelSection
                 icon={<Boxes className="h-4 w-4" />}
                 title="Pricing & inventory"
@@ -591,7 +721,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                   <p className="text-sm font-semibold tracking-tight">Visibility</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">Control where this product appears</p>
                 </div>
-                <div className="p-5">
+                <div className="p-5 space-y-3">
                   <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/60 p-4 transition-colors hover:bg-muted/20">
                     <Checkbox
                       checked={form.is_active}
@@ -602,6 +732,19 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       <p className="text-sm font-medium">Active in catalog</p>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         Inactive products are hidden from POS and sales workflows.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/60 p-4 transition-colors hover:bg-muted/20">
+                    <Checkbox
+                      checked={form.requires_prescription}
+                      onCheckedChange={(v) => setForm({ ...form, requires_prescription: !!v })}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">Requires prescription</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        When the pharmacy module is on, POS checkout needs an active Rx covering this product.
                       </p>
                     </div>
                   </label>

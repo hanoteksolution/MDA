@@ -11,6 +11,14 @@ export interface SyncRunResult {
   subscription?: SubscriptionStatus;
 }
 
+export interface SyncQueueSummary {
+  pending: number;
+  failed: number;
+  synced: number;
+  total: number;
+  last_updated_at?: string | null;
+}
+
 export interface SyncConfig {
   cloud_api_base: string;
   tenant_slug: string;
@@ -21,6 +29,7 @@ export interface SyncConfig {
   last_status: string;
   last_message: string;
   initial_pull_done?: boolean;
+  queue?: SyncQueueSummary;
 }
 
 export interface SubscriptionStatusAlert {
@@ -121,6 +130,21 @@ export const syncApi = {
         subscription_usable?: boolean;
       }>
     >("/sync/payment-status/"),
+
+  queue: () =>
+    apiRequest<
+      ApiResponse<{
+        summary: SyncQueueSummary;
+        pending: Array<{
+          id: string;
+          resource_type: string;
+          resource_id: string;
+          idempotency_key: string;
+          status: string;
+        }>;
+        finance_rules: { push_forbidden: string[]; notes: string };
+      }>
+    >("/sync/queue/"),
 };
 
 /** Platform APIs: browser uses same-origin API; desktop uses cloud when configured. */

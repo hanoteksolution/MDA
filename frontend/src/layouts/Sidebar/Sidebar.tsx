@@ -23,6 +23,13 @@ import {
   ScrollText,
   Tags,
   Trash2,
+  Pill,
+  Dumbbell,
+  FlaskConical,
+  UtensilsCrossed,
+  BedDouble,
+  Home,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -32,12 +39,17 @@ import { settingsApi } from "@/services/api/admin";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useModules } from "@/hooks/useModules";
+import { MODULE_WORKSPACES } from "@/navigation/moduleWorkspaces";
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
   permission?: string | string[];
+  module?: string | string[];
+  /** When set, item stays visible in focused workspaces that include any of these codes */
+  workspaces?: string[];
 }
 
 const navSections: { label: string; items: NavItem[] }[] = [
@@ -48,38 +60,45 @@ const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Operations",
     items: [
-      { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access" },
-      { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view" },
-      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view" },
-      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"] },
-      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view" },
-      { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"] },
-      { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view" },
-      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view" },
+      { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access", module: "pos", workspaces: ["pos", "restaurant", "pharmacy"] },
+      { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
+      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
+      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"], module: "sales", workspaces: ["pos", "finance"] },
+      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
+      { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"], module: "pos", workspaces: ["pos", "restaurant"] },
+      { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view", module: "purchases", workspaces: ["inventory", "pharmacy"] },
+      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view", module: "sales", workspaces: ["pos"] },
     ],
   },
   {
     label: "Catalog",
     items: [
-      { to: "/products", label: "Products", icon: Package, permission: "products.view" },
-      { to: "/categories", label: "Categories", icon: Tags, permission: "products.view" },
-      { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view" },
-      { to: "/customers", label: "Customers", icon: Users, permission: "customers.view" },
-      { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view" },
+      { to: "/products", label: "Products", icon: Package, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy", "pos"] },
+      { to: "/categories", label: "Categories", icon: Tags, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
+      { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
+      { to: "/customers", label: "Customers", icon: Users, permission: "customers.view", module: "sales", workspaces: ["pos", "gym", "pharmacy"] },
+      { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view", module: "purchases", workspaces: ["inventory", "pharmacy"] },
     ],
   },
   {
     label: "Venue",
     items: [
-      { to: "/futsal", label: "Futsal", icon: Goal, permission: "futsal.view" },
+      { to: "/futsal", label: "Futsal", icon: Goal, permission: "futsal.view", module: "futsal", workspaces: ["futsal"] },
+      { to: "/pharmacy", label: "Pharmacy", icon: Pill, permission: "pharmacy.view", module: "pharmacy", workspaces: ["pharmacy"] },
+      { to: "/gym", label: "Gym", icon: Dumbbell, permission: "gym.view", module: "gym", workspaces: ["gym"] },
+      { to: "/restaurant", label: "Restaurant", icon: UtensilsCrossed, permission: "restaurant.view", module: "restaurant", workspaces: ["restaurant"] },
+      { to: "/hotel", label: "Hotel", icon: BedDouble, permission: "hotel.view", module: "hotel", workspaces: ["hotel"] },
+      { to: "/property", label: "Property", icon: Building2, permission: "property_management.view", module: "property_management", workspaces: ["property"] },
+      { to: "/housing", label: "Housing", icon: Home, permission: "housing_rental.view", module: "housing_rental", workspaces: ["property", "housing"] },
+      { to: "/office", label: "Office", icon: Briefcase, permission: "office_rental.view", module: "office_rental", workspaces: ["property", "office"] },
     ],
   },
   {
     label: "Finance & Reports",
     items: [
-      { to: "/finance", label: "Finance", icon: Wallet, permission: "finance.view" },
-      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view" },
-      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view" },
+      { to: "/finance", label: "Finance", icon: Wallet, permission: "finance.view", workspaces: ["finance"] },
+      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view", workspaces: ["finance"] },
+      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view", workspaces: ["finance"] },
     ],
   },
   {
@@ -87,6 +106,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view" },
       { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view" },
+      { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view" },
       { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
     ],
   },
@@ -105,10 +125,11 @@ const navSections: { label: string; items: NavItem[] }[] = [
 ];
 
 export function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, activeWorkspace } = useUIStore();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission } = usePermissions();
+  const { hasModule, hasAnyModule } = useModules();
   const [companyName, setCompanyName] = useState("MDA ERP");
   const [logoUrl, setLogoUrl] = useState<string | undefined>();
 
@@ -133,11 +154,35 @@ export function Sidebar() {
     };
   }, []);
 
+  const focusedWorkspace =
+    activeWorkspace && activeWorkspace !== "overview"
+      ? MODULE_WORKSPACES.find((w) => w.code === activeWorkspace)
+      : null;
+
   const canSeeItem = (item: NavItem) => {
+    if (item.module) {
+      const ok = Array.isArray(item.module)
+        ? hasAnyModule(...item.module)
+        : hasModule(item.module);
+      if (!ok) return false;
+    }
     if (!item.permission) return true;
-    return Array.isArray(item.permission)
+    const permOk = Array.isArray(item.permission)
       ? hasAnyPermission(...item.permission)
       : hasPermission(item.permission);
+    if (!permOk) return false;
+    // Workspace focus: keep System/Platform + items tagged for this workspace
+    if (focusedWorkspace) {
+      if (!item.workspaces) return true;
+      if (item.workspaces.includes(focusedWorkspace.code)) return true;
+      // Also show items whose module matches the workspace modules
+      if (item.module) {
+        const mods = Array.isArray(item.module) ? item.module : [item.module];
+        if (focusedWorkspace.modules.some((m) => mods.includes(m))) return true;
+      }
+      return false;
+    }
+    return true;
   };
 
   const visibleSections = navSections
@@ -214,31 +259,43 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin xl:px-3 xl:py-4">
         {visibleSections.map((section) => (
-          <div key={section.label} className="mb-6">
+          <div key={section.label} className="mb-4 xl:mb-5">
             {!sidebarCollapsed && (
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {section.label}
               </p>
+            )}
+            {sidebarCollapsed && (
+              <div className="mx-auto mb-1.5 h-px w-6 bg-sidebar-border" aria-hidden />
             )}
             <div className="space-y-0.5">
               {section.items.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
-                  title={sidebarCollapsed ? label : undefined}
+                  title={label}
+                  aria-label={label}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                      "group relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all",
+                      sidebarCollapsed && "justify-center px-2",
                       isActive
                         ? "bg-primary/10 text-primary shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground"
                     )
                   }
                 >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
-                  {!sidebarCollapsed && <span>{label}</span>}
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                      )}
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      {!sidebarCollapsed && <span className="truncate">{label}</span>}
+                    </>
+                  )}
                 </NavLink>
               ))}
             </div>
