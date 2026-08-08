@@ -6,6 +6,7 @@ workspaces/screens the app may show. Clients must not invent parallel flags.
 
 from __future__ import annotations
 
+from apps.platform.services.module_feature_service import ModuleFeatureService
 from apps.platform.services.module_service import (
     tenant_module_ready,
     usable_module_codes,
@@ -19,6 +20,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "label": "Gym Member",
         "module": "gym",
         "permission": "gym.member_portal",
+        "feature": "members",
         "audience": "member",
         "screens": [
             {
@@ -38,6 +40,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
                 "label": "Attendance",
                 "route": "Attendance",
                 "sort_order": 30,
+                "feature": "attendance",
             },
             {
                 "id": "gym_workouts",
@@ -50,6 +53,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
                 "label": "Classes",
                 "route": "Classes",
                 "sort_order": 50,
+                "feature": "classes",
             },
         ],
     },
@@ -59,6 +63,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "",
         "permission": "",
         "audience": "staff",
+        "group": "core",
         "screens": [
             {
                 "id": "staff_switcher",
@@ -69,11 +74,188 @@ MOBILE_NAV_CATALOG: list[dict] = [
         ],
     },
     {
+        "id": "dashboard_staff",
+        "label": "Dashboard",
+        "module": "",
+        "permission": "dashboard.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "dashboard_staff_home",
+                "label": "Dashboard",
+                "route": "DashboardWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "pos_staff",
+        "label": "POS",
+        "module": "pos",
+        "permission": "pos.access",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "pos_staff_checkout",
+                "label": "Point of sale",
+                "route": "PosWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "sales_staff",
+        "label": "Sales",
+        "module": "sales",
+        "permission": "sales.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "sales_staff_invoices",
+                "label": "Invoices",
+                "route": "SalesWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "inventory_staff",
+        "label": "Inventory",
+        "module": "inventory",
+        "permission": "inventory.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "inventory_staff_stock",
+                "label": "Stock",
+                "route": "InventoryWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "purchases_staff",
+        "label": "Purchases",
+        "module": "purchases",
+        "permission": "purchases.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "purchases_staff_orders",
+                "label": "Purchase orders",
+                "route": "PurchasesWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "customers_staff",
+        "label": "Customers",
+        "module": "sales",
+        "permission": "customers.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "customers_staff_list",
+                "label": "Customers",
+                "route": "CustomersWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "suppliers_staff",
+        "label": "Suppliers",
+        "module": "purchases",
+        "permission": "suppliers.view",
+        "audience": "staff",
+        "group": "core",
+        "screens": [
+            {
+                "id": "suppliers_staff_list",
+                "label": "Suppliers",
+                "route": "SuppliersWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "finance_staff",
+        "label": "Finance",
+        "module": "",
+        "permission": "finance.view",
+        "audience": "staff",
+        "group": "finance",
+        "screens": [
+            {
+                "id": "finance_staff_summary",
+                "label": "Finance overview",
+                "route": "FinanceWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "business_units_staff",
+        "label": "Business Units",
+        "module": "",
+        "permission": "finance.view",
+        "audience": "staff",
+        "group": "finance",
+        "screens": [
+            {
+                "id": "business_units_staff_list",
+                "label": "Business units",
+                "route": "BusinessUnitsWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "reports_staff",
+        "label": "Reports",
+        "module": "",
+        "permission": "reports.view",
+        "audience": "staff",
+        "group": "finance",
+        "screens": [
+            {
+                "id": "reports_staff_catalog",
+                "label": "Reports",
+                "route": "ReportsWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "settings_staff",
+        "label": "Settings",
+        "module": "",
+        "permission": "settings.view",
+        "audience": "staff",
+        "group": "finance",
+        "screens": [
+            {
+                "id": "settings_staff_company",
+                "label": "Settings",
+                "route": "SettingsWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
         "id": "gym_staff",
         "label": "Gym",
         "module": "gym",
         "permission": "gym.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "gym_staff_summary",
@@ -89,6 +271,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "pharmacy",
         "permission": "pharmacy.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "pharmacy_staff_summary",
@@ -104,6 +287,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "hotel",
         "permission": "hotel.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "hotel_staff_summary",
@@ -119,6 +303,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "restaurant",
         "permission": "restaurant.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "restaurant_staff_summary",
@@ -134,6 +319,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "property_management",
         "permission": "property_management.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "property_staff_summary",
@@ -149,6 +335,7 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "housing_rental",
         "permission": "housing_rental.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "housing_staff_summary",
@@ -164,11 +351,28 @@ MOBILE_NAV_CATALOG: list[dict] = [
         "module": "office_rental",
         "permission": "office_rental.view",
         "audience": "staff",
+        "group": "venue",
         "screens": [
             {
                 "id": "office_staff_summary",
                 "label": "Office overview",
                 "route": "OfficeWorkspace",
+                "sort_order": 10,
+            },
+        ],
+    },
+    {
+        "id": "futsal_staff",
+        "label": "Futsal",
+        "module": "futsal",
+        "permission": "futsal.view",
+        "audience": "staff",
+        "group": "venue",
+        "screens": [
+            {
+                "id": "futsal_staff_summary",
+                "label": "Futsal overview",
+                "route": "FutsalWorkspace",
                 "sort_order": 10,
             },
         ],
@@ -223,9 +427,19 @@ class MobileNavService:
                 continue
             if permission and callable(has_perm) and not has_perm(permission):
                 continue
+            workspace_feature = (entry.get("feature") or "").strip()
+            if workspace_feature and module_code and not ModuleFeatureService.tenant_has_feature(
+                module_code, workspace_feature, tenant=tenant, user=user, request=request
+            ):
+                continue
 
             screen_rows = []
             for screen in entry.get("screens") or []:
+                screen_feature = (screen.get("feature") or "").strip()
+                if screen_feature and module_code and not ModuleFeatureService.tenant_has_feature(
+                    module_code, screen_feature, tenant=tenant, user=user, request=request
+                ):
+                    continue
                 row = {
                     "id": screen["id"],
                     "label": screen["label"],
@@ -242,6 +456,7 @@ class MobileNavService:
                 "label": entry["label"],
                 "module": module_code,
                 "audience": entry_audience,
+                "group": entry.get("group") or ("venue" if module_code else "core"),
                 "screens": sorted(screen_rows, key=lambda s: s["sort_order"]),
             }
             if entry_audience == "staff":
@@ -276,6 +491,7 @@ class MobileNavService:
                     "label": hub["label"],
                     "module": "",
                     "audience": "staff",
+                    "group": "core",
                     "screens": hub_screens,
                 },
             )

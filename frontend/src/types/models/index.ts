@@ -22,6 +22,8 @@ export interface User {
   enabled_modules?: string[];
   module_features?: Record<string, Record<string, boolean>>;
   is_platform_admin?: boolean;
+  is_superuser?: boolean;
+  is_super_admin?: boolean;
   managed_shop_group?: { id: string; name: string; slug: string } | null;
 }
 

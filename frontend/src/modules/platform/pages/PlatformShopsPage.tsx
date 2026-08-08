@@ -114,7 +114,13 @@ export function PlatformShopsPage() {
   const user = useAuthStore((s) => s.user);
   const { hasPermission } = usePermissions();
   const isGroupManager = Boolean(user?.managed_shop_group);
-  const isGlobalAdmin = Boolean(user?.is_platform_admin);
+  const isGlobalAdmin = Boolean(
+    user?.is_super_admin ||
+      user?.is_platform_admin ||
+      user?.is_superuser ||
+      user?.role?.slug === "super_admin" ||
+      user?.role?.slug === "platform_admin"
+  );
   const canManage = Boolean(
     isGlobalAdmin || hasPermission("platform.manage") || isGroupManager
   );

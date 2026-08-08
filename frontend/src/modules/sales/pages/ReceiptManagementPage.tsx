@@ -37,7 +37,7 @@ type StatusTab = "all" | "paid" | "unpaid" | "on_hold";
 type PaymentStatus = "paid" | "unpaid" | "on_hold";
 
 const HELD_KEY = "mda_pos_held";
-const RECEIPTS_UI_KEY = "mda_receipts_ui";
+const RECEIPTS_UI_KEY = "mda_receipts_ui_v2";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -48,15 +48,6 @@ const PAYMENT_LABELS: Record<string, string> = {
   bank: "Bank",
   hold: "On hold",
 };
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function monthStartIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
 
 function loadLocalHeld(): HeldSale[] {
   try {
@@ -154,10 +145,10 @@ export function ReceiptManagementPage() {
     () => searchParams.get("q") || stored.search || ""
   );
   const [dateFrom, setDateFrom] = useState(
-    () => searchParams.get("from") || stored.dateFrom || monthStartIso()
+    () => searchParams.get("from") || stored.dateFrom || ""
   );
   const [dateTo, setDateTo] = useState(
-    () => searchParams.get("to") || stored.dateTo || todayIso()
+    () => searchParams.get("to") || stored.dateTo || ""
   );
   const [waiter, setWaiter] = useState(
     () => searchParams.get("waiter") || stored.waiter || ""
@@ -642,9 +633,24 @@ export function ReceiptManagementPage() {
             placeholder="Waiter"
             className="h-11 rounded-xl border-border/70 bg-background/80"
           />
-          <Button className="h-11 rounded-xl font-semibold" onClick={applySearch}>
-            Apply filters
-          </Button>
+          <div className="flex gap-2">
+            <Button className="h-11 flex-1 rounded-xl font-semibold" onClick={applySearch}>
+              Apply filters
+            </Button>
+            {(dateFrom || dateTo) && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 rounded-xl"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                All dates
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -673,7 +679,9 @@ export function ReceiptManagementPage() {
           emptyMessage={
             tab === "on_hold"
               ? "No on-hold receipts. Hold a sale from POS — it is saved to the server."
-              : "No receipts found for these filters."
+              : dateFrom || dateTo
+                ? "No receipts in this date range. Clear the dates to see older sales."
+                : "No receipts found."
           }
           searchPlaceholder="Filter this page..."
           page={list.page}

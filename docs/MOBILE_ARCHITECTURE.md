@@ -25,7 +25,7 @@ Business rules stay on the backend. Mobile clients must not re-implement pricing
 | App | Audience | First slices |
 |-----|----------|--------------|
 | Gym Member | Members | Login, membership QR, attendance, workouts, classes — **v0.1 in `mobile/gym-member/`** |
-| Business Owner / Staff | Managers, cashiers | Dashboard, sales, inventory alerts, members, reports |
+| Business Owner / Staff | Managers, cashiers | **v0.2 in `mobile/staff/`** — dashboard, POS, sales, inventory, purchases, customers, suppliers, finance, business units, reports, settings + venue modules |
 
 ---
 
@@ -38,7 +38,7 @@ Business rules stay on the backend. Mobile clients must not re-implement pricing
 - Rate limiting: anon/user defaults + stricter `auth` scope on login/refresh
 - Mobile contract: `GET /api/v1/mobile/meta/` (public), `GET /api/v1/mobile/bootstrap/` (authenticated)
   — bootstrap includes `enabled_modules` + `mobile_nav` (PHASE 24); optional `?audience=member|staff`
-  — Staff app: `mobile/staff/` workspace switcher; member app: `mobile/gym-member/`
+  — Staff app: `mobile/staff/` full ERP workspaces (STEP 69); member app: `mobile/gym-member/`
 
 ---
 
@@ -61,6 +61,6 @@ Role `gym_member` + permission `gym.member_portal`. Member must be linked via `M
 
 - Offline-first mobile accounting sync
 - Separate mobile backend
-- Staff/owner mobile app
+- Full desktop-parity POS (split tender, holds, charge-to-room) on phone
 
 See [ERP_TRANSFORMATION_ROADMAP.md](./ERP_TRANSFORMATION_ROADMAP.md) STEP 29+.

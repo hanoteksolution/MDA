@@ -81,10 +81,15 @@ export interface PlatformShopOverview {
     name: string;
     slug: string;
     is_active: boolean;
+    status?: string;
+    currency?: string;
     contact_email: string;
     contact_phone?: string;
     shop_group_id?: string | null;
     shop_group_name?: string | null;
+    business_type_code?: string | null;
+    business_type?: PlatformBusinessTypeRow | null;
+    primary_domain?: PlatformTenantDomainRow | null;
     last_synced_at?: string | null;
     sync_secret?: string;
   };

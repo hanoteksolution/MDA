@@ -28,21 +28,26 @@ class UserSerializer(serializers.ModelSerializer):
     managed_shop_group = serializers.SerializerMethodField()
     enabled_modules = serializers.SerializerMethodField()
     module_features = serializers.SerializerMethodField()
+    is_super_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
-            "is_active", "is_platform_admin", "permissions", "direct_permissions",
+            "is_active", "is_platform_admin", "is_superuser", "is_super_admin",
+            "permissions", "direct_permissions",
             "permission_ids", "shop_slug", "managed_shop_group", "enabled_modules",
             "module_features",
             "last_login", "date_joined",
         ]
-        read_only_fields = ["id", "last_login", "date_joined"]
+        read_only_fields = ["id", "last_login", "date_joined", "is_superuser", "is_super_admin"]
 
     def get_permissions(self, obj):
         return obj.get_permissions()
+
+    def get_is_super_admin(self, obj):
+        return bool(getattr(obj, "is_elevated_admin", False))
 
     def get_direct_permissions(self, obj):
         perms = (
@@ -117,7 +122,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if branch_id:
             user.branch_id = branch_id
         user.save()
-        if permission_ids is not None:
+        if user.apply_elevated_flags():
+            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
+        if permission_ids is not None and not user.is_elevated_admin:
             from apps.authentication.services.auth_service import UserService
 
             UserService._set_direct_permissions(user, permission_ids)

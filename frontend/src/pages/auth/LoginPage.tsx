@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
 import { useAuthStore } from "@/store/authStore";
+import { postLoginPath } from "@/navigation/postLogin";
 import { setupApi } from "@/services/api/setup";
 import {
   ensureConnectionLoaded,
@@ -53,7 +54,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -140,6 +141,12 @@ export function LoginPage() {
     if (sessionExpired) clearError();
   }, [sessionExpired, clearError]);
 
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate(postLoginPath(user), { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -152,7 +159,7 @@ export function LoginPage() {
 
     try {
       await login(username, password);
-      navigate("/dashboard", { replace: true });
+      navigate(postLoginPath(useAuthStore.getState().user), { replace: true });
     } catch {
       try {
         const res = await setupApi.status();

@@ -26,6 +26,8 @@ from apps.gym.services.workout_service import (
     WorkoutSummaryService,
 )
 from apps.gym.services.gym_payment_service import GymPaymentError, GymPaymentService
+from apps.gym.services.feature_gate import gym_feature_required
+from apps.platform.services.module_feature_service import ModuleFeatureService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
 from permissions.base import HasPermission
@@ -35,21 +37,46 @@ class GymSummaryView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
     def get(self, request):
+        features = ModuleFeatureService.resolve_features(
+            "gym", user=request.user, request=request
+        )
         data = {
-            "members": MemberService.summary(user=request.user, request=request),
+            "members": MemberService.summary(user=request.user, request=request)
+            if features.get("members")
+            else {"total": 0, "active": 0, "inactive": 0, "suspended": 0},
             "subscriptions": SubscriptionService.summary(
                 user=request.user, request=request
-            ),
+            )
+            if features.get("members")
+            else {
+                "total": 0,
+                "pending": 0,
+                "active": 0,
+                "frozen": 0,
+                "expired": 0,
+                "cancelled": 0,
+            },
             "attendance": AttendanceService.summary(
                 user=request.user, request=request
-            ),
+            )
+            if features.get("attendance")
+            else {"today_checkins": 0, "currently_inside": 0, "total": 0},
             "trainers": TrainerService.summary(user=request.user, request=request),
-            "classes": BookingService.summary(user=request.user, request=request),
+            "classes": BookingService.summary(user=request.user, request=request)
+            if features.get("classes")
+            else {
+                "upcoming_sessions": 0,
+                "active_bookings": 0,
+                "waitlisted": 0,
+                "class_templates": 0,
+            },
             "workouts": WorkoutSummaryService.summary(user=request.user, request=request),
+            "features": features,
         }
         return success_response(data=data)
 
 
+@gym_feature_required("members")
 class MemberListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -81,6 +108,7 @@ class MemberListCreateView(APIView):
         )
 
 
+@gym_feature_required("members")
 class MemberDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -118,6 +146,7 @@ class MemberDetailView(APIView):
         return success_response(message="Member deleted.")
 
 
+@gym_feature_required("members")
 class PlanListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -154,6 +183,7 @@ class PlanListCreateView(APIView):
         )
 
 
+@gym_feature_required("members")
 class PlanDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -189,6 +219,7 @@ class PlanDetailView(APIView):
         return success_response(message="Plan deleted.")
 
 
+@gym_feature_required("members")
 class SubscriptionListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -237,6 +268,7 @@ class SubscriptionListCreateView(APIView):
         )
 
 
+@gym_feature_required("members")
 class SubscriptionDetailView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -251,6 +283,7 @@ class SubscriptionDetailView(APIView):
         return success_response(data=SubscriptionService.serialize(sub))
 
 
+@gym_feature_required("members")
 class SubscriptionActivateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -277,6 +310,7 @@ class SubscriptionActivateView(APIView):
         )
 
 
+@gym_feature_required("members")
 class SubscriptionFreezeView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -299,6 +333,7 @@ class SubscriptionFreezeView(APIView):
         )
 
 
+@gym_feature_required("members")
 class SubscriptionUnfreezeView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -317,6 +352,7 @@ class SubscriptionUnfreezeView(APIView):
         )
 
 
+@gym_feature_required("members")
 class SubscriptionCancelView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -339,6 +375,7 @@ class SubscriptionCancelView(APIView):
         )
 
 
+@gym_feature_required("attendance")
 class AttendanceListView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -359,6 +396,7 @@ class AttendanceListView(APIView):
         )
 
 
+@gym_feature_required("attendance")
 class AttendanceCheckInView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.attendance.checkin")]
 
@@ -386,6 +424,7 @@ class AttendanceCheckInView(APIView):
         )
 
 
+@gym_feature_required("attendance")
 class AttendanceCheckOutView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.attendance.checkin")]
 
@@ -624,6 +663,7 @@ class PTSessionCheckoutView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class GymClassListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -660,6 +700,7 @@ class GymClassListCreateView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class ClassScheduleListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -697,6 +738,7 @@ class ClassScheduleListCreateView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class ClassBookingListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.view")]
 
@@ -739,6 +781,7 @@ class ClassBookingListCreateView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class ClassBookingCancelView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -758,6 +801,7 @@ class ClassBookingCancelView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class ClassBookingCheckoutView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -989,6 +1033,7 @@ class BodyMeasurementChartView(APIView):
         return success_response(data={"points": points})
 
 
+@gym_feature_required("members")
 class GymCheckoutView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 
@@ -1013,6 +1058,7 @@ class GymCheckoutView(APIView):
         )
 
 
+@gym_feature_required("members")
 class SubscriptionPayView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("gym.manage")]
 

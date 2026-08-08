@@ -22,7 +22,7 @@ export interface NotificationListResult {
 }
 
 export const notificationsApi = {
-  list: (params: { is_read?: boolean; type?: string; page?: number } = {}) =>
+  list: (params: { is_read?: boolean; type?: string; page?: number; page_size?: number } = {}) =>
     apiRequest<ApiResponse<NotificationListResult>>(`/notifications/${qs(params)}`),
 
   unreadCount: () =>

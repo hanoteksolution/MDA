@@ -13,11 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { adminApi, settingsApi } from "@/services/api/admin";
 import { appDialog } from "@/components/feedback/AppDialog";
 
+const FULL_ACCESS_ROLE_SLUGS = new Set(["super_admin", "platform_admin"]);
+
 export function UserFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
-  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string; slug?: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [allPermissions, setAllPermissions] = useState<Record<string, PermissionItem[]>>({});
   const [selectedPermIds, setSelectedPermIds] = useState<string[]>([]);
@@ -67,8 +69,10 @@ export function UserFormPage({ editId }: { editId?: string }) {
         role_id: form.role_id || null,
         branch_id: form.branch_id || null,
         is_active: form.is_active,
-        permission_ids: selectedPermIds,
       };
+      const selectedRole = roles.find((r) => r.id === form.role_id);
+      const fullAccess = FULL_ACCESS_ROLE_SLUGS.has(selectedRole?.slug || "");
+      if (!fullAccess) payload.permission_ids = selectedPermIds;
       if (form.password) payload.password = form.password;
       if (editId) await adminApi.updateUser(editId, payload);
       else {
@@ -95,7 +99,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
     <PermissionGuard permission={editId ? "users.update" : "users.create"}>
       <PageLayout
         title={editId ? "Edit User" : "Add User"}
-        description="Assign a role for the base access set, then grant extra permissions to this user only."
+        description="Assign a role. Super Admin and Platform Admin already have every feature — extra permission ticks are only for normal roles."
         breadcrumbs={["Home", "Administration", editId ? "Edit User" : "New User"]}
       >
         <form onSubmit={handleSubmit}>
@@ -122,7 +126,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
                     <FormField label="Phone">
                       <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                     </FormField>
-                    <FormField label="Role" hint="Base permissions inherited from the role">
+                    <FormField label="Role" hint="Super Admin / Platform Admin unlock all features automatically">
                       <Select value={form.role_id || "none"} onValueChange={(v) => setForm({ ...form, role_id: v === "none" ? "" : v })}>
                         <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                         <SelectContent>
@@ -147,33 +151,47 @@ export function UserFormPage({ editId }: { editId?: string }) {
                   </label>
                 </FormSection>
 
-                <FormSection
-                  title="Direct permissions"
-                  description="Extra permissions for this user only. Includes Sales & Receipts (view / update / delete) when available to you."
-                >
-                  <PermissionMatrix
-                    permissions={allPermissions}
-                    selected={selectedPermIds}
-                    onChange={setSelectedPermIds}
-                  />
-                </FormSection>
+                {FULL_ACCESS_ROLE_SLUGS.has(roles.find((r) => r.id === form.role_id)?.slug || "") ? (
+                  <FormSection
+                    title="Access"
+                    description="This role has full access to every module and action. You do not need to grant extra permissions."
+                  >
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                      Super Admin / Platform Admin already see all ERP features. Permission checkboxes
+                      are only used for cashiers, managers, and other limited roles.
+                    </div>
+                  </FormSection>
+                ) : (
+                  <FormSection
+                    title="Direct permissions"
+                    description="Extra permissions for this user only, on top of their role. Not required for Super Admin."
+                  >
+                    <PermissionMatrix
+                      permissions={allPermissions}
+                      selected={selectedPermIds}
+                      onChange={setSelectedPermIds}
+                    />
+                  </FormSection>
+                )}
               </>
             }
             aside={
               <div className="ds-card p-4 space-y-3">
                 <p className="text-sm font-semibold">Access control</p>
                 <p className="text-xs text-muted-foreground">
-                  Effective access = role permissions + direct grants below. Direct grants do not change the role for other users.
+                  Super Admin has every feature automatically. Other roles use role permissions plus any extra grants.
                 </p>
                 {form.role_id && (
                   <Badge variant="secondary">
                     Role: {roles.find((r) => r.id === form.role_id)?.name ?? "Selected"}
                   </Badge>
                 )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Direct grants</span>
-                  <span className="font-semibold">{selectedPermIds.length}</span>
-                </div>
+                {!FULL_ACCESS_ROLE_SLUGS.has(roles.find((r) => r.id === form.role_id)?.slug || "") && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Direct grants</span>
+                    <span className="font-semibold">{selectedPermIds.length}</span>
+                  </div>
+                )}
               </div>
             }
             actions={
@@ -280,21 +298,34 @@ export function RoleFormPage({ editId }: { editId?: string }) {
                   </FormGrid>
                   {isSystem && (
                     <p className="mt-4 text-xs text-muted-foreground">
-                      System role name and slug cannot be changed. You can still update permissions.
+                      {FULL_ACCESS_ROLE_SLUGS.has(form.slug)
+                        ? "Super Admin / Platform Admin always have full access. Permission ticks cannot restrict them."
+                        : "System role name and slug cannot be changed. You can still update permissions."}
                     </p>
                   )}
                 </FormSection>
 
-                <FormSection
-                  title="Permissions"
-                  description={`${selectedPermIds.length} permission(s) selected`}
-                >
-                  <PermissionMatrix
-                    permissions={allPermissions}
-                    selected={selectedPermIds}
-                    onChange={setSelectedPermIds}
-                  />
-                </FormSection>
+                {FULL_ACCESS_ROLE_SLUGS.has(form.slug) ? (
+                  <FormSection
+                    title="Permissions"
+                    description="Full access is built into this role."
+                  >
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                      Users with this role see every ERP feature without extra permission grants.
+                    </div>
+                  </FormSection>
+                ) : (
+                  <FormSection
+                    title="Permissions"
+                    description={`${selectedPermIds.length} permission(s) selected`}
+                  >
+                    <PermissionMatrix
+                      permissions={allPermissions}
+                      selected={selectedPermIds}
+                      onChange={setSelectedPermIds}
+                    />
+                  </FormSection>
+                )}
               </>
             }
             aside={
@@ -303,7 +334,9 @@ export function RoleFormPage({ editId }: { editId?: string }) {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Permissions</span>
-                    <span className="font-semibold">{selectedPermIds.length}</span>
+                    <span className="font-semibold">
+                      {FULL_ACCESS_ROLE_SLUGS.has(form.slug) ? "All" : selectedPermIds.length}
+                    </span>
                   </div>
                   {isSystem && (
                     <Badge variant="outline">System Role</Badge>

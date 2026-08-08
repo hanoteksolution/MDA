@@ -1,8 +1,8 @@
-"""Per-module feature flags stored on TenantModule.configuration (PHASE 16 / STEP 37).
+"""Per-module feature flags stored on TenantModule.configuration (PHASE 16 / STEP 37–68).
 
 Catalog lives in code; tenant overrides live in
 `TenantModule.configuration["features"]` — no parallel feature table.
-Missing keys default to catalog `is_default` (True for pharmacy).
+Missing keys default to catalog `is_default` (True for pharmacy + gym).
 """
 
 from __future__ import annotations
@@ -30,6 +30,26 @@ MODULE_FEATURE_CATALOG: dict[str, list[dict[str, Any]]] = {
         {
             "code": "expiry_alerts",
             "name": "Expiry alerts",
+            "is_default": True,
+            "is_required": False,
+        },
+    ],
+    "gym": [
+        {
+            "code": "members",
+            "name": "Members & memberships",
+            "is_default": True,
+            "is_required": False,
+        },
+        {
+            "code": "classes",
+            "name": "Classes",
+            "is_default": True,
+            "is_required": False,
+        },
+        {
+            "code": "attendance",
+            "name": "Attendance / check-in",
             "is_default": True,
             "is_required": False,
         },

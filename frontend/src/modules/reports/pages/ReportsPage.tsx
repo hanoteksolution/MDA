@@ -266,7 +266,6 @@ export function ReportsPage() {
           property: Building2,
         };
         const mapped = res.data.map((pack: ReportPack) => {
-          const fallback = REPORT_CATEGORIES.find((c) => c.id === pack.id);
           return {
             id: pack.id,
             title: pack.title,

@@ -1,20 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Wallet,
-  TrendingUp,
-  TrendingDown,
-  PiggyBank,
   ArrowUpRight,
   ArrowDownRight,
   Plus,
-  BookOpen,
-  Scale,
-  FileSpreadsheet,
-  Landmark,
-  Waves,
-  CalendarRange,
-  HeartPulse,
   Loader2,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -756,19 +745,19 @@ export function FinancePage() {
                     key: "debit",
                     header: "Debit",
                     cell: (r) => (r.debit ? formatCurrency(r.debit) : "—"),
-                    exportValue: (r) => r.debit,
+                    exportValue: (r) => String(r.debit ?? ""),
                   },
                   {
                     key: "credit",
                     header: "Credit",
                     cell: (r) => (r.credit ? formatCurrency(r.credit) : "—"),
-                    exportValue: (r) => r.credit,
+                    exportValue: (r) => String(r.credit ?? ""),
                   },
                   {
                     key: "bal",
                     header: "Balance",
                     cell: (r) => formatCurrency(r.running_balance),
-                    exportValue: (r) => r.running_balance,
+                    exportValue: (r) => String(r.running_balance ?? ""),
                   },
                 ]}
                 data={ledgerReport.lines}

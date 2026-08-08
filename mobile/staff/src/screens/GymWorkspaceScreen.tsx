@@ -36,6 +36,11 @@ export function GymWorkspaceScreen({ navigation }: Props) {
     void reload();
   }, [reload]);
 
+  const features =
+    summary && typeof summary.features === "object" && summary.features
+      ? (summary.features as Record<string, boolean>)
+      : {};
+
   return (
     <Screen
       title="Gym"
@@ -43,27 +48,37 @@ export function GymWorkspaceScreen({ navigation }: Props) {
       onBack={() => navigation.navigate("WorkspaceSwitcher")}
     >
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Card>
-        <Text style={styles.kpiLabel}>Members</Text>
-        <Text style={styles.kpiValue}>{pickCount(summary?.members, ["total", "count", "active"])}</Text>
-      </Card>
-      <Card>
-        <Text style={styles.kpiLabel}>Active subscriptions</Text>
-        <Text style={styles.kpiValue}>
-          {pickCount(summary?.subscriptions, ["active", "total", "count"])}
-        </Text>
-      </Card>
-      <Card>
-        <Text style={styles.kpiLabel}>Today attendance</Text>
-        <Text style={styles.kpiValue}>
-          {pickCount(summary?.attendance, ["today", "checkins_today", "total"])}
-        </Text>
-      </Card>
+      {features.members !== false ? (
+        <>
+          <Card>
+            <Text style={styles.kpiLabel}>Members</Text>
+            <Text style={styles.kpiValue}>
+              {pickCount(summary?.members, ["total", "count", "active"])}
+            </Text>
+          </Card>
+          <Card>
+            <Text style={styles.kpiLabel}>Active subscriptions</Text>
+            <Text style={styles.kpiValue}>
+              {pickCount(summary?.subscriptions, ["active", "total", "count"])}
+            </Text>
+          </Card>
+        </>
+      ) : null}
+      {features.attendance !== false ? (
+        <Card>
+          <Text style={styles.kpiLabel}>Today attendance</Text>
+          <Text style={styles.kpiValue}>
+            {pickCount(summary?.attendance, ["today_checkins", "today", "total"])}
+          </Text>
+        </Card>
+      ) : null}
       <Card>
         <Text style={styles.kpiLabel}>Classes / workouts</Text>
         <Text style={styles.kpiValue}>
-          {pickCount(summary?.classes, ["upcoming", "total", "count"])} /{" "}
-          {pickCount(summary?.workouts, ["active", "total", "count"])}
+          {features.classes !== false
+            ? pickCount(summary?.classes, ["upcoming_sessions", "upcoming", "total", "count"])
+            : "—"}{" "}
+          / {pickCount(summary?.workouts, ["active", "total", "count"])}
         </Text>
       </Card>
     </Screen>

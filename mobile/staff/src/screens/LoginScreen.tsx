@@ -40,7 +40,7 @@ export function LoginScreen() {
     >
       <View style={styles.panel}>
         <Text style={styles.brand}>MDA Staff</Text>
-        <Text style={styles.subtitle}>Module workspaces</Text>
+        <Text style={styles.subtitle}>Staff ERP — all modules</Text>
         <TextInput
           style={styles.input}
           placeholder="Business slug"

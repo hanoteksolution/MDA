@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
+  LayoutGrid,
   ShoppingCart,
   Package,
   Warehouse,
@@ -55,19 +56,22 @@ interface NavItem {
 const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Overview",
-    items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard.view" }],
+    items: [
+      { to: "/modules", label: "All modules", icon: LayoutGrid },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard.view", workspaces: ["overview"] },
+    ],
   },
   {
     label: "Operations",
     items: [
       { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access", module: "pos", workspaces: ["pos", "restaurant", "pharmacy"] },
-      { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
-      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
-      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"], module: "sales", workspaces: ["pos", "finance"] },
-      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant"] },
+      { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
+      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
+      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"], module: "sales", workspaces: ["pos", "finance", "sales"] },
+      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
       { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"], module: "pos", workspaces: ["pos", "restaurant"] },
-      { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view", module: "purchases", workspaces: ["inventory", "pharmacy"] },
-      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view", module: "sales", workspaces: ["pos"] },
+      { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view", module: "purchases", workspaces: ["inventory", "pharmacy", "purchases"] },
+      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view", module: "sales", workspaces: ["pos", "sales"] },
     ],
   },
   {
@@ -76,8 +80,8 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { to: "/products", label: "Products", icon: Package, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy", "pos"] },
       { to: "/categories", label: "Categories", icon: Tags, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
       { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
-      { to: "/customers", label: "Customers", icon: Users, permission: "customers.view", module: "sales", workspaces: ["pos", "gym", "pharmacy"] },
-      { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view", module: "purchases", workspaces: ["inventory", "pharmacy"] },
+      { to: "/customers", label: "Customers", icon: Users, permission: "customers.view", module: "sales", workspaces: ["pos", "gym", "pharmacy", "sales"] },
+      { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view", module: "purchases", workspaces: ["inventory", "pharmacy", "purchases"] },
     ],
   },
   {
@@ -97,17 +101,17 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Finance & Reports",
     items: [
       { to: "/finance", label: "Finance", icon: Wallet, permission: "finance.view", workspaces: ["finance"] },
-      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view", workspaces: ["finance"] },
-      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view", workspaces: ["finance"] },
+      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view", workspaces: ["finance", "reports"] },
+      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view", workspaces: ["finance", "reports"] },
     ],
   },
   {
     label: "Platform",
     items: [
-      { to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view" },
-      { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view" },
-      { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view" },
-      { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
+      { to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view", workspaces: ["platform"] },
+      { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view", workspaces: ["platform"] },
+      { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view", workspaces: ["platform"] },
+      { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage", workspaces: ["platform"] },
     ],
   },
   {
@@ -118,8 +122,9 @@ const navSections: { label: string; items: NavItem[] }[] = [
         label: "Administration",
         icon: Shield,
         permission: ["users.view", "roles.view"],
+        workspaces: ["admin"],
       },
-      { to: "/settings", label: "Settings", icon: Settings, permission: "settings.view" },
+      { to: "/settings", label: "Settings", icon: Settings, permission: "settings.view", workspaces: ["settings"] },
     ],
   },
 ];
@@ -209,7 +214,7 @@ export function Sidebar() {
         )}
       >
         {!sidebarCollapsed ? (
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <NavLink to="/modules" className="flex min-w-0 flex-1 items-center gap-2.5" title="All modules">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -225,9 +230,9 @@ export function Sidebar() {
               <p className="truncate text-sm font-bold text-foreground">{companyName}</p>
               <p className="text-[10px] text-muted-foreground">Enterprise Edition</p>
             </div>
-          </div>
+          </NavLink>
         ) : (
-          <div className="flex flex-1 justify-center">
+          <NavLink to="/modules" className="flex flex-1 justify-center" title="All modules">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -243,7 +248,7 @@ export function Sidebar() {
                 {initial}
               </div>
             )}
-          </div>
+          </NavLink>
         )}
         <button
           onClick={toggleSidebar}

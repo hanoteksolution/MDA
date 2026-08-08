@@ -22,7 +22,7 @@ Stack: Django + DRF + React/Vite (+ RN). Extend `apps/platform` / vertical apps 
 | 10–11 | Demo tenant + modular seeders | **DONE** (gym/pharmacy seed real rows) |
 | 12 | Subscription ↔ module entitlement polish | **DONE** (trial/demo bypass paid starter caps) |
 | 13 | Universal POS profiles | **DONE** (profile codes + restaurant pay-table) |
-| 14 | Gym EXTEND features/demo | **PARTIAL** (PT + class drop-in billing; base KEEP) |
+| 14 | Gym EXTEND features/demo | **DONE** (PT + drop-in + `members`/`classes`/`attendance` flags; base KEEP) |
 | 15 | Cafeteria/Restaurant **CREATE** app | **DONE** (skeleton: menu/tables/orders) |
 | 16 | Pharmacy EXTEND | **PARTIAL** (CAE + Rx + POS + FEFO + categories + features; base KEEP) |
 | 17 | Hotel **CREATE** | **DONE** (skeleton + charge-to-room + folio settle) |
@@ -30,7 +30,7 @@ Stack: Django + DRF + React/Vite (+ RN). Extend `apps/platform` / vertical apps 
 | 19 | Housing rental **CREATE** | **DONE** (leases on PropertyUnit) |
 | 20 | Office rental **CREATE** | **DONE** (commercial leases on PropertyUnit) |
 | 21–23 | Cross-module + CAE mappings + reporting | continuous |
-| 24 | RN dynamic modules | **PARTIAL** (member nav + staff switcher gym/pharmacy/hotel/restaurant/property/housing/office) |
+| 24 | RN dynamic modules | **DONE** (member nav + staff full ERP: core + finance/BU + venues) |
 | 25–28 | Security, perf, tests, production migration | continuous |
 
 ---
@@ -61,8 +61,12 @@ Stack: Django + DRF + React/Vite (+ RN). Extend `apps/platform` / vertical apps 
 35. ~~Pharmacy categories UX (inventory Category filter + demo Analgesics/Antibiotics)~~ ✓
 36. ~~RN staff property + housing + office workspaces~~ ✓
 37. ~~Pharmacy module features (`batches`, `prescriptions`, `expiry_alerts`)~~ ✓
+38. ~~Gym module features (`members`, `classes`, `attendance`)~~ ✓
+39. ~~Futsal staff workspace~~ ✓
+40. ~~Staff mobile full ERP (dashboard, POS, sales, inventory, purchases, customers, suppliers, finance, **business units**, reports, settings)~~ ✓
+41. ~~Post-login module hub (`/modules`) for super admin / multi-module users; each card opens that module dashboard~~ ✓
 
-**Next:** Futsal staff workspace — **or** gym module features (`members`, `classes`, `attendance`).
+**Next:** Gym dashboard widgets / optional gym POS profile — **or** lockers / access-control features.
 
 **Stop before:** inventing a second Property/Building stack.
 

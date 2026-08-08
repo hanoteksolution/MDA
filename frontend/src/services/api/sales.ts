@@ -108,6 +108,8 @@ export interface DeliveryNote {
 export interface SalesSummary {
   today_sales: number;
   month_sales: number;
+  all_time_sales?: number;
+  invoice_count?: number;
   open_invoices: number;
   quotations_count: number;
 }

@@ -1,5 +1,16 @@
 export type RootStackParamList = {
   WorkspaceSwitcher: undefined;
+  DashboardWorkspace: undefined;
+  PosWorkspace: undefined;
+  SalesWorkspace: undefined;
+  InventoryWorkspace: undefined;
+  PurchasesWorkspace: undefined;
+  CustomersWorkspace: undefined;
+  SuppliersWorkspace: undefined;
+  FinanceWorkspace: undefined;
+  BusinessUnitsWorkspace: undefined;
+  ReportsWorkspace: undefined;
+  SettingsWorkspace: undefined;
   GymWorkspace: undefined;
   PharmacyWorkspace: undefined;
   HotelWorkspace: undefined;
@@ -7,4 +18,5 @@ export type RootStackParamList = {
   PropertyWorkspace: undefined;
   HousingWorkspace: undefined;
   OfficeWorkspace: undefined;
+  FutsalWorkspace: undefined;
 };

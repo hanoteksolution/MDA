@@ -370,6 +370,11 @@ class PlatformService:
     @staticmethod
     def is_global_platform_admin(user) -> bool:
         """True platform owners — see every shop. Not multi-shop group managers."""
+        if user is None:
+            return False
+        elevated = getattr(user, "is_elevated_admin", None)
+        if isinstance(elevated, bool):
+            return elevated
         return bool(
             user.is_platform_admin
             or user.is_superuser

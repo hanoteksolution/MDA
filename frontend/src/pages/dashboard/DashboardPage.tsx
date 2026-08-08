@@ -95,7 +95,7 @@ export function DashboardPage() {
     profit: { month: string; profit: number; expenses: number }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("month");
+  const [period, setPeriod] = useState("year");
 
   const loadDashboard = async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -157,6 +157,7 @@ export function DashboardPage() {
             <SelectItem value="week">This Week</SelectItem>
             <SelectItem value="month">This Month</SelectItem>
             <SelectItem value="year">This Year</SelectItem>
+            <SelectItem value="all">All time</SelectItem>
           </SelectContent>
         </Select>
       }

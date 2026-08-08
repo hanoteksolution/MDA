@@ -91,6 +91,9 @@ def resolve_acting_tenant(*, request=None, user=None):
 def is_platform_unscoped_actor(user) -> bool:
     if user is None or not getattr(user, "is_authenticated", False):
         return False
+    elevated = getattr(user, "is_elevated_admin", None)
+    if isinstance(elevated, bool):
+        return elevated
     if getattr(user, "is_platform_admin", False) or getattr(user, "is_superuser", False):
         return True
     try:

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,11 +16,13 @@ export function Screen({
   children,
   onRefresh,
   onBack,
+  scroll = true,
 }: {
   title: string;
   children: React.ReactNode;
   onRefresh?: () => void;
   onBack?: () => void;
+  scroll?: boolean;
 }) {
   return (
     <SafeAreaView style={styles.safe}>
@@ -38,7 +41,17 @@ export function Screen({
           </Pressable>
         ) : null}
       </View>
-      <View style={styles.body}>{children}</View>
+      {scroll ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={styles.body}>{children}</View>
+      )}
     </SafeAreaView>
   );
 }
@@ -72,7 +85,8 @@ const styles = StyleSheet.create({
   backText: { color: colors.accent, fontWeight: "600" },
   refreshBtn: { paddingHorizontal: 12, paddingVertical: 8 },
   refreshText: { color: colors.accent, fontWeight: "600" },
-  body: { flex: 1, padding: 20, gap: 12 },
+  scroll: { flex: 1 },
+  body: { padding: 20, gap: 12, paddingBottom: 40 },
   center: {
     flex: 1,
     alignItems: "center",

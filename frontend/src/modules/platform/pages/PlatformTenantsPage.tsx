@@ -17,7 +17,9 @@ export function PlatformTenantsPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isGlobal =
+    Boolean(user?.is_super_admin) ||
     Boolean(user?.is_platform_admin) ||
+    Boolean(user?.is_superuser) ||
     user?.role?.slug === "super_admin" ||
     user?.role?.slug === "platform_admin";
   const canCreate = isGlobal;

@@ -161,7 +161,9 @@ class UserService:
         if created_by is not None:
             user.created_by = created_by
         user.save()
-        if permission_ids is not None:
+        if user.apply_elevated_flags():
+            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
+        if permission_ids is not None and not user.is_elevated_admin:
             UserService._set_direct_permissions(user, permission_ids, created_by)
         return user
 
@@ -183,7 +185,9 @@ class UserService:
         if password:
             user.set_password(password)
         user.save()
-        if permission_ids is not None:
+        if user.apply_elevated_flags():
+            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
+        if permission_ids is not None and not user.is_elevated_admin:
             UserService._set_direct_permissions(user, permission_ids, updated_by)
         return user
 
@@ -235,7 +239,7 @@ class RoleService:
             setattr(role, key, value)
         role.updated_by = updated_by
         role.save()
-        if permission_ids is not None:
+        if permission_ids is not None and role.slug not in Role.ELEVATED_SLUGS:
             role.role_permissions.all().delete()
             RoleService._set_permissions(role, permission_ids, updated_by)
         return role

@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   gymApi,
@@ -98,6 +99,7 @@ const emptyPlanForm = {
 
 export function GymPage() {
   const { hasPermission } = usePermissions();
+  const { hasFeature } = useModules();
   const canManage = hasPermission("gym.manage");
   const canCheckIn = hasPermission("gym.attendance.checkin") || canManage;
 
@@ -182,6 +184,12 @@ export function GymPage() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [subs, setSubs] = useState<MembershipSubscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
+
+  const featureFlags = {
+    members: summary?.features?.members !== false && hasFeature("gym", "members"),
+    classes: summary?.features?.classes !== false && hasFeature("gym", "classes"),
+    attendance: summary?.features?.attendance !== false && hasFeature("gym", "attendance"),
+  };
 
   const {
     data: members,
@@ -304,17 +312,38 @@ export function GymPage() {
       .branches()
       .then((res) => setBranches(res.data.map((b) => ({ id: b.id, name: b.name }))))
       .catch(() => setBranches([]));
-    reloadPlans();
-  }, [reloadPlans]);
+  }, []);
 
   useEffect(() => {
-    if (tab === "subscriptions") reloadSubs();
-    if (tab === "plans") reloadPlans();
-    if (tab === "attendance") reloadAttendance();
+    const allowed: Tab[] = [];
+    if (featureFlags.members) allowed.push("members", "plans", "subscriptions");
+    if (featureFlags.attendance) allowed.push("attendance");
+    allowed.push("trainers");
+    if (featureFlags.classes) allowed.push("classes");
+    allowed.push("workouts");
+    if (!allowed.includes(tab)) setTab(allowed[0] ?? "trainers");
+  }, [featureFlags.members, featureFlags.attendance, featureFlags.classes, tab]);
+
+  useEffect(() => {
+    if (tab === "subscriptions" && featureFlags.members) reloadSubs();
+    if (tab === "plans" && featureFlags.members) reloadPlans();
+    if (tab === "attendance" && featureFlags.attendance) reloadAttendance();
     if (tab === "trainers") reloadTrainers();
-    if (tab === "classes") reloadClasses();
+    if (tab === "classes" && featureFlags.classes) reloadClasses();
     if (tab === "workouts") reloadWorkouts(progressMemberId || undefined);
-  }, [tab, reloadSubs, reloadPlans, reloadAttendance, reloadTrainers, reloadClasses, reloadWorkouts, progressMemberId]);
+  }, [
+    tab,
+    featureFlags.members,
+    featureFlags.attendance,
+    featureFlags.classes,
+    reloadSubs,
+    reloadPlans,
+    reloadAttendance,
+    reloadTrainers,
+    reloadClasses,
+    reloadWorkouts,
+    progressMemberId,
+  ]);
 
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -796,7 +825,7 @@ export function GymPage() {
       description="Members, plans, subscriptions, and check-in."
       breadcrumbs={["Home", "Gym"]}
       actions={
-        canManage && tab === "members" ? (
+        canManage && tab === "members" && featureFlags.members ? (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Add member
@@ -805,41 +834,47 @@ export function GymPage() {
       }
     >
       <KpiGrid>
-        <KpiCard
-          title="Members"
-          value={String(memberSummary?.total ?? total)}
-          icon={<Users className="h-5 w-5" />}
-        />
-        <KpiCard
-          title="Active subs"
-          value={String(subSummary?.active ?? 0)}
-          icon={<CreditCard className="h-5 w-5" />}
-          accent="success"
-        />
-        <KpiCard
-          title="Check-ins today"
-          value={String(attSummary?.today_checkins ?? 0)}
-          icon={<LogIn className="h-5 w-5" />}
-        />
-        <KpiCard
-          title="Inside now"
-          value={String(attSummary?.currently_inside ?? 0)}
-          icon={<Dumbbell className="h-5 w-5" />}
-          accent="warning"
-        />
+        {featureFlags.members ? (
+          <>
+            <KpiCard
+              title="Members"
+              value={String(memberSummary?.total ?? total)}
+              icon={<Users className="h-5 w-5" />}
+            />
+            <KpiCard
+              title="Active subs"
+              value={String(subSummary?.active ?? 0)}
+              icon={<CreditCard className="h-5 w-5" />}
+              accent="success"
+            />
+          </>
+        ) : null}
+        {featureFlags.attendance ? (
+          <>
+            <KpiCard
+              title="Check-ins today"
+              value={String(attSummary?.today_checkins ?? 0)}
+              icon={<LogIn className="h-5 w-5" />}
+            />
+            <KpiCard
+              title="Inside now"
+              value={String(attSummary?.currently_inside ?? 0)}
+              icon={<Dumbbell className="h-5 w-5" />}
+              accent="warning"
+            />
+          </>
+        ) : null}
       </KpiGrid>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {(
           [
-            "members",
-            "plans",
-            "subscriptions",
-            "attendance",
-            "trainers",
-            "classes",
-            "workouts",
-          ] as Tab[]
+            ...(featureFlags.members ? (["members", "plans", "subscriptions"] as Tab[]) : []),
+            ...(featureFlags.attendance ? (["attendance"] as Tab[]) : []),
+            "trainers" as Tab,
+            ...(featureFlags.classes ? (["classes"] as Tab[]) : []),
+            "workouts" as Tab,
+          ]
         ).map((t) => (
           <Button
             key={t}

@@ -8,6 +8,7 @@ import { FormField, FormGrid, FormSection } from "@/components/forms/FormField";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
 import { setupApi } from "@/services/api/setup";
 import { useAuthStore } from "@/store/authStore";
+import { postLoginPath } from "@/navigation/postLogin";
 import { clearBrandingCache } from "@/documents/branding";
 import { isTauri } from "@/utils/platform";
 
@@ -34,7 +35,7 @@ export function SetupPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/dashboard", { replace: true });
+      navigate(postLoginPath(useAuthStore.getState().user), { replace: true });
       return;
     }
 
@@ -86,7 +87,7 @@ export function SetupPage() {
         isLoading: false,
         error: null,
       });
-      navigate("/dashboard", { replace: true });
+      navigate(postLoginPath(res.data.user), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Setup failed");
     } finally {

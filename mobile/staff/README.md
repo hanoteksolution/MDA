@@ -1,13 +1,14 @@
 # MDA Staff (React Native)
 
-Expo staff app with **module workspace switcher** driven by `GET /mobile/bootstrap/?audience=staff`.
+Expo staff **ERP** app. Navigation comes from `GET /mobile/bootstrap/?audience=staff` — same module + permission gates as web.
 
-## Features (v0.1 — PHASE 24)
+## Features (v0.2 — STEP 69)
 
 - Tenant slug + staff login
-- Bootstrap `mobile_nav` filtered to staff audience
-  (`staff_hub`, gym/pharmacy/hotel/restaurant/property/housing/office `_staff`)
-- Workspace switcher → Gym / Pharmacy / Hotel / Restaurant / Property / Housing / Office KPI screens
+- Workspace switcher grouped as Operations / Finance / Venues
+- **Operations:** Dashboard, POS (search + cash checkout), Sales, Inventory, Purchases, Customers, Suppliers
+- **Finance:** Finance KPIs, **Business Units** + P&L, Reports catalog, Settings
+- **Venues:** Gym, Pharmacy, Hotel, Restaurant, Property, Housing, Office, Futsal
 
 ## Setup
 
@@ -25,12 +26,17 @@ Configure `extra.apiBase` / `extra.tenantSlug` in `app.json` as needed.
 |--------|----------|
 | Login | `POST /api/v1/auth/login/` |
 | Nav / modules | `GET /api/v1/mobile/bootstrap/?audience=staff` |
-| Gym workspace | `GET /api/v1/gym/summary/` |
-| Pharmacy workspace | `GET /api/v1/pharmacy/summary/` |
-| Hotel workspace | `GET /api/v1/hotel/summary/` |
-| Restaurant workspace | `GET /api/v1/restaurant/summary/` |
-| Property workspace | `GET /api/v1/property/summary/` |
-| Housing workspace | `GET /api/v1/housing/summary/` |
-| Office workspace | `GET /api/v1/office/summary/` |
+| Dashboard | `/dashboard/kpis/`, `/recent-sales/`, `/low-stock/`, `/widgets/` |
+| POS | `/products/search/`, `POST /pos/checkout/` |
+| Sales | `/sales/summary/`, `/sales/invoices/` |
+| Inventory | `/inventory/summary/`, `/inventory/`, `/inventory/low-stock/` |
+| Purchases | `/purchases/summary/`, `/purchases/` |
+| Customers | `/customers/summary/`, `/customers/` |
+| Suppliers | `/suppliers/` |
+| Finance | `/finance/summary/`, `/finance/equation/` |
+| Business units | `/finance/business-units/`, `/finance/reports/profit-loss/?business_unit_id=` |
+| Reports | `/reports/catalog/`, `/reports/data/` |
+| Settings | `/settings/company/`, `/settings/branches/` |
+| Venue KPIs | `/gym|pharmacy|hotel|restaurant|property|housing|office|futsal/summary/` |
 
-Member portal remains in [`../gym-member/`](../gym-member/) (`audience=member` / default member workspace).
+Member portal remains in [`../gym-member/`](../gym-member/) (`audience=member`).

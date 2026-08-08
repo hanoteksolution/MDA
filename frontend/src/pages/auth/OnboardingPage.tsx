@@ -21,6 +21,7 @@ import {
   type OnboardingPlan,
 } from "@/services/api/onboarding";
 import { useAuthStore } from "@/store/authStore";
+import { postLoginPath } from "@/navigation/postLogin";
 import { clearBrandingCache } from "@/documents/branding";
 import { cn } from "@/utils/cn";
 import { isTauri } from "@/utils/platform";
@@ -77,7 +78,7 @@ export function OnboardingPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/dashboard", { replace: true });
+      navigate(postLoginPath(useAuthStore.getState().user), { replace: true });
       return;
     }
     if (isTauri()) {
@@ -217,7 +218,7 @@ export function OnboardingPage() {
           isLoading: false,
           error: null,
         });
-        navigate("/dashboard", { replace: true });
+        navigate(postLoginPath(res.data.user), { replace: true });
         return;
       }
       navigate("/login", { replace: true });

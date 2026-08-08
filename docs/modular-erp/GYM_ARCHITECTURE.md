@@ -24,9 +24,10 @@ Module code: `gym`
 - ~~Demo seeder `demo/gym.py`~~ ✓
 - ~~PT session → Invoice + CAE~~ ✓
 - ~~Class drop-in → Invoice + CAE~~ ✓ (`GymClass.drop_in_price`)
-- ModuleFeature flags (classes, PT, lockers, access control)
+- ~~ModuleFeature flags (`members`, `classes`, `attendance`)~~ ✓ (`TenantModule.configuration.features`)
 - Dashboard widgets for main ERP home
 - Optional POS profile for membership retail
+- Later: lockers / access control features
 
 ## Not required
 

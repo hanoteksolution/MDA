@@ -94,7 +94,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
-export function qs(params: Record<string, string | number | undefined>) {
+export function qs(params: Record<string, string | number | boolean | undefined>) {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== "") q.set(k, String(v));

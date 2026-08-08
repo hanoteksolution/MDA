@@ -4,7 +4,9 @@ export function usePermissions() {
   const user = useAuthStore((s) => s.user);
   const permissions = user?.permissions ?? [];
   const isSuperAdmin =
+    Boolean(user?.is_super_admin) ||
     Boolean(user?.is_platform_admin) ||
+    Boolean(user?.is_superuser) ||
     user?.role?.slug === "super_admin" ||
     user?.role?.slug === "platform_admin";
 

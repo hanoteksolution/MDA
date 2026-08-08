@@ -67,6 +67,11 @@ export interface GymSummary {
   attendance?: GymAttendanceSummary;
   classes?: GymClassSummary;
   workouts?: GymWorkoutSummary;
+  features?: {
+    members?: boolean;
+    classes?: boolean;
+    attendance?: boolean;
+  };
 }
 
 export interface GymAttendance {

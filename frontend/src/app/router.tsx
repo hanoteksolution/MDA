@@ -1,7 +1,11 @@
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { isTauri } from "@/utils/platform";
 import { AppShell } from "@/layouts/AppShell/AppShell";
+import { HubShell } from "@/layouts/HubShell/HubShell";
 import { AuthLayout, ProtectedRoute } from "@/layouts/AuthLayout/AuthLayout";
+import { useAuthStore } from "@/store/authStore";
+import { postLoginPath } from "@/navigation/postLogin";
+import { ModuleHubPage } from "@/pages/modules/ModuleHubPage";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { SetupPage } from "@/pages/auth/SetupPage";
 import { OnboardingPage } from "@/pages/auth/OnboardingPage";
@@ -73,6 +77,21 @@ import {
 
 const Router = isTauri() ? HashRouter : BrowserRouter;
 
+function HomeRedirect() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  if (isLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={postLoginPath(user)} replace />;
+}
+
 export function AppRouter() {
   return (
     <Router>
@@ -83,6 +102,10 @@ export function AppRouter() {
           <Route path="/connection" element={<ConnectionPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute><HubShell /></ProtectedRoute>}>
+          <Route path="/modules" element={<ModuleHubPage />} />
         </Route>
 
         <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
@@ -528,8 +551,8 @@ export function AppRouter() {
           />
         </Route>
 
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="*" element={<HomeRedirect />} />
       </Routes>
     </Router>
   );

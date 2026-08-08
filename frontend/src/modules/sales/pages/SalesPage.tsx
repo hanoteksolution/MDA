@@ -326,8 +326,8 @@ export function SalesPage() {
     >
       <KpiGrid>
         <KpiCard title="Today's Sales" value={formatCurrency(summary?.today_sales ?? 0)} icon={<DollarSign className="h-5 w-5" />} loading={summaryLoading} />
-        <KpiCard title="This Month" value={formatCurrency(summary?.month_sales ?? 0)} icon={<TrendingUp className="h-5 w-5" />} loading={summaryLoading} />
-        <KpiCard title="Open Invoices" value={String(summary?.open_invoices ?? 0)} icon={<Receipt className="h-5 w-5" />} loading={summaryLoading} />
+        <KpiCard title="All sales" value={formatCurrency(summary?.all_time_sales ?? summary?.month_sales ?? 0)} icon={<TrendingUp className="h-5 w-5" />} loading={summaryLoading} />
+        <KpiCard title="Invoices" value={String(summary?.invoice_count ?? invoiceList.total)} icon={<Receipt className="h-5 w-5" />} loading={summaryLoading} />
         <KpiCard title="Quotations" value={String(summary?.quotations_count ?? 0)} icon={<FileText className="h-5 w-5" />} loading={summaryLoading} />
       </KpiGrid>
 

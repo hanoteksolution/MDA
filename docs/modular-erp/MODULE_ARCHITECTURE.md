@@ -64,9 +64,9 @@ ModuleFeature(module, code, name, is_default, is_required)
 TenantModuleFeature(tenant, module_feature, is_enabled, configuration)
 ```
 
-Example Gym features: `members`, `memberships`, `classes`, `attendance`, `lockers`.
+Example Gym features: `members`, `classes`, `attendance` (lockers later).
 
-**Interim (STEP 37):** pharmacy features live on `TenantModule.configuration["features"]` via `ModuleFeatureService` (catalog in code). Same store can host gym features later; promote to tables if querying/reporting needs it.
+**Interim (STEP 37 / 68):** pharmacy + gym features live on `TenantModule.configuration["features"]` via `ModuleFeatureService` (catalog in code). Promote to tables if querying/reporting needs it.
 
 ---
 

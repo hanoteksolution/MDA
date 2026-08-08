@@ -13,7 +13,11 @@ let authSessionGen = 0;
 
 function isPlatformUser(user: User): boolean {
   return Boolean(
-    user.is_platform_admin ||
+    user.is_super_admin ||
+      user.is_platform_admin ||
+      user.is_superuser ||
+      user.role?.slug === "super_admin" ||
+      user.role?.slug === "platform_admin" ||
       user.permissions?.includes("platform.view") ||
       user.permissions?.includes("platform.manage")
   );

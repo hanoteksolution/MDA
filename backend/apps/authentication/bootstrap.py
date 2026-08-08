@@ -276,4 +276,11 @@ def bootstrap_roles_and_permissions(stdout=None, *, reset_role_permissions: bool
         if created:
             write(f"  Created role '{slug}'.\n")
 
+    from apps.authentication.models import User
+
+    for user in User.objects.filter(deleted_at__isnull=True, role__slug__in=Role.ELEVATED_SLUGS):
+        if user.apply_elevated_flags():
+            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
+            write(f"  Synced elevated flags for '{user.username}'.\n")
+
     return perm_map

@@ -21,6 +21,8 @@ class AnalyticsService:
             return today.replace(day=1)
         if period == "year":
             return today.replace(month=1, day=1)
+        if period == "all":
+            return None
         return today
 
     @staticmethod
@@ -34,7 +36,9 @@ class AnalyticsService:
         if date_to:
             qs = qs.filter(issue_date__lte=date_to)
         if not date_from and not date_to:
-            qs = qs.filter(issue_date__gte=AnalyticsService._period_start(period))
+            start = AnalyticsService._period_start(period)
+            if start:
+                qs = qs.filter(issue_date__gte=start)
         return qs
 
     @staticmethod
@@ -48,7 +52,9 @@ class AnalyticsService:
         if date_to:
             qs = qs.filter(order_date__lte=date_to)
         if not date_from and not date_to:
-            qs = qs.filter(order_date__gte=AnalyticsService._period_start(period))
+            start = AnalyticsService._period_start(period)
+            if start:
+                qs = qs.filter(order_date__gte=start)
         return qs
 
     @staticmethod

@@ -6,6 +6,7 @@ import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules } from "@/hooks/useModules";
 import { workspacesForModules, type ModuleWorkspace } from "@/navigation/moduleWorkspaces";
+import { recordHubVisit } from "@/pages/modules/hub/hubStorage";
 import { cn } from "@/utils/cn";
 
 function workspaceFromPath(pathname: string): string | null {
@@ -18,8 +19,25 @@ function workspaceFromPath(pathname: string): string | null {
   if (pathname.startsWith("/pharmacy")) return "pharmacy";
   if (pathname.startsWith("/futsal")) return "futsal";
   if (pathname.startsWith("/pos")) return "pos";
-  if (pathname.startsWith("/inventory") || pathname.startsWith("/products")) return "inventory";
+  if (pathname.startsWith("/inventory") || pathname.startsWith("/products") || pathname.startsWith("/categories")) {
+    return "inventory";
+  }
+  if (
+    pathname.startsWith("/sales") ||
+    pathname.startsWith("/receipts") ||
+    pathname.startsWith("/customers") ||
+    pathname.startsWith("/daily-ops") ||
+    pathname.startsWith("/expenses") ||
+    pathname.startsWith("/trash")
+  ) {
+    return "sales";
+  }
+  if (pathname.startsWith("/purchases") || pathname.startsWith("/suppliers")) return "purchases";
+  if (pathname.startsWith("/reports") || pathname.startsWith("/staff-performance")) return "reports";
   if (pathname.startsWith("/finance")) return "finance";
+  if (pathname.startsWith("/platform")) return "platform";
+  if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/dashboard")) return "overview";
   return null;
 }
@@ -38,6 +56,7 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
   const list = workspacesForModules(user?.enabled_modules ?? modules, {
     isSuperAdmin,
     includeFinance: isSuperAdmin || hasPermission("finance.view"),
+    hasPermission,
   });
 
   useEffect(() => {
@@ -62,11 +81,12 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
 
   const select = (w: ModuleWorkspace) => {
     setActiveWorkspace(w.code);
+    recordHubVisit(w.code);
     setOpen(false);
     navigate(w.route);
   };
 
-  if (list.length <= 2) {
+  if (list.length <= 1) {
     return null;
   }
 
@@ -96,6 +116,17 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
           <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Workspaces
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate("/modules");
+            }}
+            className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted/60"
+          >
+            <LayoutGrid className="h-4 w-4 shrink-0 text-primary" />
+            <span className="font-medium">All modules</span>
+          </button>
           {list.map((w) => {
             const WIcon = w.icon;
             const active = w.code === current?.code;

@@ -14,6 +14,7 @@ export interface MobileNavWorkspace {
   label: string;
   module: string;
   audience: string;
+  group?: string;
   screens: MobileNavScreen[];
 }
 
@@ -61,4 +62,8 @@ export function fetchHousingSummary() {
 
 export function fetchOfficeSummary() {
   return apiRequest<Record<string, unknown>>("/office/summary/");
+}
+
+export function fetchFutsalSummary() {
+  return apiRequest<Record<string, unknown>>("/futsal/summary/");
 }

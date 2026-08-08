@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from apps.gym.services.attendance_service import AttendanceService
 from apps.gym.services.class_service import BookingService
+from apps.gym.services.feature_gate import gym_feature_required
 from apps.gym.services.member_portal_service import MemberPortalError, MemberPortalService
 from apps.gym.services.workout_service import AssignmentService as WorkoutAssignmentService
 from core.responses.api_response import error_response, success_response
@@ -21,6 +22,7 @@ def _portal_permissions():
     ]
 
 
+@gym_feature_required("members")
 class MemberPortalHomeView(APIView):
     permission_classes = _portal_permissions()
 
@@ -36,6 +38,7 @@ class MemberPortalHomeView(APIView):
         return success_response(data=data)
 
 
+@gym_feature_required("members")
 class MemberPortalProfileView(APIView):
     permission_classes = _portal_permissions()
 
@@ -51,6 +54,7 @@ class MemberPortalProfileView(APIView):
         return success_response(data=data)
 
 
+@gym_feature_required("members")
 class MemberPortalQrView(APIView):
     permission_classes = _portal_permissions()
 
@@ -67,6 +71,7 @@ class MemberPortalQrView(APIView):
         return success_response(data=data)
 
 
+@gym_feature_required("attendance")
 class MemberPortalAttendanceView(APIView):
     permission_classes = _portal_permissions()
 
@@ -91,6 +96,7 @@ class MemberPortalAttendanceView(APIView):
         )
 
 
+@gym_feature_required("members")
 class MemberPortalWorkoutsView(APIView):
     permission_classes = _portal_permissions()
 
@@ -116,6 +122,7 @@ class MemberPortalWorkoutsView(APIView):
         )
 
 
+@gym_feature_required("classes")
 class MemberPortalClassesView(APIView):
     permission_classes = _portal_permissions()
 

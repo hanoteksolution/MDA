@@ -7,6 +7,7 @@ from core.models.base import BaseModel
 
 
 class Role(BaseModel):
+    ELEVATED_SLUGS = frozenset({"super_admin", "platform_admin"})
     SYSTEM_ROLES = [
         ("platform_admin", "Platform Admin"),
         ("super_admin", "Super Admin"),
@@ -161,6 +162,39 @@ class User(AbstractUser):
     def is_deleted(self):
         return self.deleted_at is not None
 
+    def _role_slug(self) -> str | None:
+        role = getattr(self, "role", None)
+        slug = getattr(role, "slug", None) if role is not None else None
+        if slug:
+            return slug
+        role_id = getattr(self, "role_id", None)
+        if not role_id:
+            return None
+        return Role.objects.filter(pk=role_id).values_list("slug", flat=True).first()
+
+    @property
+    def is_elevated_admin(self) -> bool:
+        """Super Admin / Platform Admin: full product access, not a normal permissioned user."""
+        if getattr(self, "is_platform_admin", False) or getattr(self, "is_superuser", False):
+            return True
+        return self._role_slug() in Role.ELEVATED_SLUGS
+
+    def apply_elevated_flags(self) -> bool:
+        """Keep Django/platform flags in sync with Super Admin / Platform Admin roles."""
+        if self._role_slug() not in Role.ELEVATED_SLUGS:
+            return False
+        changed = False
+        if not self.is_platform_admin:
+            self.is_platform_admin = True
+            changed = True
+        if not self.is_superuser:
+            self.is_superuser = True
+            changed = True
+        if not self.is_staff:
+            self.is_staff = True
+            changed = True
+        return changed
+
     def get_role_permissions(self):
         if not self.role_id:
             return []
@@ -178,13 +212,23 @@ class User(AbstractUser):
         )
 
     def get_permissions(self):
-        """Effective permissions = role permissions ∪ direct user grants."""
+        """Effective permissions = role permissions ∪ direct user grants.
+
+        Elevated admins receive the full catalog so clients do not have to
+        special-case an empty/partial list.
+        """
+        if self.is_elevated_admin:
+            return list(
+                Permission.objects.filter(deleted_at__isnull=True)
+                .order_by("codename")
+                .values_list("codename", flat=True)
+            )
         codes = set(self.get_role_permissions())
         codes.update(self.get_direct_permissions())
         return sorted(codes)
 
     def has_permission(self, codename):
-        if self.is_platform_admin or self.is_superuser or (self.role and self.role.slug == "super_admin"):
+        if self.is_elevated_admin:
             return True
         return codename in self.get_permissions()
 

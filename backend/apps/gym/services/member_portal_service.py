@@ -11,6 +11,7 @@ from apps.gym.services.class_service import BookingService
 from apps.gym.services.member_service import MemberService
 from apps.gym.services.subscription_service import SubscriptionService
 from apps.gym.services.workout_service import AssignmentService as WorkoutAssignmentService
+from apps.platform.services.module_feature_service import ModuleFeatureService
 
 
 class MemberPortalError(ValueError):
@@ -67,17 +68,25 @@ class MemberPortalService:
         member = MemberPortalService.resolve_member(user=user)
         member_id = str(member.id)
         today = timezone.localdate()
-        attendance_qs = AttendanceService.list(
-            member_id=member_id, user=user, request=request
-        )
-        today_visits = attendance_qs.filter(check_in_at__date=today).count()
-        open_visit = attendance_qs.filter(check_out_at__isnull=True).first()
-        upcoming_classes = BookingService.list(
-            member_id=member_id,
-            status=ClassBooking.STATUS_CONFIRMED,
-            user=user,
-            request=request,
-        ).filter(schedule__starts_at__gte=timezone.now())[:5]
+        features = ModuleFeatureService.resolve_features("gym", user=user, request=request)
+        today_visits = 0
+        open_visit = None
+        if features.get("attendance"):
+            attendance_qs = AttendanceService.list(
+                member_id=member_id, user=user, request=request
+            )
+            today_visits = attendance_qs.filter(check_in_at__date=today).count()
+            open_visit = attendance_qs.filter(check_out_at__isnull=True).first()
+        upcoming_classes = []
+        if features.get("classes"):
+            upcoming_classes = list(
+                BookingService.list(
+                    member_id=member_id,
+                    status=ClassBooking.STATUS_CONFIRMED,
+                    user=user,
+                    request=request,
+                ).filter(schedule__starts_at__gte=timezone.now())[:5]
+            )
         active_workouts = WorkoutAssignmentService.list(
             member_id=member_id,
             status="active",
@@ -99,6 +108,7 @@ class MemberPortalService:
             "active_workouts": [
                 WorkoutAssignmentService.serialize(a) for a in active_workouts[:5]
             ],
+            "features": features,
         }
 
     @staticmethod

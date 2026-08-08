@@ -539,15 +539,19 @@ class InvoiceService:
         status_map = {row["status"]: row["count"] for row in by_status}
         today = timezone.localdate()
         month_start = today.replace(day=1)
+        paid = qs.filter(status=Invoice.STATUS_PAID)
         today_total = float(
-            qs.filter(issue_date=today, status=Invoice.STATUS_PAID).aggregate(t=Sum("total_amount"))["t"] or 0
+            paid.filter(issue_date=today).aggregate(t=Sum("total_amount"))["t"] or 0
         )
         month_total = float(
-            qs.filter(issue_date__gte=month_start, status=Invoice.STATUS_PAID).aggregate(t=Sum("total_amount"))["t"] or 0
+            paid.filter(issue_date__gte=month_start).aggregate(t=Sum("total_amount"))["t"] or 0
         )
+        all_time_total = float(paid.aggregate(t=Sum("total_amount"))["t"] or 0)
         return {
             "today_sales": today_total,
             "month_sales": month_total,
+            "all_time_sales": all_time_total,
+            "invoice_count": qs.exclude(status=Invoice.STATUS_CANCELLED).count(),
             "open_invoices": status_map.get(Invoice.STATUS_SENT, 0) + status_map.get(Invoice.STATUS_DRAFT, 0),
             "quotations_count": apply_tenant_scope(
                 Quotation.active_objects(), user=user, request=request

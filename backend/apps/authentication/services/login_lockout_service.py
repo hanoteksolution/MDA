@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 from django.utils import timezone
 
 from apps.authentication.models import LoginAttempt
@@ -43,12 +44,16 @@ class LoginLockoutService:
             return False, None
 
         window_start = timezone.now() - timedelta(minutes=LoginLockoutService._window_minutes())
-        failures = LoginAttempt.objects.filter(
-            username=normalized,
-            succeeded=False,
-            created_at__gte=window_start,
-        )
-        count = failures.count()
+        try:
+            failures = LoginAttempt.objects.filter(
+                username=normalized,
+                succeeded=False,
+                created_at__gte=window_start,
+            )
+            count = failures.count()
+        except (ProgrammingError, OperationalError, DatabaseError):
+            # Table missing until migrate — never block login.
+            return False, None
         if count < LoginLockoutService._max_attempts():
             return False, None
 
@@ -75,22 +80,28 @@ class LoginLockoutService:
         normalized = LoginLockoutService.normalize_username(username)
         if not normalized:
             return
-        LoginAttempt.objects.create(
-            username=normalized,
-            ip_address=LoginLockoutService.client_ip(request) or None,
-            succeeded=True,
-        )
+        try:
+            LoginAttempt.objects.create(
+                username=normalized,
+                ip_address=LoginLockoutService.client_ip(request) or None,
+                succeeded=True,
+            )
+        except (ProgrammingError, OperationalError, DatabaseError):
+            return
 
     @staticmethod
     def record_failure(*, username: str, request=None) -> None:
         normalized = LoginLockoutService.normalize_username(username)
         if not normalized:
             return
-        LoginAttempt.objects.create(
-            username=normalized,
-            ip_address=LoginLockoutService.client_ip(request) or None,
-            succeeded=False,
-        )
+        try:
+            LoginAttempt.objects.create(
+                username=normalized,
+                ip_address=LoginLockoutService.client_ip(request) or None,
+                succeeded=False,
+            )
+        except (ProgrammingError, OperationalError, DatabaseError):
+            return
 
     @staticmethod
     def lockout_message(details: dict | None) -> str:
