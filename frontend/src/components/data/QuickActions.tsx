@@ -28,7 +28,7 @@ export function QuickActions({ actions, className }: QuickActionsProps) {
               className={cn(
                 "flex h-11 w-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105",
                 action.variant === "primary"
-                  ? "bg-gradient-to-br from-primary to-emerald-600 text-primary-foreground shadow-lg shadow-primary/25"
+                  ? "bg-gradient-to-br from-primary to-primary-hover text-primary-foreground shadow-lg shadow-primary/25"
                   : "bg-primary/10 text-primary"
               )}
             >

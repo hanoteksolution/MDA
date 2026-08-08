@@ -9,7 +9,9 @@ import { Sidebar } from "@/layouts/Sidebar/Sidebar";
 import { Header } from "@/layouts/Header/Header";
 import { FooterStatusBar } from "@/layouts/Footer/FooterStatusBar";
 import { useUIStore } from "@/store/uiStore";
+import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
 import { cn } from "@/utils/cn";
+import { isPosPath } from "@/navigation/businessWorkspaces";
 
 /** Collapse sidebar on laptop-width screens so catalog / tables have room. */
 function useLaptopSidebarCollapse() {
@@ -28,8 +30,9 @@ function useLaptopSidebarCollapse() {
 
 export function AppShell() {
   const location = useLocation();
-  const isPos = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
+  const isPos = isPosPath(location.pathname);
   useLaptopSidebarCollapse();
+  useWorkspaceTheme();
 
   return (
     <PageMetaProvider>

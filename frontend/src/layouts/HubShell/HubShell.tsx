@@ -7,6 +7,7 @@ import { SubscriptionAlertDialog } from "@/components/platform/SubscriptionAlert
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
 import { settingsApi } from "@/services/api/admin";
 import { resolveMediaUrl } from "@/config/api";
 import { hubWorkspacesForUser } from "@/navigation/postLogin";
@@ -46,11 +47,12 @@ function HubHeader({ onOpenSearch }: { onOpenSearch: () => void }) {
   const tenantLabel = user?.branch?.name || user?.managed_shop_group?.name;
 
   return (
-    <header className="hub-topbar sticky top-0 z-40 flex h-[3.75rem] shrink-0 items-center gap-3 px-4 sm:px-6 lg:px-8">
+    <header className="hub-topbar relative sticky top-0 z-40 flex h-[3.75rem] shrink-0 items-center gap-3 px-4 sm:px-6 lg:px-8">
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-primary/70" aria-hidden />
       <button
         type="button"
         onClick={() => {
-          setActiveWorkspace("overview");
+          setActiveWorkspace("hub");
           navigate("/modules");
         }}
         className="flex min-w-0 items-center gap-2.5"
@@ -80,7 +82,7 @@ function HubHeader({ onOpenSearch }: { onOpenSearch: () => void }) {
         className="mx-auto hidden min-w-0 max-w-xl flex-1 items-center gap-3 rounded-full border border-white/60 bg-white/50 px-4 py-2 text-left text-[13px] text-muted-foreground shadow-sm backdrop-blur-xl transition-colors hover:border-white hover:bg-white/80 md:flex dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15"
       >
         <Search className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 truncate">Search modules, customers, invoices…</span>
+        <span className="min-w-0 flex-1 truncate">Search workspaces, customers, invoices…</span>
         <kbd className="hidden h-5 items-center rounded border border-border bg-background px-1.5 text-[10px] font-medium text-muted-foreground lg:inline-flex">
           ⌘K
         </kbd>
@@ -140,6 +142,7 @@ export function HubShell() {
   const { hasPermission, isSuperAdmin } = usePermissions();
   const setActiveWorkspace = useUIStore((s) => s.setActiveWorkspace);
   const [searchOpen, setSearchOpen] = useState(false);
+  useWorkspaceTheme();
 
   const workspaces = useMemo(
     () => hubWorkspacesForUser(user, hasPermission),

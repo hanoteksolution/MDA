@@ -737,7 +737,7 @@ export function PosCheckoutPanel({
                 size="lg"
                 className={cn(
                   "h-14 w-full gap-2 rounded-2xl text-base font-semibold sm:w-auto sm:min-w-[240px]",
-                  "bg-gradient-to-r from-primary to-emerald-600 shadow-lg shadow-primary/25",
+                  "bg-gradient-to-r from-primary to-primary-hover shadow-lg shadow-primary/25",
                   "hover:brightness-[1.03] disabled:shadow-none"
                 )}
                 disabled={!canSubmit || processing}

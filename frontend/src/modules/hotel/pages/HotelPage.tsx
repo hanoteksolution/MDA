@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/forms/FormField";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
 import { useAuthStore } from "@/store/authStore";
 import {
   hotelApi,
@@ -20,7 +21,16 @@ import {
 } from "@/services/api/hotel";
 import { formatCurrency } from "@/utils/cn";
 
-type Tab = "reservations" | "rooms" | "types";
+type Tab = "reservations" | "rooms" | "types" | "housekeeping" | "guests";
+
+const HOTEL_TAB_PATHS: Record<string, Tab> = {
+  reservations: "reservations",
+  "front-desk": "reservations",
+  guests: "guests",
+  rooms: "rooms",
+  types: "types",
+  housekeeping: "housekeeping",
+};
 
 function tomorrowISO() {
   const d = new Date();
@@ -41,7 +51,7 @@ export function HotelPage() {
   const canFrontDesk = hasPermission("hotel.front_desk") || canManage;
   const canHousekeeping = hasPermission("hotel.housekeeping") || canManage;
 
-  const [tab, setTab] = useState<Tab>("reservations");
+  const [tab, setTab] = useWorkspaceTab<Tab>("/hotel", HOTEL_TAB_PATHS, "reservations");
   const [summary, setSummary] = useState<HotelSummary | null>(null);
   const [roomTypes, setRoomTypes] = useState<HotelRoomType[]>([]);
   const [rooms, setRooms] = useState<HotelRoom[]>([]);
@@ -309,15 +319,15 @@ export function HotelPage() {
         />
       </KpiGrid>
 
-      <div className="mb-4 flex gap-2">
-        {(["reservations", "rooms", "types"] as Tab[]).map((t) => (
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(["reservations", "rooms", "types", "housekeeping", "guests"] as Tab[]).map((t) => (
           <Button
             key={t}
             size="sm"
             variant={tab === t ? "default" : "outline"}
             onClick={() => setTab(t)}
           >
-            {t[0].toUpperCase() + t.slice(1)}
+            {t === "housekeeping" ? "Housekeeping" : t[0].toUpperCase() + t.slice(1)}
           </Button>
         ))}
       </div>
@@ -448,6 +458,41 @@ export function HotelPage() {
             </FormGrid>
           ) : null}
           <DataTable columns={roomColumns} data={rooms} loading={loading} emptyMessage="No rooms." />
+        </ContentSection>
+      ) : null}
+
+      {tab === "housekeeping" ? (
+        <ContentSection title="Housekeeping" description="Dirty rooms awaiting turnover">
+          <DataTable
+            columns={roomColumns}
+            data={rooms.filter((r) => r.status === "dirty")}
+            loading={loading}
+            emptyMessage="No dirty rooms. Housekeeping is clear."
+          />
+        </ContentSection>
+      ) : null}
+
+      {tab === "guests" ? (
+        <ContentSection
+          title="Guests"
+          description="Guests from reservations. Dedicated guest master CRUD is next."
+        >
+          <DataTable
+            columns={[
+              { key: "guest_name", header: "Guest", cell: (r) => r.guest_name || "—" },
+              { key: "phone", header: "Phone", cell: (r) => r.guest_phone || "—" },
+              { key: "status", header: "Stay", cell: (r) => <Badge variant="secondary">{r.status}</Badge> },
+              { key: "room_code", header: "Room", cell: (r) => r.room_code || "—" },
+              {
+                key: "dates",
+                header: "Dates",
+                cell: (r) => `${r.check_in_date || "—"} → ${r.check_out_date || "—"}`,
+              },
+            ]}
+            data={reservations}
+            loading={loading}
+            emptyMessage="No guests yet. Create a reservation to check someone in."
+          />
         </ContentSection>
       ) : null}
 

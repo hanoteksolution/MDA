@@ -5,42 +5,11 @@ import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules } from "@/hooks/useModules";
-import { workspacesForModules, type ModuleWorkspace } from "@/navigation/moduleWorkspaces";
+import { TONE_STYLES, type ModuleWorkspace } from "@/navigation/moduleWorkspaces";
+import { switcherWorkspacesForUser } from "@/navigation/businessWorkspaces";
 import { recordHubVisit } from "@/pages/modules/hub/hubStorage";
+import { workspaceFromPath } from "@/theme/workspaceBrand";
 import { cn } from "@/utils/cn";
-
-function workspaceFromPath(pathname: string): string | null {
-  if (pathname.startsWith("/gym")) return "gym";
-  if (pathname.startsWith("/hotel")) return "hotel";
-  if (pathname.startsWith("/housing")) return "housing";
-  if (pathname.startsWith("/office")) return "office";
-  if (pathname.startsWith("/property")) return "property";
-  if (pathname.startsWith("/restaurant")) return "restaurant";
-  if (pathname.startsWith("/pharmacy")) return "pharmacy";
-  if (pathname.startsWith("/futsal")) return "futsal";
-  if (pathname.startsWith("/pos")) return "pos";
-  if (pathname.startsWith("/inventory") || pathname.startsWith("/products") || pathname.startsWith("/categories")) {
-    return "inventory";
-  }
-  if (
-    pathname.startsWith("/sales") ||
-    pathname.startsWith("/receipts") ||
-    pathname.startsWith("/customers") ||
-    pathname.startsWith("/daily-ops") ||
-    pathname.startsWith("/expenses") ||
-    pathname.startsWith("/trash")
-  ) {
-    return "sales";
-  }
-  if (pathname.startsWith("/purchases") || pathname.startsWith("/suppliers")) return "purchases";
-  if (pathname.startsWith("/reports") || pathname.startsWith("/staff-performance")) return "reports";
-  if (pathname.startsWith("/finance")) return "finance";
-  if (pathname.startsWith("/platform")) return "platform";
-  if (pathname.startsWith("/admin")) return "admin";
-  if (pathname.startsWith("/settings")) return "settings";
-  if (pathname.startsWith("/dashboard")) return "overview";
-  return null;
-}
 
 export function ModuleSwitcher({ compact }: { compact?: boolean }) {
   const navigate = useNavigate();
@@ -53,11 +22,17 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const list = workspacesForModules(user?.enabled_modules ?? modules, {
-    isSuperAdmin,
+  const list = switcherWorkspacesForUser(user?.enabled_modules ?? modules, {
+    elevated: isSuperAdmin,
     includeFinance: isSuperAdmin || hasPermission("finance.view"),
     hasPermission,
   });
+
+  const industries = list.filter((w) => w.kind === "industry");
+  const centralFinance = list.filter((w) => w.code === "finance" || w.code === "reports");
+  const platform = list.filter(
+    (w) => w.kind === "platform" && w.code !== "finance" && w.code !== "reports"
+  );
 
   useEffect(() => {
     const inferred = workspaceFromPath(location.pathname);
@@ -69,7 +44,9 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
   }, [location.pathname]);
 
   const current =
-    list.find((w) => w.code === activeWorkspace) || list.find((w) => w.code === "overview") || list[0];
+    list.find((w) => w.code === activeWorkspace) ||
+    list.find((w) => w.code === "overview") ||
+    list[0];
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -92,6 +69,29 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
 
   const Icon = current?.icon || LayoutGrid;
 
+  const renderItem = (w: ModuleWorkspace) => {
+    const WIcon = w.icon;
+    const active = w.code === current?.code;
+    return (
+      <button
+        key={w.code}
+        type="button"
+        role="option"
+        aria-selected={active}
+        onClick={() => select(w)}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+          active ? "bg-primary/10 text-primary" : "hover:bg-muted/60"
+        )}
+      >
+        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", TONE_STYLES[w.tone].accent)}>
+          <WIcon className="h-3.5 w-3.5" />
+        </span>
+        <span className="font-medium">{w.label}</span>
+      </button>
+    );
+  };
+
   return (
     <div ref={ref} className="relative hidden md:block">
       <button
@@ -104,18 +104,15 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <Icon className="h-4 w-4 text-primary" />
+        <Icon className="h-4 w-4 text-primary" aria-hidden />
         <span className="max-w-[100px] truncate font-medium xl:max-w-[140px]">{current?.label}</span>
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
       {open ? (
         <div
           role="listbox"
-          className="absolute left-0 z-50 mt-1.5 min-w-[200px] rounded-xl border border-border bg-card p-1.5 shadow-lg"
+          className="absolute left-0 z-50 mt-1.5 min-w-[220px] rounded-xl border border-border bg-card p-1.5 shadow-lg"
         >
-          <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Workspaces
-          </p>
           <button
             type="button"
             onClick={() => {
@@ -125,28 +122,32 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
             className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted/60"
           >
             <LayoutGrid className="h-4 w-4 shrink-0 text-primary" />
-            <span className="font-medium">All modules</span>
+            <span className="font-medium">All workspaces</span>
           </button>
-          {list.map((w) => {
-            const WIcon = w.icon;
-            const active = w.code === current?.code;
-            return (
-              <button
-                key={w.code}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => select(w)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                  active ? "bg-primary/10 text-primary" : "hover:bg-muted/60"
-                )}
-              >
-                <WIcon className="h-4 w-4 shrink-0" />
-                <span className="font-medium">{w.label}</span>
-              </button>
-            );
-          })}
+          {industries.length ? (
+            <>
+              <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Business workspaces
+              </p>
+              {industries.map(renderItem)}
+            </>
+          ) : null}
+          {centralFinance.length ? (
+            <>
+              <p className="mt-1 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Central Finance
+              </p>
+              {centralFinance.map(renderItem)}
+            </>
+          ) : null}
+          {platform.length ? (
+            <>
+              <p className="mt-1 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Platform
+              </p>
+              {platform.map(renderItem)}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

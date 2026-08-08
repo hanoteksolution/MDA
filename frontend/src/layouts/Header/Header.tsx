@@ -19,10 +19,11 @@ export function Header({ compact }: HeaderProps) {
   return (
     <header
       className={cn(
-        "flex shrink-0 items-center border-b border-border bg-card",
+        "relative flex shrink-0 items-center border-b border-border bg-card",
         compact ? "h-12 gap-3 px-3 xl:h-14 xl:gap-4 xl:px-4" : "h-14 gap-4 px-4 xl:h-[72px] xl:gap-6 xl:px-6"
       )}
     >
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-primary/70" aria-hidden />
       <ModuleSwitcher compact={compact} />
 
       <div className={cn("relative min-w-0 flex-1", compact ? "max-w-md" : "max-w-xl")}>

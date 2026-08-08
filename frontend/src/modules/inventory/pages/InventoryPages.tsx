@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { useAuthStore } from "@/store/authStore";
 import { Link } from "react-router-dom";
 import {
   Package, AlertTriangle, XCircle, Warehouse, ArrowRightLeft, Plus, PackagePlus,
@@ -463,12 +464,50 @@ export function AdjustmentsPage() {
 }
 
 export function WarehousesPage() {
+  const { hasPermission } = usePermissions();
+  const branchId = useAuthStore((s) => s.user?.branch?.id);
+  const canCreate = hasPermission("inventory.adjust");
   const [warehouses, setWarehouses] = useState<Awaited<ReturnType<typeof inventoryApi.warehouses>>["data"]["results"]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ code: "", name: "", address: "" });
+
+  const reload = () => {
+    setLoading(true);
+    inventoryApi.warehouses().then((r) => setWarehouses(r.data.results)).finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    inventoryApi.warehouses().then((r) => setWarehouses(r.data.results)).finally(() => setLoading(false));
+    reload();
   }, []);
+
+  const createWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.code.trim() || !form.name.trim()) {
+      setError("Code and name are required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await inventoryApi.createWarehouse({
+        code: form.code.trim(),
+        name: form.name.trim(),
+        address: form.address.trim(),
+        branch_id: branchId,
+        is_active: true,
+      });
+      setForm({ code: "", name: "", address: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create warehouse.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const columns: Column<(typeof warehouses)[0]>[] = [
     { key: "code", header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code}</span> },
@@ -479,8 +518,48 @@ export function WarehousesPage() {
   ];
 
   return (
-    <PageLayout title="Warehouses" description="Manage storage locations and branches." breadcrumbs={["Home", "Inventory", "Warehouses"]}>
-      <DataTable exportTitle="Warehouses" columns={columns} data={warehouses} loading={loading} emptyMessage="No warehouses configured." />
+    <PageLayout
+      title="Warehouses"
+      description="Manage storage locations and branches."
+      breadcrumbs={["Home", "Inventory", "Warehouses"]}
+      actions={
+        canCreate ? (
+          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            {showForm ? "Cancel" : "New warehouse"}
+          </Button>
+        ) : undefined
+      }
+    >
+      {showForm && canCreate ? (
+        <form onSubmit={createWarehouse} className="mb-4 rounded-xl border border-border/70 p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Code</label>
+              <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="MAIN" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Name</label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Main warehouse" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Address</label>
+              <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+            </div>
+          </div>
+          {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
+          <Button type="submit" size="sm" className="mt-3" disabled={saving}>
+            {saving ? "Saving…" : "Create warehouse"}
+          </Button>
+        </form>
+      ) : null}
+      <DataTable
+        exportTitle="Warehouses"
+        columns={columns}
+        data={warehouses}
+        loading={loading}
+        emptyMessage="No warehouses configured. Create one to hold stock."
+      />
     </PageLayout>
   );
 }

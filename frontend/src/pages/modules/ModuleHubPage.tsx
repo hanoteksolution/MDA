@@ -92,7 +92,9 @@ export function ModuleHubPage() {
   const filteredWorkspaces = useMemo(() => {
     if (filter === "favorites") return favorites.map((c) => workspaceByCode[c]).filter(Boolean);
     if (filter === "recent") return recents.map((r) => workspaceByCode[r.code]).filter(Boolean);
-    if (filter === "actions" || filter === "all") return workspaces.filter((w) => w.code !== "overview");
+    if (filter === "actions" || filter === "all") {
+      return workspaces.filter((w) => w.code !== "overview" && w.kind !== "capability");
+    }
     return workspaces.filter((w) => w.category === filter);
   }, [filter, favorites, recents, workspaceByCode, workspaces]);
 
@@ -215,7 +217,7 @@ export function ModuleHubPage() {
                   {greeting}, {displayName}
                 </h1>
                 <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-                  A live command center for every workspace on this tenant.
+                  Business workspaces on one platform. Shared engines underneath. One central accounting engine.
                 </p>
               </div>
 
@@ -283,9 +285,9 @@ export function ModuleHubPage() {
           <div>
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-[15px] font-semibold tracking-tight">Workspaces</h2>
+                <h2 className="text-[15px] font-semibold tracking-tight">Your Business Workspaces</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {gridWorkspaces.length} available · click any card to enter
+                  {gridWorkspaces.length} available · open a vertical ERP, not a shared engine
                 </p>
               </div>
               <div className="relative flex rounded-lg bg-muted/70 p-0.5 text-[12px]">

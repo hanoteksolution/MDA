@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/forms/FormField";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
 import { useAuthStore } from "@/store/authStore";
 import {
   propertyApi,
@@ -23,6 +24,12 @@ import { formatCurrency } from "@/utils/cn";
 
 type Tab = "units" | "properties" | "maintenance";
 
+const PROPERTY_TAB_PATHS: Record<string, Tab> = {
+  units: "units",
+  properties: "properties",
+  maintenance: "maintenance",
+};
+
 export function PropertyPage() {
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
@@ -30,7 +37,7 @@ export function PropertyPage() {
   const canMaint =
     hasPermission("property_management.maintenance") || canManage;
 
-  const [tab, setTab] = useState<Tab>("units");
+  const [tab, setTab] = useWorkspaceTab<Tab>("/property", PROPERTY_TAB_PATHS, "units");
   const [summary, setSummary] = useState<PropertySummary | null>(null);
   const [properties, setProperties] = useState<PropertyAsset[]>([]);
   const [buildings, setBuildings] = useState<PropertyBuilding[]>([]);

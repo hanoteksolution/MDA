@@ -1,38 +1,5 @@
-import { useEffect, useState } from "react";
-import {
-  LayoutDashboard,
-  LayoutGrid,
-  ShoppingCart,
-  Package,
-  Warehouse,
-  Truck,
-  Receipt,
-  Users,
-  Building2,
-  Wallet,
-  BarChart3,
-  Settings,
-  LogOut,
-  PanelLeftClose,
-  PanelLeft,
-  Shield,
-  UserCheck,
-  Globe2,
-  CreditCard,
-  Goal,
-  CalendarDays,
-  ScrollText,
-  Tags,
-  Trash2,
-  Pill,
-  Dumbbell,
-  FlaskConical,
-  UtensilsCrossed,
-  BedDouble,
-  Home,
-  Briefcase,
-  type LucideIcon,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { resolveMediaUrl } from "@/config/api";
 import { cn } from "@/utils/cn";
@@ -42,99 +9,21 @@ import { useAuthStore } from "@/store/authStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules } from "@/hooks/useModules";
 import { MODULE_WORKSPACES } from "@/navigation/moduleWorkspaces";
-
-interface NavItem {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  permission?: string | string[];
-  module?: string | string[];
-  /** When set, item stays visible in focused workspaces that include any of these codes */
-  workspaces?: string[];
-}
-
-const navSections: { label: string; items: NavItem[] }[] = [
-  {
-    label: "Overview",
-    items: [
-      { to: "/modules", label: "All modules", icon: LayoutGrid },
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard.view", workspaces: ["overview"] },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access", module: "pos", workspaces: ["pos", "restaurant", "pharmacy"] },
-      { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
-      { to: "/receipts", label: "Receipts", icon: ScrollText, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
-      { to: "/expenses", label: "Expenses", icon: Wallet, permission: ["finance.view", "sales.view"], module: "sales", workspaces: ["pos", "finance", "sales"] },
-      { to: "/daily-ops", label: "Daily Ops", icon: CalendarDays, permission: "sales.view", module: "sales", workspaces: ["pos", "restaurant", "sales"] },
-      { to: "/waiter-performance", label: "Waiters", icon: UserCheck, permission: ["pos.access", "sales.view"], module: "pos", workspaces: ["pos", "restaurant"] },
-      { to: "/purchases", label: "Purchases", icon: Truck, permission: "purchases.view", module: "purchases", workspaces: ["inventory", "pharmacy", "purchases"] },
-      { to: "/trash", label: "Trash", icon: Trash2, permission: "trash.view", module: "sales", workspaces: ["pos", "sales"] },
-    ],
-  },
-  {
-    label: "Catalog",
-    items: [
-      { to: "/products", label: "Products", icon: Package, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy", "pos"] },
-      { to: "/categories", label: "Categories", icon: Tags, permission: "products.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
-      { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view", module: "inventory", workspaces: ["inventory", "pharmacy"] },
-      { to: "/customers", label: "Customers", icon: Users, permission: "customers.view", module: "sales", workspaces: ["pos", "gym", "pharmacy", "sales"] },
-      { to: "/suppliers", label: "Suppliers", icon: Building2, permission: "suppliers.view", module: "purchases", workspaces: ["inventory", "pharmacy", "purchases"] },
-    ],
-  },
-  {
-    label: "Venue",
-    items: [
-      { to: "/futsal", label: "Futsal", icon: Goal, permission: "futsal.view", module: "futsal", workspaces: ["futsal"] },
-      { to: "/pharmacy", label: "Pharmacy", icon: Pill, permission: "pharmacy.view", module: "pharmacy", workspaces: ["pharmacy"] },
-      { to: "/gym", label: "Gym", icon: Dumbbell, permission: "gym.view", module: "gym", workspaces: ["gym"] },
-      { to: "/restaurant", label: "Restaurant", icon: UtensilsCrossed, permission: "restaurant.view", module: "restaurant", workspaces: ["restaurant"] },
-      { to: "/hotel", label: "Hotel", icon: BedDouble, permission: "hotel.view", module: "hotel", workspaces: ["hotel"] },
-      { to: "/property", label: "Property", icon: Building2, permission: "property_management.view", module: "property_management", workspaces: ["property"] },
-      { to: "/housing", label: "Housing", icon: Home, permission: "housing_rental.view", module: "housing_rental", workspaces: ["property", "housing"] },
-      { to: "/office", label: "Office", icon: Briefcase, permission: "office_rental.view", module: "office_rental", workspaces: ["property", "office"] },
-    ],
-  },
-  {
-    label: "Finance & Reports",
-    items: [
-      { to: "/finance", label: "Finance", icon: Wallet, permission: "finance.view", workspaces: ["finance"] },
-      { to: "/reports", label: "Reports", icon: BarChart3, permission: "reports.view", workspaces: ["finance", "reports"] },
-      { to: "/staff-performance", label: "Staff Performance", icon: UserCheck, permission: "staff.performance.view", workspaces: ["finance", "reports"] },
-    ],
-  },
-  {
-    label: "Platform",
-    items: [
-      { to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view", workspaces: ["platform"] },
-      { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view", workspaces: ["platform"] },
-      { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view", workspaces: ["platform"] },
-      { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage", workspaces: ["platform"] },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      {
-        to: "/admin",
-        label: "Administration",
-        icon: Shield,
-        permission: ["users.view", "roles.view"],
-        workspaces: ["admin"],
-      },
-      { to: "/settings", label: "Settings", icon: Settings, permission: "settings.view", workspaces: ["settings"] },
-    ],
-  },
-];
+import {
+  industryNavSections,
+  industryWorkspacesForUser,
+  isIndustryPath,
+  overviewNavSections,
+  platformNavSections,
+  type WorkspaceNavSection,
+} from "@/navigation/businessWorkspaces";
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, activeWorkspace } = useUIStore();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
-  const { hasPermission, hasAnyPermission } = usePermissions();
-  const { hasModule, hasAnyModule } = useModules();
+  const { hasPermission, hasAnyPermission, isSuperAdmin } = usePermissions();
+  const { hasModule, hasAnyModule, modules } = useModules();
   const [companyName, setCompanyName] = useState("MDA ERP");
   const [logoUrl, setLogoUrl] = useState<string | undefined>();
 
@@ -159,43 +48,54 @@ export function Sidebar() {
     };
   }, []);
 
-  const focusedWorkspace =
-    activeWorkspace && activeWorkspace !== "overview"
+  const focused =
+    activeWorkspace && activeWorkspace !== "overview" && activeWorkspace !== "hub"
       ? MODULE_WORKSPACES.find((w) => w.code === activeWorkspace)
       : null;
 
-  const canSeeItem = (item: NavItem) => {
-    if (item.module) {
-      const ok = Array.isArray(item.module)
-        ? hasAnyModule(...item.module)
-        : hasModule(item.module);
-      if (!ok) return false;
-    }
-    if (!item.permission) return true;
-    const permOk = Array.isArray(item.permission)
-      ? hasAnyPermission(...item.permission)
-      : hasPermission(item.permission);
-    if (!permOk) return false;
-    // Workspace focus: keep System/Platform + items tagged for this workspace
-    if (focusedWorkspace) {
-      if (!item.workspaces) return true;
-      if (item.workspaces.includes(focusedWorkspace.code)) return true;
-      // Also show items whose module matches the workspace modules
-      if (item.module) {
-        const mods = Array.isArray(item.module) ? item.module : [item.module];
-        if (focusedWorkspace.modules.some((m) => mods.includes(m))) return true;
-      }
-      return false;
-    }
-    return true;
-  };
+  const industryList = useMemo(
+    () =>
+      industryWorkspacesForUser(user?.enabled_modules ?? modules, {
+        elevated: isSuperAdmin,
+        hasPermission,
+      }),
+    [user?.enabled_modules, modules, isSuperAdmin, hasPermission]
+  );
 
-  const visibleSections = navSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter(canSeeItem),
-    }))
-    .filter((section) => section.items.length > 0);
+  const visibleSections: WorkspaceNavSection[] = useMemo(() => {
+    const opts = {
+      elevated: isSuperAdmin,
+      enabled: user?.enabled_modules ?? modules,
+      hasPermission,
+      hasAnyPermission,
+      hasModule,
+      hasAnyModule,
+    };
+    if (focused && isIndustryPath(focused.code)) {
+      return industryNavSections(focused.code, opts);
+    }
+    if (focused && (focused.kind === "platform" || ["finance", "reports", "admin", "settings", "platform"].includes(focused.code))) {
+      const platform = platformNavSections(focused.code, opts);
+      if (platform.length) return platform;
+    }
+    return overviewNavSections(industryList, {
+      elevated: isSuperAdmin,
+      hasPermission,
+      includeFinance: isSuperAdmin || hasPermission("finance.view"),
+      includeAdmin: true,
+      includePlatform: isSuperAdmin || hasPermission("platform.view"),
+    });
+  }, [
+    focused,
+    industryList,
+    isSuperAdmin,
+    user?.enabled_modules,
+    modules,
+    hasPermission,
+    hasAnyPermission,
+    hasModule,
+    hasAnyModule,
+  ]);
 
   const initial = (companyName || "M").charAt(0).toUpperCase();
 
@@ -206,7 +106,6 @@ export function Sidebar() {
         sidebarCollapsed ? "w-[64px] xl:w-[72px]" : "w-[220px] xl:w-[280px]"
       )}
     >
-      {/* Logo */}
       <div
         className={cn(
           "flex shrink-0 items-center justify-between border-b border-sidebar-border px-3 xl:px-4",
@@ -214,7 +113,7 @@ export function Sidebar() {
         )}
       >
         {!sidebarCollapsed ? (
-          <NavLink to="/modules" className="flex min-w-0 flex-1 items-center gap-2.5" title="All modules">
+          <NavLink to="/modules" className="flex min-w-0 flex-1 items-center gap-2.5" title="All workspaces">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -228,11 +127,13 @@ export function Sidebar() {
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-foreground">{companyName}</p>
-              <p className="text-[10px] text-muted-foreground">Enterprise Edition</p>
+              <p className="text-[10px] text-muted-foreground">
+                {focused?.kind === "industry" ? focused.label : "Enterprise Edition"}
+              </p>
             </div>
           </NavLink>
         ) : (
-          <NavLink to="/modules" className="flex flex-1 justify-center" title="All modules">
+          <NavLink to="/modules" className="flex flex-1 justify-center" title="All workspaces">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -255,15 +156,10 @@ export function Sidebar() {
           className="rounded-lg p-2 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
           aria-label="Toggle sidebar"
         >
-          {sidebarCollapsed ? (
-            <PanelLeft className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
+          {sidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin xl:px-3 xl:py-4">
         {visibleSections.map((section) => (
           <div key={section.label} className="mb-4 xl:mb-5">
@@ -272,14 +168,13 @@ export function Sidebar() {
                 {section.label}
               </p>
             )}
-            {sidebarCollapsed && (
-              <div className="mx-auto mb-1.5 h-px w-6 bg-sidebar-border" aria-hidden />
-            )}
+            {sidebarCollapsed && <div className="mx-auto mb-1.5 h-px w-6 bg-sidebar-border" aria-hidden />}
             <div className="space-y-0.5">
-              {section.items.map(({ to, label, icon: Icon }) => (
+              {section.items.map(({ to, label, icon: Icon, end }) => (
                 <NavLink
-                  key={to}
+                  key={`${to}-${label}`}
                   to={to}
+                  end={end}
                   title={label}
                   aria-label={label}
                   className={({ isActive }) =>
@@ -308,7 +203,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* User footer */}
       <div className="border-t border-sidebar-border p-3">
         {!sidebarCollapsed && user && (
           <div className="mb-2 flex items-center gap-3 rounded-xl bg-sidebar-accent px-3 py-2.5">
@@ -316,9 +210,7 @@ export function Sidebar() {
               {user.username?.[0]?.toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {user.first_name || user.username}
-              </p>
+              <p className="truncate text-sm font-medium text-foreground">{user.first_name || user.username}</p>
               <p className="truncate text-xs text-muted-foreground">{user.role?.name}</p>
             </div>
           </div>

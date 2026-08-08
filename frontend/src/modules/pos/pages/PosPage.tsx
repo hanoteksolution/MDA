@@ -557,7 +557,7 @@ export function PosPage() {
         {/* Top bar */}
         <div className="pos-glass relative flex shrink-0 flex-nowrap items-center gap-2 px-3 py-2.5 xl:gap-3 xl:px-5 xl:py-3">
           <div className="flex shrink-0 items-center gap-2.5 pr-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-emerald-600 text-primary-foreground shadow-[0_8px_24px_hsl(var(--primary)/0.35)] xl:h-11 xl:w-11 xl:rounded-2xl">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-primary-hover text-primary-foreground shadow-[0_8px_24px_hsl(var(--primary)/0.35)] xl:h-11 xl:w-11 xl:rounded-2xl">
               <ShoppingCart className="h-4 w-4 xl:h-5 xl:w-5" strokeWidth={2.25} />
             </div>
             <div className="hidden lg:block">

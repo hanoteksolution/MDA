@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
 import {
   gymApi,
   type GymAttendance,
@@ -66,6 +67,16 @@ type Tab =
   | "trainers"
   | "classes"
   | "workouts";
+
+const GYM_TAB_PATHS: Record<string, Tab> = {
+  members: "members",
+  memberships: "subscriptions",
+  plans: "plans",
+  attendance: "attendance",
+  trainers: "trainers",
+  classes: "classes",
+  workouts: "workouts",
+};
 type MemberMode = "list" | "create" | "edit";
 
 const emptyMemberForm = {
@@ -103,7 +114,7 @@ export function GymPage() {
   const canManage = hasPermission("gym.manage");
   const canCheckIn = hasPermission("gym.attendance.checkin") || canManage;
 
-  const [tab, setTab] = useState<Tab>("members");
+  const [tab, setTab] = useWorkspaceTab<Tab>("/gym", GYM_TAB_PATHS, "members");
   const [summary, setSummary] = useState<GymSummary | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");

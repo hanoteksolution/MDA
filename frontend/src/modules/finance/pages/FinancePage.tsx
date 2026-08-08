@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   financeApi,
   type AccountingEquationReport,
@@ -84,6 +85,8 @@ function DateRangeFilters({
 }
 
 export function FinancePage() {
+  const { hasPermission } = usePermissions();
+  const canCreateJournal = hasPermission("finance.create");
   const [tab, setTab] = useState("overview");
   const [data, setData] = useState<FinanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +110,14 @@ export function FinancePage() {
   const [journalEntries, setJournalEntries] = useState<FinanceJournalEntry[]>([]);
   const [journalBusy, setJournalBusy] = useState<string | null>(null);
   const [journalMsg, setJournalMsg] = useState<string | null>(null);
+  const [showJournalForm, setShowJournalForm] = useState(false);
+  const [journalForm, setJournalForm] = useState({
+    description: "",
+    entry_date: "",
+    debit_account_id: "",
+    credit_account_id: "",
+    amount: "",
+  });
   const [backfillPreview, setBackfillPreview] = useState<Record<string, unknown> | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
@@ -288,6 +299,49 @@ export function FinancePage() {
       .then((r) => setJournalEntries(r.data.results ?? []))
       .catch(() => setJournalEntries(data?.journal ?? []));
   }, [data?.journal]);
+
+  const createManualJournal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(journalForm.amount);
+    if (!journalForm.description.trim() || !journalForm.debit_account_id || !journalForm.credit_account_id) {
+      setJournalMsg("Description, debit account, and credit account are required.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setJournalMsg("Amount must be greater than zero.");
+      return;
+    }
+    if (journalForm.debit_account_id === journalForm.credit_account_id) {
+      setJournalMsg("Debit and credit accounts must differ.");
+      return;
+    }
+    setJournalBusy("new");
+    setJournalMsg(null);
+    try {
+      await financeApi.createJournalEntry({
+        description: journalForm.description.trim(),
+        entry_date: journalForm.entry_date || undefined,
+        lines: [
+          { account_id: journalForm.debit_account_id, debit: amount, credit: 0 },
+          { account_id: journalForm.credit_account_id, debit: 0, credit: amount },
+        ],
+      });
+      setShowJournalForm(false);
+      setJournalForm({
+        description: "",
+        entry_date: "",
+        debit_account_id: "",
+        credit_account_id: "",
+        amount: "",
+      });
+      setJournalMsg("Draft journal created. Approve to post.");
+      loadJournals();
+    } catch (err) {
+      setJournalMsg(err instanceof Error ? err.message : "Could not create journal.");
+    } finally {
+      setJournalBusy(null);
+    }
+  };
 
   const postDraftJournal = async (entryId: string, allowSelf = false) => {
     setJournalBusy(entryId);
@@ -798,12 +852,86 @@ export function FinancePage() {
             <Button type="button" variant="secondary" size="sm" onClick={loadJournals}>
               Refresh
             </Button>
+            {canCreateJournal ? (
+              <Button type="button" size="sm" onClick={() => setShowJournalForm((v) => !v)}>
+                <Plus className="h-4 w-4 mr-1" />
+                {showJournalForm ? "Cancel" : "New journal"}
+              </Button>
+            ) : null}
             {journalMsg ? <p className="text-sm text-muted-foreground">{journalMsg}</p> : null}
           </div>
+          {showJournalForm && canCreateJournal ? (
+            <form onSubmit={createManualJournal} className="mb-4 grid gap-3 rounded-xl border border-border/70 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="mb-1 block text-xs text-muted-foreground">Description</label>
+                <Input
+                  value={journalForm.description}
+                  onChange={(e) => setJournalForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Manual adjustment"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Date</label>
+                <Input
+                  type="date"
+                  value={journalForm.entry_date}
+                  onChange={(e) => setJournalForm((f) => ({ ...f, entry_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Debit account</label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                  value={journalForm.debit_account_id}
+                  onChange={(e) => setJournalForm((f) => ({ ...f, debit_account_id: e.target.value }))}
+                >
+                  <option value="">Select</option>
+                  {(data?.accounts ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code ? `${a.code} · ` : ""}
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Credit account</label>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                  value={journalForm.credit_account_id}
+                  onChange={(e) => setJournalForm((f) => ({ ...f, credit_account_id: e.target.value }))}
+                >
+                  <option value="">Select</option>
+                  {(data?.accounts ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code ? `${a.code} · ` : ""}
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Amount</label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={journalForm.amount}
+                  onChange={(e) => setJournalForm((f) => ({ ...f, amount: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button type="submit" size="sm" disabled={journalBusy === "new"}>
+                  {journalBusy === "new" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                  Save draft
+                </Button>
+              </div>
+            </form>
+          ) : null}
           {!loading && !journalEntries.length && !(data?.journal?.length ?? 0) ? (
             <EmptyState
               title="No journal entries yet"
-              description="POS sales, expenses, purchases, and gym memberships post automatically. Manual drafts need approval."
+              description="POS sales, expenses, purchases, and gym memberships post automatically. Create a balanced draft, then approve."
             />
           ) : (
             <div className="space-y-4">

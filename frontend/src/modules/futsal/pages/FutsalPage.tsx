@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/forms/FormField";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
 import { useAuthStore } from "@/store/authStore";
 import {
   futsalApi,
@@ -24,13 +25,21 @@ import { formatCurrency } from "@/utils/cn";
 
 type Tab = "bookings" | "teams" | "finance";
 
+const FUTSAL_TAB_PATHS: Record<string, Tab> = {
+  bookings: "bookings",
+  courts: "bookings",
+  teams: "teams",
+  ledger: "finance",
+  finance: "finance",
+};
+
 export function FutsalPage() {
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("futsal.manage");
   const canFinance = hasPermission("futsal.finance");
 
-  const [tab, setTab] = useState<Tab>("bookings");
+  const [tab, setTab] = useWorkspaceTab<Tab>("/futsal", FUTSAL_TAB_PATHS, "bookings");
   const [summary, setSummary] = useState<FutsalSummary | null>(null);
   const [courts, setCourts] = useState<FutsalCourt[]>([]);
   const [teams, setTeams] = useState<FutsalTeam[]>([]);

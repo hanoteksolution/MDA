@@ -173,7 +173,13 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
             )}
       </div>
 
-      <div className="relative mt-auto flex items-center justify-between gap-2 px-4 py-3">
+      <div className="relative mt-auto px-4 py-3">
+        {workspace.pages.length ? (
+          <p className="mb-2 line-clamp-1 text-[11px] text-muted-foreground">
+            {workspace.pages.slice(0, 5).join(" · ")}
+          </p>
+        ) : null}
+        <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-0.5">
           {workspace.quickActions.slice(0, 3).map((action) => {
             const AIcon = action.icon;
@@ -195,9 +201,10 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
           })}
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-foreground/90 px-2.5 py-1 text-[11px] font-semibold text-background opacity-0 shadow-sm transition-all duration-300 group-hover:opacity-100">
-          Open
+          Open {workspace.label}
           <ArrowUpRight className="h-3.5 w-3.5" />
         </span>
+        </div>
       </div>
     </motion.article>
   );

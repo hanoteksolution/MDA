@@ -74,6 +74,7 @@ import {
   QuotationFormPage,
   QuotationEditPage,
 } from "@/app/routes/sales";
+import { industryCapabilityRoutes, industryFeatureRoutes } from "@/app/workspaceRoutes";
 
 const Router = isTauri() ? HashRouter : BrowserRouter;
 
@@ -549,6 +550,9 @@ export function AppRouter() {
               </PermissionGuard>
             }
           />
+
+          {industryCapabilityRoutes()}
+          {industryFeatureRoutes()}
         </Route>
 
         <Route path="/" element={<HomeRedirect />} />

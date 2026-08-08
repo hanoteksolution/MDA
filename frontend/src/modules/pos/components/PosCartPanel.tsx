@@ -166,7 +166,7 @@ export function PosCartPanel({
 
       <div className="relative flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2 xl:px-4 xl:py-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-600 text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/0.28)] xl:h-10 xl:w-10 xl:rounded-2xl">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-hover text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/0.28)] xl:h-10 xl:w-10 xl:rounded-2xl">
             <ShoppingCart className="h-4 w-4" strokeWidth={2.25} />
           </div>
           <div>
@@ -468,7 +468,7 @@ export function PosCartPanel({
             size="lg"
             className={cn(
               "h-11 w-full gap-2 rounded-xl text-sm font-semibold tracking-tight xl:h-12 xl:rounded-2xl xl:text-[15px] 2xl:h-14",
-              "bg-gradient-to-r from-primary via-primary to-emerald-600 shadow-[0_12px_32px_hsl(var(--primary)/0.28)]",
+              "bg-gradient-to-r from-primary via-primary to-primary-hover shadow-[0_12px_32px_hsl(var(--primary)/0.28)]",
               "transition-all hover:shadow-[0_16px_40px_hsl(var(--primary)/0.34)] hover:brightness-[1.03]",
               "disabled:opacity-50 disabled:shadow-none"
             )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, ClipboardList, Package, Pill } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { AlertTriangle, CalendarClock, ClipboardList, Package, Pill, Plus } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
 import { DataTable, type Column } from "@/components/data/DataTable";
@@ -7,8 +8,11 @@ import { ContentSection } from "@/components/layout/ContentSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { productsApi } from "@/services/api/catalog";
-import type { Product } from "@/types/models/catalog";
+import { FormField, FormGrid } from "@/components/forms/FormField";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
+import { usePermissions } from "@/hooks/usePermissions";
+import { productsApi, inventoryApi } from "@/services/api/catalog";
+import type { Product, Warehouse } from "@/types/models/catalog";
 import {
   pharmacyApi,
   type PharmacyBatch,
@@ -19,8 +23,17 @@ import {
 
 type Tab = "batches" | "prescriptions";
 
+const PHARMACY_TAB_PATHS: Record<string, Tab> = {
+  batches: "batches",
+  expiry: "batches",
+  prescriptions: "prescriptions",
+};
+
 export function PharmacyPage() {
-  const [tab, setTab] = useState<Tab>("batches");
+  const location = useLocation();
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission("pharmacy.manage");
+  const [tab, setTab] = useWorkspaceTab<Tab>("/pharmacy", PHARMACY_TAB_PATHS, "batches");
   const [summary, setSummary] = useState<PharmacySummary | null>(null);
   const [categories, setCategories] = useState<PharmacyCategory[]>([]);
   const [categoryId, setCategoryId] = useState("");
@@ -32,6 +45,17 @@ export function PharmacyPage() {
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [rxStatus, setRxStatus] = useState("");
   const [showRxForm, setShowRxForm] = useState(false);
+  const [showBatchForm, setShowBatchForm] = useState(false);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [batchForm, setBatchForm] = useState({
+    product_id: "",
+    warehouse_id: "",
+    quantity: "1",
+    batch_number: "",
+    expiry_date: "",
+    cost_price: "",
+  });
+  const [batchError, setBatchError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dispenseRx, setDispenseRx] = useState<Prescription | null>(null);
   const [fillQtys, setFillQtys] = useState<Record<string, string>>({});
@@ -59,7 +83,11 @@ export function PharmacyPage() {
     } else if (tab === "prescriptions" && !featureFlags.prescriptions && featureFlags.batches) {
       setTab("batches");
     }
-  }, [featureFlags.batches, featureFlags.prescriptions, tab]);
+  }, [featureFlags.batches, featureFlags.prescriptions, tab, setTab]);
+
+  useEffect(() => {
+    setShowExpiringOnly(location.pathname.includes("/expiry"));
+  }, [location.pathname]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -119,7 +147,7 @@ export function PharmacyPage() {
   }, [reload]);
 
   useEffect(() => {
-    if (!showRxForm) return;
+    if (!showRxForm && !showBatchForm) return;
     void productsApi
       .list({
         page_size: 50,
@@ -128,7 +156,50 @@ export function PharmacyPage() {
       })
       .then((res) => setCatalogProducts(res.data.results ?? []))
       .catch(() => setCatalogProducts([]));
-  }, [showRxForm, categoryId]);
+  }, [showRxForm, showBatchForm, categoryId]);
+
+  useEffect(() => {
+    if (!showBatchForm) return;
+    void inventoryApi
+      .warehouses()
+      .then((res) => setWarehouses(res.data.results ?? []))
+      .catch(() => setWarehouses([]));
+  }, [showBatchForm]);
+
+  const handleCreateBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const qty = Number(batchForm.quantity);
+    if (!batchForm.product_id || !batchForm.warehouse_id || !Number.isFinite(qty) || qty <= 0) {
+      setBatchError("Product, warehouse, and quantity are required.");
+      return;
+    }
+    setSaving(true);
+    setBatchError(null);
+    try {
+      await pharmacyApi.createBatch({
+        product_id: batchForm.product_id,
+        warehouse_id: batchForm.warehouse_id,
+        quantity: qty,
+        batch_number: batchForm.batch_number || undefined,
+        expiry_date: batchForm.expiry_date || undefined,
+        cost_price: batchForm.cost_price ? Number(batchForm.cost_price) : undefined,
+      });
+      setShowBatchForm(false);
+      setBatchForm({
+        product_id: "",
+        warehouse_id: "",
+        quantity: "1",
+        batch_number: "",
+        expiry_date: "",
+        cost_price: "",
+      });
+      await reload();
+    } catch (err) {
+      setBatchError(err instanceof Error ? err.message : "Could not receive batch.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleCreateRx = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -445,19 +516,101 @@ export function PharmacyPage() {
                 <input
                   type="checkbox"
                   checked={showExpiringOnly}
-                  onChange={(e) => setShowExpiringOnly(e.target.checked)}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setShowExpiringOnly(next);
+                    if (next) setTab("batches");
+                  }}
                 />
                 Expiring / expired only
               </label>
               ) : null}
+              {canManage ? (
+                <Button size="sm" onClick={() => setShowBatchForm((v) => !v)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  {showBatchForm ? "Cancel" : "New batch"}
+                </Button>
+              ) : null}
             </div>
           }
         >
+          {showBatchForm && canManage ? (
+            <form onSubmit={handleCreateBatch} className="mb-4 rounded-xl border border-border/70 p-4">
+              <FormGrid>
+                <FormField label="Medicine">
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={batchForm.product_id}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, product_id: e.target.value }))}
+                  >
+                    <option value="">Select product</option>
+                    {catalogProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Warehouse">
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={batchForm.warehouse_id}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, warehouse_id: e.target.value }))}
+                  >
+                    <option value="">Select warehouse</option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Quantity">
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={batchForm.quantity}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, quantity: e.target.value }))}
+                  />
+                </FormField>
+                <FormField label="Batch number">
+                  <Input
+                    value={batchForm.batch_number}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, batch_number: e.target.value }))}
+                    placeholder="Optional"
+                  />
+                </FormField>
+                <FormField label="Expiry">
+                  <Input
+                    type="date"
+                    value={batchForm.expiry_date}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, expiry_date: e.target.value }))}
+                  />
+                </FormField>
+                <FormField label="Cost">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={batchForm.cost_price}
+                    onChange={(e) => setBatchForm((f) => ({ ...f, cost_price: e.target.value }))}
+                  />
+                </FormField>
+                <div className="flex items-end">
+                  <Button type="submit" size="sm" disabled={saving}>
+                    {saving ? "Saving…" : "Receive batch"}
+                  </Button>
+                </div>
+              </FormGrid>
+              {batchError ? <p className="mt-2 text-sm text-destructive">{batchError}</p> : null}
+            </form>
+          ) : null}
           <DataTable
             columns={batchColumns}
             data={batches}
             loading={loading}
-            emptyMessage="No batches yet. Receive stock with a batch number or enable pharmacy on GRN."
+            emptyMessage="No batches yet. Receive a batch or post a pharmacy GRN."
           />
         </ContentSection>
       )}

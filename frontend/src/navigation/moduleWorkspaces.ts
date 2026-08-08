@@ -277,6 +277,8 @@ export interface HubQuickAction {
   tone: WorkspaceTone;
 }
 
+export type WorkspaceKind = "industry" | "platform" | "capability";
+
 /** Workspace entries for the module hub + switcher (derived from enabled modules). */
 export interface ModuleWorkspace {
   code: string;
@@ -294,12 +296,14 @@ export interface ModuleWorkspace {
   pages: string[];
   quickActions: WorkspaceQuickAction[];
   group: "overview" | "operations" | "venue" | "finance" | "platform" | "system";
+  /** industry = business vertical; platform = finance/admin; capability = shared engine (not hub peer). */
+  kind: WorkspaceKind;
 }
 
 function ws(
-  spec: Omit<ModuleWorkspace, "accent">
+  spec: Omit<ModuleWorkspace, "accent" | "kind"> & { kind?: WorkspaceKind }
 ): ModuleWorkspace {
-  return { ...spec, accent: TONE_STYLES[spec.tone].accent };
+  return { kind: spec.kind ?? "capability", ...spec, accent: TONE_STYLES[spec.tone].accent };
 }
 
 export const MODULE_WORKSPACES: ModuleWorkspace[] = [
@@ -319,6 +323,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Reports", route: "/reports", icon: BarChart3 },
     ],
     group: "overview",
+    kind: "platform",
   }),
   ws({
     code: "pos",
@@ -401,12 +406,14 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     category: "fitness",
     modules: ["gym"],
     permission: "gym.view",
-    pages: ["Members", "Plans", "Classes", "Attendance", "Trainers"],
+    pages: ["Members", "Memberships", "Attendance", "Classes", "POS", "Finance"],
     quickActions: [
-      { label: "Members", route: "/gym", icon: UserPlus },
-      { label: "Attendance", route: "/gym", icon: Clock },
+      { label: "Members", route: "/gym/members", icon: UserPlus },
+      { label: "Attendance", route: "/gym/attendance", icon: Clock },
+      { label: "Open POS", route: "/gym/pos", icon: Store },
     ],
     group: "venue",
+    kind: "industry",
   }),
   ws({
     code: "pharmacy",
@@ -418,12 +425,13 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     category: "healthcare",
     modules: ["pharmacy"],
     permission: "pharmacy.view",
-    pages: ["Batches", "Prescriptions", "Dispense", "Expiry alerts"],
+    pages: ["POS", "Sales", "Medicines", "Batches", "Expiry", "Finance"],
     quickActions: [
-      { label: "Batches", route: "/pharmacy", icon: Pill },
-      { label: "Prescriptions", route: "/pharmacy", icon: FileText },
+      { label: "Batches", route: "/pharmacy/batches", icon: Pill },
+      { label: "Open POS", route: "/pharmacy/pos", icon: Store },
     ],
     group: "venue",
+    kind: "industry",
   }),
   ws({
     code: "futsal",
@@ -435,12 +443,13 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     category: "hospitality",
     modules: ["futsal"],
     permission: "futsal.view",
-    pages: ["Courts", "Teams", "Bookings", "Ledger"],
+    pages: ["Courts", "Bookings", "Teams", "POS", "Finance"],
     quickActions: [
       { label: "Bookings", route: "/futsal", icon: CalendarPlus },
-      { label: "Courts", route: "/futsal", icon: Goal },
+      { label: "Open POS", route: "/futsal/pos", icon: Store },
     ],
     group: "venue",
+    kind: "industry",
   }),
   ws({
     code: "restaurant",
@@ -452,12 +461,31 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     category: "hospitality",
     modules: ["restaurant"],
     permission: "restaurant.view",
-    pages: ["Floor", "Kitchen", "Menus", "Tables"],
+    pages: ["POS", "Sales", "Kitchen", "Tables", "Finance"],
     quickActions: [
       { label: "Floor", route: "/restaurant", icon: UtensilsCrossed },
-      { label: "Open POS", route: "/pos", icon: Store },
+      { label: "Open POS", route: "/restaurant/pos", icon: Store },
     ],
     group: "venue",
+    kind: "industry",
+  }),
+  ws({
+    code: "cafeteria",
+    label: "Cafeteria",
+    description: "Counter POS, menu, inventory, and purchasing.",
+    route: "/cafeteria",
+    icon: UtensilsCrossed,
+    tone: "amber",
+    category: "hospitality",
+    modules: ["restaurant"],
+    permission: "restaurant.view",
+    pages: ["POS", "Orders", "Menu", "Inventory", "Finance"],
+    quickActions: [
+      { label: "Open POS", route: "/cafeteria/pos", icon: Store },
+      { label: "Menu", route: "/cafeteria/products", icon: PackagePlus },
+    ],
+    group: "venue",
+    kind: "industry",
   }),
   ws({
     code: "hotel",
@@ -465,16 +493,17 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     description: "Rooms, reservations, folios, and housekeeping.",
     route: "/hotel",
     icon: BedDouble,
-    tone: "indigo",
+    tone: "cyan",
     category: "hospitality",
     modules: ["hotel"],
     permission: "hotel.view",
-    pages: ["Rooms", "Reservations", "Folios", "Housekeeping"],
+    pages: ["Reservations", "Rooms", "POS", "Housekeeping", "Finance"],
     quickActions: [
-      { label: "Reservations", route: "/hotel", icon: CalendarPlus },
-      { label: "Rooms", route: "/hotel", icon: BedDouble },
+      { label: "Reservations", route: "/hotel/reservations", icon: CalendarPlus },
+      { label: "Open POS", route: "/hotel/pos", icon: Store },
     ],
     group: "venue",
+    kind: "industry",
   }),
   ws({
     code: "property",
@@ -484,14 +513,33 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     icon: Building2,
     tone: "teal",
     category: "property",
-    modules: ["property_management"],
-    permission: "property_management.view",
-    pages: ["Assets", "Buildings", "Units", "Maintenance"],
+    modules: ["property_management", "housing_rental", "office_rental"],
+    permission: ["property_management.view", "housing_rental.view", "office_rental.view"],
+    pages: ["Properties", "Units", "Tenants", "Leases", "Finance"],
     quickActions: [
       { label: "Units", route: "/property", icon: Building2 },
-      { label: "Maintenance", route: "/property", icon: Settings },
+      { label: "Housing", route: "/property/housing", icon: Home },
     ],
     group: "venue",
+    kind: "industry",
+  }),
+  ws({
+    code: "retail",
+    label: "Retail",
+    description: "Shop POS, sales, products, inventory, and purchasing.",
+    route: "/retail",
+    icon: Store,
+    tone: "orange",
+    category: "retail",
+    modules: ["pos", "sales", "inventory", "purchases"],
+    permission: ["pos.access", "sales.view", "inventory.view"],
+    pages: ["POS", "Sales", "Products", "Inventory", "Finance"],
+    quickActions: [
+      { label: "Open POS", route: "/retail/pos", icon: Store },
+      { label: "New Invoice", route: "/retail/sales", icon: FileText },
+    ],
+    group: "operations",
+    kind: "industry",
   }),
   ws({
     code: "housing",
@@ -529,7 +577,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
   }),
   ws({
     code: "finance",
-    label: "Finance",
+    label: "Central Finance",
     description: "Journals, P&L, business units, and accounting health.",
     route: "/finance",
     icon: Wallet,
@@ -544,6 +592,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Expense", route: "/expenses", icon: Receipt },
     ],
     group: "finance",
+    kind: "platform",
   }),
   ws({
     code: "reports",
@@ -561,6 +610,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Staff", route: "/staff-performance", icon: Users },
     ],
     group: "finance",
+    kind: "platform",
   }),
   ws({
     code: "platform",
@@ -579,6 +629,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Plans", route: "/platform/subscriptions", icon: Wallet },
     ],
     group: "platform",
+    kind: "platform",
   }),
   ws({
     code: "admin",
@@ -596,6 +647,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Roles", route: "/admin", icon: Shield },
     ],
     group: "system",
+    kind: "platform",
   }),
   ws({
     code: "settings",
@@ -612,6 +664,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Company", route: "/settings", icon: Settings },
     ],
     group: "system",
+    kind: "platform",
   }),
 ];
 
@@ -720,27 +773,84 @@ export function categoryForId(id: WorkspaceCategoryId): WorkspaceCategory | unde
   return WORKSPACE_CATEGORIES.find((c) => c.id === id);
 }
 
+export const VENUE_MODULE_CODES = [
+  "restaurant",
+  "gym",
+  "pharmacy",
+  "hotel",
+  "futsal",
+  "property_management",
+  "housing_rental",
+  "office_rental",
+] as const;
+
+export const ENGINE_MODULE_CODES = ["pos", "sales", "inventory", "purchases"] as const;
+
+export function retailUnlocked(enabled: string[] | undefined, elevated: boolean): boolean {
+  if (elevated || enabled == null) return true;
+  const hasEngine = ENGINE_MODULE_CODES.some((m) => enabled.includes(m));
+  if (!hasEngine) return false;
+  return !VENUE_MODULE_CODES.some((m) => enabled.includes(m));
+}
+
+export function propertyUnlocked(enabled: string[] | undefined, elevated: boolean): boolean {
+  if (elevated || enabled == null) return true;
+  return ["property_management", "housing_rental", "office_rental"].some((m) => enabled.includes(m));
+}
+
+function permOk(
+  permission: string | string[] | undefined,
+  hasPermission: ((code: string) => boolean) | undefined,
+  elevated: boolean
+): boolean {
+  if (!permission || elevated || !hasPermission) return true;
+  const codes = Array.isArray(permission) ? permission : [permission];
+  return codes.some((c) => hasPermission(c));
+}
+
+/** Hub + switcher: industry verticals + platform. Engine peers (POS/Sales/…) stay off the top level. */
+export function filterVisibleWorkspaces(
+  enabled: string[] | undefined,
+  opts?: {
+    elevated?: boolean;
+    hasPermission?: (code: string) => boolean;
+    includeOverview?: boolean;
+    includeFinance?: boolean;
+    includeCafeteria?: boolean;
+  }
+): ModuleWorkspace[] {
+  const mods = enabled ?? [];
+  const elevated = Boolean(opts?.elevated || enabled == null);
+  const hasPermission = opts?.hasPermission;
+
+  return MODULE_WORKSPACES.filter((w) => {
+    if (w.kind === "capability") return false;
+    if (w.code === "cafeteria" && !opts?.includeCafeteria) return false;
+    if (w.code === "overview") return opts?.includeOverview !== false;
+    if (w.code === "finance") return opts?.includeFinance !== false && permOk(w.permission, hasPermission, elevated);
+    if (!permOk(w.permission, hasPermission, elevated)) return false;
+    if (w.code === "retail") return retailUnlocked(enabled, elevated);
+    if (w.code === "property") return propertyUnlocked(enabled, elevated);
+    if (!w.modules.length) return true;
+    if (elevated) return true;
+    return w.modules.some((m) => mods.includes(m));
+  });
+}
+
 export function workspacesForModules(
   enabled: string[] | undefined,
   opts?: {
     includeFinance?: boolean;
     isSuperAdmin?: boolean;
     hasPermission?: (code: string) => boolean;
+    includeOverview?: boolean;
   }
 ): ModuleWorkspace[] {
-  const mods = enabled ?? [];
-  const open = opts?.isSuperAdmin || !enabled;
-  const hasPermission = opts?.hasPermission;
-  return MODULE_WORKSPACES.filter((w) => {
-    if (w.permission && hasPermission && !opts?.isSuperAdmin) {
-      const codes = Array.isArray(w.permission) ? w.permission : [w.permission];
-      if (!codes.some((c) => hasPermission(c))) return false;
-    }
-    if (w.code === "overview") return true;
-    if (w.code === "finance") return opts?.includeFinance !== false;
-    if (w.modules.length === 0) return true;
-    if (open) return true;
-    return w.modules.some((m) => mods.includes(m));
+  return filterVisibleWorkspaces(enabled, {
+    elevated: opts?.isSuperAdmin,
+    hasPermission: opts?.hasPermission,
+    includeFinance: opts?.includeFinance,
+    includeOverview: opts?.includeOverview,
   });
 }
 

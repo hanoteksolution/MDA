@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Armchair, CookingPot, Plus, UtensilsCrossed } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/forms/FormField";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceTab } from "@/hooks/useWorkspaceTab";
 import { useAuthStore } from "@/store/authStore";
 import {
   restaurantApi,
@@ -22,15 +23,25 @@ import {
 } from "@/services/api/restaurant";
 import { formatCurrency } from "@/utils/cn";
 
-type Tab = "orders" | "menu" | "tables";
+type Tab = "orders" | "menu" | "tables" | "kitchen";
+
+const RESTAURANT_TAB_PATHS: Record<string, Tab> = {
+  orders: "orders",
+  menu: "menu",
+  tables: "tables",
+  kitchen: "kitchen",
+};
 
 export function RestaurantPage() {
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("restaurant.manage");
   const canFloor = hasPermission("restaurant.floor") || canManage;
+  const canKitchen = hasPermission("restaurant.kitchen") || canFloor;
 
-  const [tab, setTab] = useState<Tab>("orders");
+  const location = useLocation();
+  const restaurantRoot = location.pathname.startsWith("/cafeteria") ? "/cafeteria" : "/restaurant";
+  const [tab, setTab] = useWorkspaceTab<Tab>(restaurantRoot, RESTAURANT_TAB_PATHS, "orders");
   const [summary, setSummary] = useState<RestaurantSummary | null>(null);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -250,8 +261,8 @@ export function RestaurantPage() {
         />
       </KpiGrid>
 
-      <div className="mb-4 flex gap-2">
-        {(["orders", "menu", "tables"] as Tab[]).map((t) => (
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(["orders", "kitchen", "menu", "tables"] as Tab[]).map((t) => (
           <Button
             key={t}
             size="sm"
@@ -322,8 +333,22 @@ export function RestaurantPage() {
             columns={orderColumns}
             data={orders}
             loading={loading}
-            emptyMessage="No orders yet."
+            emptyMessage="No orders yet. Create your first ticket."
           />
+        </ContentSection>
+      ) : null}
+
+      {tab === "kitchen" ? (
+        <ContentSection title="Kitchen" description="Tickets sent to the pass. Mark ready then serve on the floor.">
+          <DataTable
+            columns={orderColumns}
+            data={orders.filter((o) => ["sent", "ready", "preparing"].includes(o.status))}
+            loading={loading}
+            emptyMessage="No tickets in the kitchen."
+          />
+          {canKitchen ? null : (
+            <p className="mt-2 text-xs text-muted-foreground">Kitchen actions require restaurant.kitchen or floor access.</p>
+          )}
         </ContentSection>
       ) : null}
 

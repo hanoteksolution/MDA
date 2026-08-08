@@ -1,5 +1,5 @@
 import type { User } from "@/types/models";
-import { MODULE_WORKSPACES, type ModuleWorkspace } from "./moduleWorkspaces";
+import { filterVisibleWorkspaces, type ModuleWorkspace } from "./moduleWorkspaces";
 
 type PermFn = (code: string) => boolean;
 
@@ -13,45 +13,37 @@ export function isElevatedUser(user: User | null | undefined): boolean {
   );
 }
 
-function hasAnyPermission(
-  w: ModuleWorkspace,
-  hasPermission: PermFn,
-  elevated: boolean
-): boolean {
-  if (elevated) return true;
-  if (!w.permission) return true;
-  const codes = Array.isArray(w.permission) ? w.permission : [w.permission];
-  return codes.some((c) => hasPermission(c));
-}
-
-function hasModuleAccess(
-  w: ModuleWorkspace,
-  enabled: string[] | undefined,
-  elevated: boolean
-): boolean {
-  if (!w.modules.length) return true;
-  if (elevated || enabled == null) return true;
-  return w.modules.some((m) => enabled.includes(m));
-}
-
+/** Industry + platform workspaces for the hub (no POS/Sales/Inventory peers). */
 export function hubWorkspacesForUser(
   user: User | null | undefined,
   hasPermission: PermFn = (code) => Boolean(user?.permissions?.includes(code))
 ): ModuleWorkspace[] {
   const elevated = isElevatedUser(user);
-  const enabled = user?.enabled_modules;
-  return MODULE_WORKSPACES.filter(
-    (w) => hasAnyPermission(w, hasPermission, elevated) && hasModuleAccess(w, enabled, elevated)
-  );
+  return filterVisibleWorkspaces(user?.enabled_modules, {
+    elevated,
+    hasPermission,
+    includeOverview: false,
+    includeFinance: elevated || hasPermission("finance.view"),
+  });
 }
 
-/** Super admin or 2+ modules → hub. Single module → that dashboard. */
+export function industryWorkspacesForUser(
+  user: User | null | undefined,
+  hasPermission: PermFn = (code) => Boolean(user?.permissions?.includes(code))
+): ModuleWorkspace[] {
+  return hubWorkspacesForUser(user, hasPermission).filter((w) => w.kind === "industry");
+}
+
+/** Super admin or 2+ industry workspaces → hub. Single vertical → that dashboard. */
 export function postLoginPath(
   user: User | null | undefined,
   hasPermission?: PermFn
 ): string {
-  const cards = hubWorkspacesForUser(user, hasPermission);
-  if (isElevatedUser(user) || cards.length > 1) return "/modules";
+  const perm = hasPermission ?? ((code: string) => Boolean(user?.permissions?.includes(code)));
+  const industries = industryWorkspacesForUser(user, perm);
+  if (isElevatedUser(user) || industries.length > 1) return "/modules";
+  if (industries.length === 1) return industries[0].route;
+  const cards = hubWorkspacesForUser(user, perm);
   if (cards.length === 1) return cards[0].route;
   return "/dashboard";
 }

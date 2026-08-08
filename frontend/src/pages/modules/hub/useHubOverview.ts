@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { dashboardApi, type DashboardTransaction } from "@/services/api/dashboard";
 import { salesApi } from "@/services/api/sales";
 import { financeApi } from "@/services/api/finance";
-import { customersApi, purchasesApi, suppliersApi } from "@/services/api/partners";
+import { customersApi, suppliersApi } from "@/services/api/partners";
 import { inventoryApi } from "@/services/api/catalog";
 import { gymApi } from "@/services/api/gym";
 import { pharmacyApi } from "@/services/api/pharmacy";
@@ -126,6 +126,18 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
 
     const run = async () => {
       const has = (code: string) => codes.has(code);
+      const needsCommerce =
+        has("retail") ||
+        has("restaurant") ||
+        has("cafeteria") ||
+        has("pharmacy") ||
+        has("gym") ||
+        has("hotel") ||
+        has("futsal");
+      const needsInventory =
+        has("retail") || has("restaurant") || has("cafeteria") || has("pharmacy") || has("gym") || has("hotel");
+      const needsPurchases = has("retail") || has("restaurant") || has("cafeteria") || has("pharmacy") || has("hotel");
+      const needsFinance = has("finance") || needsCommerce || has("property") || has("gym");
       const [
         kpisToday,
         kpisMonth,
@@ -134,7 +146,6 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
         customers,
         suppliers,
         inventory,
-        warehouses,
         gym,
         pharmacy,
         restaurant,
@@ -143,7 +154,6 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
         housing,
         office,
         futsal,
-        purchases,
         recentSales,
         notes,
         entitlementsRes,
@@ -151,21 +161,19 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
       ] = await Promise.allSettled([
         safe(() => dashboardApi.kpis("today")),
         safe(() => dashboardApi.kpis("month")),
-        has("sales") || has("pos") ? safe(() => salesApi.summary()) : Promise.resolve(null),
-        has("finance") ? safe(() => financeApi.summary("month")) : Promise.resolve(null),
-        has("sales") || has("pos") ? safe(() => customersApi.summary()) : Promise.resolve(null),
-        has("purchases") ? safe(() => suppliersApi.summary()) : Promise.resolve(null),
-        has("inventory") ? safe(() => inventoryApi.summary()) : Promise.resolve(null),
-        has("inventory") ? safe(() => inventoryApi.warehouses()) : Promise.resolve(null),
+        needsCommerce ? safe(() => salesApi.summary()) : Promise.resolve(null),
+        needsFinance ? safe(() => financeApi.summary("month")) : Promise.resolve(null),
+        needsCommerce ? safe(() => customersApi.summary()) : Promise.resolve(null),
+        needsPurchases ? safe(() => suppliersApi.summary()) : Promise.resolve(null),
+        needsInventory ? safe(() => inventoryApi.summary()) : Promise.resolve(null),
         has("gym") ? safe(() => gymApi.summary()) : Promise.resolve(null),
         has("pharmacy") ? safe(() => pharmacyApi.summary()) : Promise.resolve(null),
-        has("restaurant") ? safe(() => restaurantApi.summary()) : Promise.resolve(null),
+        has("restaurant") || has("cafeteria") ? safe(() => restaurantApi.summary()) : Promise.resolve(null),
         has("hotel") ? safe(() => hotelApi.summary()) : Promise.resolve(null),
         has("property") ? safe(() => propertyApi.summary()) : Promise.resolve(null),
-        has("housing") ? safe(() => housingApi.summary()) : Promise.resolve(null),
-        has("office") ? safe(() => officeApi.summary()) : Promise.resolve(null),
+        has("property") ? safe(() => housingApi.summary()) : Promise.resolve(null),
+        has("property") ? safe(() => officeApi.summary()) : Promise.resolve(null),
         has("futsal") ? safe(() => futsalApi.summary()) : Promise.resolve(null),
-        has("purchases") ? safe(() => purchasesApi.summary()) : Promise.resolve(null),
         safe(() => dashboardApi.recentSales()),
         safe(() => notificationsApi.list({ page_size: 12 })),
         safe(() => platformApi.entitlements()),
@@ -181,8 +189,6 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
       const customerData = settled(customers)?.data;
       const supplierData = settled(suppliers)?.data;
       const invData = settled(inventory)?.data;
-      const warehousePage = settled(warehouses)?.data;
-      const warehouseCount = warehousePage?.count ?? warehousePage?.results?.length ?? 0;
       const gymData = settled(gym)?.data;
       const pharmacyData = settled(pharmacy)?.data;
       const restaurantData = settled(restaurant)?.data;
@@ -191,7 +197,6 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
       const housingData = settled(housing)?.data;
       const officeData = settled(office)?.data;
       const futsalData = settled(futsal)?.data;
-      const purchaseData = settled(purchases)?.data;
       const recent = settled(recentSales)?.data?.results ?? [];
       const notifications = settled(notes)?.data?.results ?? [];
       const ents = settled(entitlementsRes)?.data ?? null;
@@ -273,22 +278,16 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
       const trial = Boolean(isTrial || ents?.trial_or_demo);
       const nextLive: Record<string, WorkspaceLiveState> = {};
 
-      if (has("pos") || has("sales")) {
-        const posMetrics: WorkspaceMetric[] = [
-          { label: "Today's Sales", value: money(salesData?.today_sales ?? today?.revenue) },
-          { label: "Orders", value: num(salesData?.invoice_count) },
-          { label: "Open invoices", value: num(salesData?.open_invoices), alert: (salesData?.open_invoices ?? 0) > 0 },
-        ];
-        nextLive.pos = liveState(posMetrics, salesData?.open_invoices ?? 0, salesData?.open_invoices ? `${salesData.open_invoices} open invoices` : undefined, trial);
-        nextLive.sales = liveState(
+      if (has("retail")) {
+        const low = invData?.low_stock_count ?? 0;
+        nextLive.retail = liveState(
           [
-            { label: "Today", value: money(salesData?.today_sales) },
-            { label: "All time", value: money(salesData?.all_time_sales ?? salesData?.month_sales) },
-            { label: "Open", value: num(salesData?.open_invoices), alert: (salesData?.open_invoices ?? 0) > 0 },
-            { label: "Quotes", value: num(salesData?.quotations_count) },
+            { label: "Revenue", value: money(salesData?.today_sales ?? today?.revenue) },
+            { label: "Orders", value: num(salesData?.invoice_count) },
+            { label: "Low stock", value: num(low), alert: low > 0 },
           ],
-          salesData?.open_invoices ?? 0,
-          salesData?.open_invoices ? `${salesData.open_invoices} unpaid` : undefined,
+          (salesData?.open_invoices ?? 0) + low,
+          low ? `${low} low stock` : salesData?.open_invoices ? `${salesData.open_invoices} open invoices` : undefined,
           trial
         );
       }
@@ -303,35 +302,6 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
           ],
           pendingJournals,
           pendingJournals ? `${pendingJournals} journals awaiting approval` : undefined,
-          trial
-        );
-      }
-
-      if (has("inventory")) {
-        const low = invData?.low_stock_count ?? 0;
-        nextLive.inventory = liveState(
-          [
-            { label: "Products", value: num(invData?.total_items) },
-            { label: "Low stock", value: num(low), alert: low > 0 },
-            { label: "Warehouses", value: num(warehouseCount) },
-            { label: "Value", value: money(invData?.inventory_value) },
-          ],
-          low,
-          low ? `${low} low stock items` : undefined,
-          trial
-        );
-      }
-
-      if (has("purchases")) {
-        const pending = purchaseData?.pending_receipt ?? 0;
-        nextLive.purchases = liveState(
-          [
-            { label: "Open POs", value: num(purchaseData?.open_orders) },
-            { label: "To receive", value: num(pending), alert: pending > 0 },
-            { label: "Month total", value: money(purchaseData?.month_total) },
-          ],
-          pending,
-          pending ? `${pending} awaiting receipt` : undefined,
           trial
         );
       }
@@ -353,21 +323,24 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
         );
       }
 
-      if (has("restaurant")) {
+      if (has("restaurant") || has("cafeteria")) {
         const queue = restaurantData?.orders_open ?? 0;
-        nextLive.restaurant = liveState(
+        const restLive = liveState(
           [
-            { label: "Orders today", value: num(restaurantData?.orders_today) },
-            { label: "Kitchen queue", value: num(queue), alert: queue > 0 },
+            { label: "Revenue", value: money(salesData?.today_sales ?? today?.revenue) },
+            { label: "Orders", value: num(restaurantData?.orders_today ?? salesData?.invoice_count) },
             {
               label: "Tables",
               value: `${num(restaurantData?.tables_occupied)} / ${num(restaurantData?.tables)}`,
+              alert: queue > 0,
             },
           ],
           queue,
           queue ? `${queue} kitchen orders` : undefined,
           trial
         );
+        if (has("restaurant")) nextLive.restaurant = restLive;
+        if (has("cafeteria")) nextLive.cafeteria = restLive;
       }
 
       if (has("hotel")) {
@@ -387,45 +360,20 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
 
       if (has("property")) {
         const maint = propertyData?.maintenance_open ?? 0;
+        const due = (housingData?.charges_overdue ?? 0) + (officeData?.charges_overdue ?? 0);
+        const units =
+          (propertyData?.units ?? 0) || (housingData?.units_occupied ?? 0) + (officeData?.units_occupied ?? 0);
+        const occupied =
+          (propertyData?.units_occupied ?? 0) || (housingData?.units_occupied ?? 0) + (officeData?.units_occupied ?? 0);
         nextLive.property = liveState(
           [
-            { label: "Properties", value: num(propertyData?.properties) },
-            { label: "Units", value: num(propertyData?.units) },
-            { label: "Occupied", value: num(propertyData?.units_occupied) },
+            { label: "Units", value: num(units) },
+            { label: "Occupied", value: num(occupied) },
+            { label: "Rent due", value: num(due), alert: due > 0 },
             { label: "Maintenance", value: num(maint), alert: maint > 0 },
           ],
-          maint,
-          maint ? `${maint} open tickets` : undefined,
-          trial
-        );
-      }
-
-      if (has("housing")) {
-        const due = housingData?.charges_overdue ?? 0;
-        nextLive.housing = liveState(
-          [
-            { label: "Active leases", value: num(housingData?.leases_active) },
-            { label: "Occupied", value: num(housingData?.units_occupied) },
-            { label: "Rent due", value: num((housingData?.charges_pending ?? 0) + due), alert: due > 0 },
-            { label: "Outstanding", value: money(housingData?.rent_pending_amount) },
-          ],
-          due,
-          due ? `${due} rent payments due` : undefined,
-          trial
-        );
-      }
-
-      if (has("office")) {
-        const due = officeData?.charges_overdue ?? 0;
-        nextLive.office = liveState(
-          [
-            { label: "Active leases", value: num(officeData?.leases_active) },
-            { label: "Occupied", value: num(officeData?.units_occupied) },
-            { label: "Rent due", value: num((officeData?.charges_pending ?? 0) + due), alert: due > 0 },
-            { label: "Outstanding", value: money(officeData?.rent_pending_amount) },
-          ],
-          due,
-          due ? `${due} rent payments due` : undefined,
+          maint + due,
+          due ? `${due} rent payments due` : maint ? `${maint} open tickets` : undefined,
           trial
         );
       }
@@ -569,8 +517,9 @@ export function useHubOverview(workspaces: ModuleWorkspace[], isTrial = false): 
       }
 
       const sparkMap: Record<string, number[] | undefined> = {
-        pos: hasTrend(salesSeries) ? salesSeries : undefined,
-        sales: hasTrend(salesSeries) ? salesSeries : undefined,
+        retail: hasTrend(salesSeries) ? salesSeries : undefined,
+        restaurant: hasTrend(salesSeries) ? salesSeries : undefined,
+        cafeteria: hasTrend(salesSeries) ? salesSeries : undefined,
         finance: hasTrend(profitSeries) ? profitSeries : undefined,
         overview: hasTrend(revenueSeries) ? revenueSeries : undefined,
         reports: hasTrend(revenueSeries) ? revenueSeries : undefined,

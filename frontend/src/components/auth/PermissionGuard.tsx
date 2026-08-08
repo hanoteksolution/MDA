@@ -7,8 +7,8 @@ interface PermissionGuardProps {
   children: React.ReactNode;
   /** Single permission or any-of list */
   permission: string | string[];
-  /** TenantModule code; also requires dependencies (usable set from /me). */
-  module?: string;
+  /** TenantModule code(s); also requires dependencies (usable set from /me). */
+  module?: string | string[];
   fallback?: string;
 }
 
@@ -22,7 +22,7 @@ export function PermissionGuard({
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission } = usePermissions();
-  const { hasModule } = useModules();
+  const { hasModule, hasAnyModule } = useModules();
 
   // Refresh / cold start: token exists but /me has not returned yet — do not redirect.
   if (isAuthenticated && (isLoading || !user)) {
@@ -40,8 +40,11 @@ export function PermissionGuard({
   if (!allowed) {
     return <Navigate to={fallback} replace />;
   }
-  if (module && !hasModule(module)) {
-    return <Navigate to={fallback} replace />;
+  if (module) {
+    const moduleOk = Array.isArray(module) ? hasAnyModule(...module) : hasModule(module);
+    if (!moduleOk) {
+      return <Navigate to={fallback} replace />;
+    }
   }
 
   return <>{children}</>;

@@ -11,6 +11,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     --primary: 160 84% 39%;
+    --primary-hover: 160 84% 32%;
     --primary-foreground: 0 0% 100%;
     --secondary: 222 47% 11%;
     --secondary-foreground: 210 40% 98%;
@@ -64,6 +65,15 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  html {
+    transition:
+      --primary 280ms ease,
+      --primary-hover 280ms ease,
+      --accent 280ms ease,
+      --ring 280ms ease,
+      --sidebar-accent 280ms ease;
   }
 }
 
@@ -136,7 +146,7 @@
   }
 
   .pos-category-active {
-    @apply bg-gradient-to-r from-primary via-primary to-emerald-600 text-primary-foreground shadow-[0_4px_14px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25;
+    @apply bg-gradient-to-r from-primary via-primary to-primary-hover text-primary-foreground shadow-[0_4px_14px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25;
   }
 
   .pos-product-card {
