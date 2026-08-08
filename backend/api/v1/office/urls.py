@@ -9,12 +9,14 @@ from api.v1.office.views import (
     LeaseListCreateView,
     LeaseTerminateView,
     OfficeSummaryView,
+    TenantDetailView,
     TenantListCreateView,
 )
 
 urlpatterns = [
     path("summary/", OfficeSummaryView.as_view(), name="office-summary"),
     path("tenants/", TenantListCreateView.as_view(), name="office-tenants"),
+    path("tenants/<uuid:pk>/", TenantDetailView.as_view(), name="office-tenant-detail"),
     path("leases/", LeaseListCreateView.as_view(), name="office-leases"),
     path("leases/<uuid:pk>/", LeaseDetailView.as_view(), name="office-lease-detail"),
     path(

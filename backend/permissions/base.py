@@ -37,3 +37,10 @@ def HasModule(code: str):
 def require_permission(codename: str):
     """Alias for HasPermission — kept for backwards compatibility."""
     return HasPermission(codename)
+
+
+def user_has_any(user, *codes: str) -> bool:
+    """True if the user has any of the given permission codes (elevated admin included)."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return any(user.has_permission(c) for c in codes)

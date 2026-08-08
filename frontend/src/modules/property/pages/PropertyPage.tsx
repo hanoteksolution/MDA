@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Building2, DoorOpen, Plus, Wrench } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -31,6 +32,7 @@ const PROPERTY_TAB_PATHS: Record<string, Tab> = {
 };
 
 export function PropertyPage() {
+  const navigate = useNavigate();
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("property_management.manage");
@@ -139,6 +141,17 @@ export function PropertyPage() {
       cell: (r) => <Badge variant="secondary">{r.status}</Badge>,
     },
     { key: "rent", header: "Rent", cell: (r) => formatCurrency(r.rent_amount) },
+    {
+      key: "actions",
+      header: "",
+      cell: (r) => (
+        <div className="flex justify-end gap-1">
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/property/units/${r.id}`)}>
+            View
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const propColumns: Column<PropertyAsset>[] = [
@@ -289,10 +302,13 @@ export function PropertyPage() {
                   onChange={(e) => setUnitForm((f) => ({ ...f, rent_amount: e.target.value }))}
                 />
               </FormField>
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
                 <Button onClick={addUnit}>
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Add unit
+                  Quick add
+                </Button>
+                <Button variant="secondary" onClick={() => navigate("/property/units/new")}>
+                  Full form
                 </Button>
               </div>
             </FormGrid>

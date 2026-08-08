@@ -11,11 +11,20 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from apps.audit.services import write_audit
 from apps.office_rental.models import OfficeLease, OfficeLeaseCharge, OfficeTenant
 from apps.property_management.models import PropertyUnit
 from apps.property_management.services import PropertyError, PropertyService
 from apps.settings_app.models import Branch
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}
 
 
 class OfficeError(ValueError):
@@ -136,7 +145,7 @@ class OfficeService:
         name = (payload.get("company_name") or payload.get("full_name") or "").strip()
         if not name:
             raise OfficeError("company_name is required.")
-        return OfficeTenant.objects.create(
+        row = OfficeTenant.objects.create(
             tenant_id=payload.get("tenant_id")
             or (branch.tenant_id if branch else None),
             branch=branch,
@@ -147,9 +156,64 @@ class OfficeService:
             phone=(payload.get("phone") or "").strip(),
             email=(payload.get("email") or "").strip(),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="office_rental",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"company_name": row.company_name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_tenant(*, office_tenant: OfficeTenant, data, user=None, request=None) -> OfficeTenant:
+        payload = dict(data or {})
+        if "company_name" in payload or "full_name" in payload:
+            name = (payload.get("company_name") or payload.get("full_name") or "").strip()
+            if not name:
+                raise OfficeError("company_name is required.")
+            office_tenant.company_name = name
+        if "registration_number" in payload:
+            office_tenant.registration_number = (payload.get("registration_number") or "").strip()
+        if "contact_name" in payload:
+            office_tenant.contact_name = (payload.get("contact_name") or "").strip()
+        if "phone" in payload:
+            office_tenant.phone = (payload.get("phone") or "").strip()
+        if "email" in payload:
+            office_tenant.email = (payload.get("email") or "").strip()
+        if "notes" in payload:
+            office_tenant.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            office_tenant.is_active = _as_bool(payload.get("is_active"))
+        if "customer_id" in payload:
+            office_tenant.customer_id = payload.get("customer_id") or None
+        office_tenant.updated_by = user
+        office_tenant.save()
+        write_audit(
+            action="update",
+            module="office_rental",
+            entity=office_tenant,
+            user=user,
+            request=request,
+        )
+        return office_tenant
+
+    @staticmethod
+    def soft_delete_tenant(*, office_tenant: OfficeTenant, user=None, request=None) -> OfficeTenant:
+        office_tenant.soft_delete(user=user)
+        write_audit(
+            action="delete",
+            module="office_rental",
+            entity=office_tenant,
+            user=user,
+            request=request,
+        )
+        return office_tenant
 
     @staticmethod
     def list_leases(*, branch_id=None, status=None, user=None, request=None):

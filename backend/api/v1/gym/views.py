@@ -30,7 +30,7 @@ from apps.gym.services.feature_gate import gym_feature_required
 from apps.platform.services.module_feature_service import ModuleFeatureService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
-from permissions.base import HasPermission
+from permissions.base import HasPermission, user_has_any
 
 
 class GymSummaryView(APIView):
@@ -93,7 +93,7 @@ class MemberListCreateView(APIView):
         )
 
     def post(self, request):
-        if not request.user.has_permission("gym.manage"):
+        if not user_has_any(request.user, "gym.manage", "gym.members.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         try:
             member = MemberService.create(
@@ -119,8 +119,11 @@ class MemberDetailView(APIView):
             return error_response(message="Member not found.", status=status.HTTP_404_NOT_FOUND)
         return success_response(data=MemberService.serialize(member))
 
+    def patch(self, request, pk):
+        return self.put(request, pk)
+
     def put(self, request, pk):
-        if not request.user.has_permission("gym.manage"):
+        if not user_has_any(request.user, "gym.manage", "gym.members.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         try:
             member = MemberService.get(pk=pk, user=request.user, request=request)
@@ -136,13 +139,13 @@ class MemberDetailView(APIView):
         )
 
     def delete(self, request, pk):
-        if not request.user.has_permission("gym.manage"):
+        if not user_has_any(request.user, "gym.manage", "gym.members.delete"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         try:
             member = MemberService.get(pk=pk, user=request.user, request=request)
         except Exception:
             return error_response(message="Member not found.", status=status.HTTP_404_NOT_FOUND)
-        MemberService.soft_delete(member=member, user=request.user)
+        MemberService.soft_delete(member=member, user=request.user, request=request)
         return success_response(message="Member deleted.")
 
 

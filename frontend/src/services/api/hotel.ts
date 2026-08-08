@@ -85,7 +85,7 @@ export interface HotelReservation {
   branch_id: string;
   guest_id: string;
   guest_name: string;
-  guest_phone: string;
+  guest_phone?: string;
   room_type_id: string;
   room_type_name: string;
   room_id: string | null;
@@ -186,6 +186,15 @@ export const hotelApi = {
   createReservation: (data: Record<string, unknown>) =>
     apiRequest<ApiResponse<HotelReservation>>("/hotel/reservations/", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  reservation: (id: string) =>
+    apiRequest<ApiResponse<HotelReservation>>(`/hotel/reservations/${id}/`),
+
+  updateReservation: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<HotelReservation>>(`/hotel/reservations/${id}/`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     }),
 

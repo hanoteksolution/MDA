@@ -3,10 +3,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.finance.services.backfill_service import AccountingBackfillService, BackfillError
+from apps.audit.services import write_audit
 from apps.finance.services.chart_service import ChartError, ChartService
 from apps.finance.services.cutover_service import AccountingCutoverService, CutoverError
 from apps.finance.services.health_service import AccountingHealthService
 from apps.finance.services.journal_service import JournalError, JournalService
+from apps.finance.services.reversal_service import AccountingReversalService, ReversalError
 from apps.finance.services.period_service import PeriodError, PeriodService
 from apps.finance.services.reconciliation_service import (
     ReconciliationError,
@@ -49,9 +51,13 @@ class AccountListView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("finance.view")]
 
     def get(self, request):
+        active_param = request.query_params.get("is_active")
+        is_active = True
+        if active_param in ("0", "false", "all"):
+            is_active = None if active_param == "all" else False
         qs = ChartService.list(
             account_type=request.query_params.get("type"),
-            is_active=True,
+            is_active=is_active,
             user=request.user,
             request=request,
         )
@@ -63,6 +69,73 @@ class AccountListView(APIView):
                 for a in items
             ],
         )
+
+    def post(self, request):
+        if not request.user.has_permission("finance.create"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            account = ChartService.create(
+                data=request.data, user=request.user, request=request
+            )
+        except ChartError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=ChartService.serialize(account, balance=0),
+            message="Account created.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AccountDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("finance.view")]
+
+    def get(self, request, pk):
+        try:
+            account = ChartService.get(pk=pk, user=request.user, request=request)
+        except Exception:
+            return error_response(message="Account not found.", status=status.HTTP_404_NOT_FOUND)
+        return success_response(
+            data=ChartService.serialize(
+                account, balance=ChartService.account_balance(account=account)
+            )
+        )
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not request.user.has_permission("finance.create"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            account = ChartService.get(pk=pk, user=request.user, request=request)
+            account = ChartService.update(
+                account=account, data=request.data, user=request.user, request=request
+            )
+        except ChartError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return error_response(message="Account not found.", status=status.HTTP_404_NOT_FOUND)
+        return success_response(
+            data=ChartService.serialize(
+                account, balance=ChartService.account_balance(account=account)
+            ),
+            message="Account updated.",
+        )
+
+    def delete(self, request, pk):
+        if not request.user.has_permission("finance.create"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            account = ChartService.get(pk=pk, user=request.user, request=request)
+            ChartService.deactivate(account=account, user=request.user, request=request)
+        except ChartError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return error_response(message="Account not found.", status=status.HTTP_404_NOT_FOUND)
+        return success_response(message="Account deactivated.")
 
 
 class CostCenterListCreateView(APIView):
@@ -191,6 +264,14 @@ class JournalListCreateView(APIView):
             if entry.status == "posted"
             else "Journal draft saved. Awaiting approval."
         )
+        write_audit(
+            action="create",
+            module="finance",
+            entity=entry,
+            user=request.user,
+            request=request,
+            new_values={"entry_number": entry.entry_number, "status": entry.status},
+        )
         return success_response(
             data=JournalService.serialize(entry),
             message=msg,
@@ -220,6 +301,14 @@ class JournalPostView(APIView):
                 else status.HTTP_400_BAD_REQUEST
             )
             return error_response(message=str(exc), status=http)
+        write_audit(
+            action="post",
+            module="finance",
+            entity=entry,
+            user=request.user,
+            request=request,
+            new_values={"entry_number": entry.entry_number},
+        )
         return success_response(
             data=JournalService.serialize(entry),
             message="Journal entry approved and posted.",
@@ -245,7 +334,57 @@ class JournalDiscardView(APIView):
                 else status.HTTP_400_BAD_REQUEST
             )
             return error_response(message=str(exc), status=http)
+        write_audit(
+            action="discard",
+            module="finance",
+            entity=entry,
+            user=request.user,
+            request=request,
+        )
         return success_response(message="Draft journal discarded.")
+
+
+class JournalReverseView(APIView):
+    """Post an offsetting reversal journal. Never mutates the original posted entry."""
+
+    permission_classes = [IsAuthenticated, HasPermission("finance.approve")]
+
+    def post(self, request, entry_id):
+        try:
+            entry = JournalService.get(
+                entry_id=entry_id, user=request.user, request=request
+            )
+            reversal = AccountingReversalService.reverse_entry(
+                entry=entry,
+                user=request.user,
+                reason=(request.data or {}).get("reason") or "",
+            )
+        except JournalError as exc:
+            code = getattr(exc, "code", "")
+            http = (
+                status.HTTP_404_NOT_FOUND
+                if code == "JOURNAL_NOT_FOUND"
+                else status.HTTP_400_BAD_REQUEST
+            )
+            return error_response(message=str(exc), status=http)
+        except ReversalError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        write_audit(
+            action="reverse",
+            module="finance",
+            entity=entry,
+            user=request.user,
+            request=request,
+            new_values={
+                "reversal_id": str(reversal.id),
+                "reversal_number": reversal.entry_number,
+            },
+        )
+        return success_response(
+            data=JournalService.serialize(reversal),
+            message="Journal reversed.",
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class TrialBalanceReportView(APIView):

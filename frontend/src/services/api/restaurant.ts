@@ -128,6 +128,39 @@ export const restaurantApi = {
       body: JSON.stringify(data),
     }),
 
+  updateCategory: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<MenuCategory>>(`/restaurant/categories/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteCategory: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/categories/${id}/`, {
+      method: "DELETE",
+    }),
+
+  updateItem: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<MenuItem>>(`/restaurant/items/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteItem: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/items/${id}/`, {
+      method: "DELETE",
+    }),
+
+  updateTable: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<DiningTable>>(`/restaurant/tables/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteTable: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/tables/${id}/`, {
+      method: "DELETE",
+    }),
+
   orders: (page = 1, branchId?: string) =>
     apiRequest<ApiListResponse<RestaurantOrder>>(
       `/restaurant/orders/${qs({ page, branch_id: branchId })}`

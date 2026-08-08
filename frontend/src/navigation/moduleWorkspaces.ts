@@ -717,7 +717,7 @@ export const HUB_QUICK_ACTIONS: HubQuickAction[] = [
   {
     id: "new-member",
     label: "New Member",
-    route: "/gym",
+    route: "/gym/members/new",
     icon: Dumbbell,
     permission: "gym.view",
     modules: ["gym"],
@@ -726,7 +726,7 @@ export const HUB_QUICK_ACTIONS: HubQuickAction[] = [
   {
     id: "new-reservation",
     label: "New Reservation",
-    route: "/hotel",
+    route: "/hotel/reservations/new",
     icon: CalendarPlus,
     permission: "hotel.view",
     modules: ["hotel"],

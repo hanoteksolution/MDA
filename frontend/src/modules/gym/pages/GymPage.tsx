@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
   CreditCard,
@@ -17,7 +18,6 @@ import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
 import { ContentSection } from "@/components/layout/ContentSection";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { FormField, FormGrid } from "@/components/forms/FormField";
-import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,8 +54,6 @@ import {
   YAxis,
 } from "recharts";
 import { chartColors } from "@/design-system";
-import { customersApi } from "@/services/api/partners";
-import { settingsApi } from "@/services/api/admin";
 import { appDialog } from "@/components/feedback/AppDialog";
 import { formatCurrency } from "@/utils/cn";
 
@@ -77,25 +75,6 @@ const GYM_TAB_PATHS: Record<string, Tab> = {
   classes: "classes",
   workouts: "workouts",
 };
-type MemberMode = "list" | "create" | "edit";
-
-const emptyMemberForm = {
-  membership_number: "",
-  full_name: "",
-  email: "",
-  phone: "",
-  date_of_birth: "",
-  gender: "",
-  address: "",
-  emergency_contact_name: "",
-  emergency_contact_phone: "",
-  status: "active",
-  joined_at: "",
-  notes: "",
-  customer_id: "",
-  branch_id: "",
-};
-
 const emptyPlanForm = {
   code: "",
   name: "",
@@ -109,18 +88,19 @@ const emptyPlanForm = {
 };
 
 export function GymPage() {
-  const { hasPermission } = usePermissions();
+  const navigate = useNavigate();
+  const { hasPermission, hasAnyPermission } = usePermissions();
   const { hasFeature } = useModules();
   const canManage = hasPermission("gym.manage");
+  const canCreateMembers = hasAnyPermission("gym.manage", "gym.members.create");
+  const canUpdateMembers = hasAnyPermission("gym.manage", "gym.members.update");
+  const canDeleteMembers = hasAnyPermission("gym.manage", "gym.members.delete");
   const canCheckIn = hasPermission("gym.attendance.checkin") || canManage;
 
   const [tab, setTab] = useWorkspaceTab<Tab>("/gym", GYM_TAB_PATHS, "members");
   const [summary, setSummary] = useState<GymSummary | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [mode, setMode] = useState<MemberMode>("list");
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyMemberForm);
   const [planForm, setPlanForm] = useState(emptyPlanForm);
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [sellForm, setSellForm] = useState({
@@ -190,8 +170,6 @@ export function GymPage() {
   });
   const [showExerciseForm, setShowExerciseForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [subs, setSubs] = useState<MembershipSubscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
@@ -315,17 +293,6 @@ export function GymPage() {
   }, [members, reloadSummary]);
 
   useEffect(() => {
-    customersApi
-      .list({ page_size: 100 })
-      .then((res) => setCustomers(res.data.results.map((c) => ({ id: c.id, name: c.full_name }))))
-      .catch(() => setCustomers([]));
-    settingsApi
-      .branches()
-      .then((res) => setBranches(res.data.map((b) => ({ id: b.id, name: b.name }))))
-      .catch(() => setBranches([]));
-  }, []);
-
-  useEffect(() => {
     const allowed: Tab[] = [];
     if (featureFlags.members) allowed.push("members", "plans", "subscriptions");
     if (featureFlags.attendance) allowed.push("attendance");
@@ -387,70 +354,13 @@ export function GymPage() {
     }
   };
   const openCreate = () => {
-    setForm(emptyMemberForm);
-    setEditId(null);
-    setMode("create");
-  };
-
-  const openEdit = async (id: string) => {
-    const res = await gymApi.getMember(id);
-    const m = res.data;
-    setForm({
-      membership_number: m.membership_number,
-      full_name: m.full_name,
-      email: m.email || "",
-      phone: m.phone || "",
-      date_of_birth: m.date_of_birth || "",
-      gender: m.gender || "",
-      address: m.address || "",
-      emergency_contact_name: m.emergency_contact_name || "",
-      emergency_contact_phone: m.emergency_contact_phone || "",
-      status: m.status,
-      joined_at: m.joined_at || "",
-      notes: m.notes || "",
-      customer_id: m.customer_id || "",
-      branch_id: m.branch_id || "",
-    });
-    setEditId(id);
-    setMode("edit");
+    navigate("/gym/members/new");
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this member?")) return;
     await gymApi.deleteMember(id);
     reload();
-  };
-
-  const handleSubmitMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        membership_number: form.membership_number.trim() || undefined,
-        full_name: form.full_name.trim(),
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        date_of_birth: form.date_of_birth || null,
-        gender: form.gender || undefined,
-        address: form.address || undefined,
-        emergency_contact_name: form.emergency_contact_name || undefined,
-        emergency_contact_phone: form.emergency_contact_phone || undefined,
-        status: form.status,
-        joined_at: form.joined_at || null,
-        notes: form.notes || undefined,
-        customer_id: form.customer_id || null,
-        branch_id: form.branch_id || null,
-      };
-      if (mode === "edit" && editId) await gymApi.updateMember(editId, payload);
-      else await gymApi.createMember(payload);
-      setMode("list");
-      reload();
-      reloadSummary();
-    } catch (err) {
-      await appDialog.alert(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleSavePlan = async (e: React.FormEvent) => {
@@ -557,17 +467,23 @@ export function GymPage() {
     {
       key: "actions",
       header: "",
-      cell: (r) =>
-        canManage ? (
+      cell: (r) => (
           <div className="flex justify-end gap-1">
-            <Button variant="ghost" size="sm" onClick={() => void openEdit(r.id)}>
-              <Pencil className="h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/gym/members/${r.id}`)}>
+              View
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => void handleDelete(r.id)}>
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+            {canUpdateMembers ? (
+              <Button variant="ghost" size="sm" onClick={() => navigate(`/gym/members/${r.id}/edit`)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {canDeleteMembers ? (
+              <Button variant="ghost" size="sm" onClick={() => void handleDelete(r.id)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            ) : null}
           </div>
-        ) : null,
+        ),
     },
   ];
 
@@ -715,117 +631,6 @@ export function GymPage() {
     },
   ];
 
-  if (mode !== "list") {
-    return (
-      <PageLayout
-        title={mode === "edit" ? "Edit member" : "Add member"}
-        description="Gym member profile. Membership number is optional — auto-assigned when blank."
-        breadcrumbs={["Home", "Gym", mode === "edit" ? "Edit" : "New"]}
-        backTo="/gym"
-        backLabel="Back to gym"
-      >
-        <form onSubmit={handleSubmitMember}>
-          <FormPageLayout
-            main={
-              <FormGrid>
-                <FormField label="Full name" required>
-                  <Input
-                    required
-                    value={form.full_name}
-                    onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                    className="h-11 rounded-xl"
-                  />
-                </FormField>
-                <FormField label="Membership #" hint="Auto-generated if empty">
-                  <Input
-                    value={form.membership_number}
-                    onChange={(e) => setForm({ ...form, membership_number: e.target.value })}
-                    className="h-11 rounded-xl font-mono"
-                  />
-                </FormField>
-                <FormField label="Phone">
-                  <Input
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="h-11 rounded-xl"
-                  />
-                </FormField>
-                <FormField label="Email">
-                  <Input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="h-11 rounded-xl"
-                  />
-                </FormField>
-                <FormField label="Status">
-                  <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                    <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-                <FormField label="Branch">
-                  <Select
-                    value={form.branch_id || "none"}
-                    onValueChange={(v) => setForm({ ...form, branch_id: v === "none" ? "" : v })}
-                  >
-                    <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormField>
-                <FormField label="Linked customer">
-                  <Select
-                    value={form.customer_id || "none"}
-                    onValueChange={(v) => setForm({ ...form, customer_id: v === "none" ? "" : v })}
-                  >
-                    <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              </FormGrid>
-            }
-            actions={
-              <FormActions>
-                <div className="flex gap-3">
-                  <Button type="submit" loading={saving}>
-                    {mode === "edit" ? "Save changes" : "Create member"}
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => setMode("list")}>
-                    Cancel
-                  </Button>
-                </div>
-              </FormActions>
-            }
-          />
-        </form>
-      </PageLayout>
-    );
-  }
-
   const memberSummary = summary?.members;
   const subSummary = summary?.subscriptions;
   const attSummary = summary?.attendance;
@@ -836,7 +641,7 @@ export function GymPage() {
       description="Members, plans, subscriptions, and check-in."
       breadcrumbs={["Home", "Gym"]}
       actions={
-        canManage && tab === "members" && featureFlags.members ? (
+        canCreateMembers && tab === "members" && featureFlags.members ? (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Add member

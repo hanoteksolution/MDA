@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q, Sum
 
+from apps.audit.services import write_audit
 from apps.finance.models import Account, JournalEntry, JournalLine
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
 
@@ -195,7 +196,139 @@ class ChartService:
             rows.append(ChartService.serialize(account))
         return rows
 
+    @staticmethod
+    def get(*, pk, user=None, request=None) -> Account:
+        qs = Account.active_objects()
+        qs = apply_tenant_scope(qs, user=user, request=request)
+        return qs.get(pk=pk)
+
+    @staticmethod
+    @transaction.atomic
+    def create(*, data, user=None, request=None) -> Account:
+        payload = stamp_tenant_id(dict(data or {}), user=user, request=request)
+        code = (payload.get("code") or "").strip()
+        name = (payload.get("name") or "").strip()
+        account_type = payload.get("type") or payload.get("account_type")
+        if not code or not name:
+            raise ChartError("code and name are required.")
+        if account_type not in dict(Account.TYPE_CHOICES):
+            raise ChartError(f"Invalid account type: {account_type}")
+        tenant_id = payload.get("tenant_id") or _resolve_tenant_id(user=user, request=request)
+        if not tenant_id:
+            raise ChartError("Tenant could not be resolved.")
+        if Account.active_objects().filter(tenant_id=tenant_id, code=code).exists():
+            raise ChartError(f"Account code '{code}' already exists.")
+        parent = None
+        if payload.get("parent_id"):
+            parent = ChartService.get(pk=payload["parent_id"], user=user, request=request)
+        account = Account.objects.create(
+            tenant_id=tenant_id,
+            code=code,
+            name=name,
+            account_type=account_type,
+            parent=parent,
+            is_system=False,
+            is_active=_as_bool(payload.get("is_active"), True),
+            is_control_account=False,
+            allow_manual_posting=_as_bool(payload.get("allow_manual_posting"), True),
+            description=(payload.get("description") or "").strip(),
+            created_by=user,
+        )
+        write_audit(
+            action="create",
+            module="finance",
+            entity=account,
+            user=user,
+            request=request,
+            new_values={"code": account.code, "name": account.name},
+        )
+        return account
+
+    @staticmethod
+    @transaction.atomic
+    def update(*, account: Account, data, user=None, request=None) -> Account:
+        payload = dict(data or {})
+        if "code" in payload:
+            code = (payload.get("code") or "").strip()
+            if not code:
+                raise ChartError("code is required.")
+            if account.is_system and code != account.code:
+                raise ChartError("System account code cannot be changed.")
+            clash = (
+                Account.active_objects()
+                .filter(tenant_id=account.tenant_id, code=code)
+                .exclude(pk=account.pk)
+                .exists()
+            )
+            if clash:
+                raise ChartError(f"Account code '{code}' already exists.")
+            account.code = code
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise ChartError("name is required.")
+            account.name = name
+        if "type" in payload or "account_type" in payload:
+            account_type = payload.get("type") or payload.get("account_type")
+            if account_type not in dict(Account.TYPE_CHOICES):
+                raise ChartError(f"Invalid account type: {account_type}")
+            if account.is_system and account_type != account.account_type:
+                raise ChartError("System account type cannot be changed.")
+            account.account_type = account_type
+        if "parent_id" in payload:
+            account.parent = (
+                ChartService.get(pk=payload["parent_id"], user=user, request=request)
+                if payload.get("parent_id")
+                else None
+            )
+        if "is_active" in payload:
+            account.is_active = _as_bool(payload.get("is_active"))
+        if "allow_manual_posting" in payload:
+            if account.is_control_account and _as_bool(payload.get("allow_manual_posting")):
+                raise ChartError("Control accounts cannot allow manual posting.")
+            account.allow_manual_posting = _as_bool(payload.get("allow_manual_posting"))
+        if "description" in payload:
+            account.description = (payload.get("description") or "").strip()
+        account.updated_by = user
+        account.save()
+        write_audit(action="update", module="finance", entity=account, user=user, request=request)
+        return account
+
+    @staticmethod
+    @transaction.atomic
+    def deactivate(*, account: Account, user=None, request=None) -> Account:
+        if account.is_system:
+            raise ChartError("System accounts cannot be deleted.")
+        has_posted = JournalLine.active_objects().filter(
+            account=account,
+            entry__status=JournalEntry.STATUS_POSTED,
+            entry__deleted_at__isnull=True,
+        ).exists()
+        if has_posted:
+            account.is_active = False
+            account.updated_by = user
+            account.save(update_fields=["is_active", "updated_by", "updated_at"])
+            write_audit(
+                action="deactivate",
+                module="finance",
+                entity=account,
+                user=user,
+                request=request,
+            )
+            return account
+        account.soft_delete(user=user)
+        write_audit(action="delete", module="finance", entity=account, user=user, request=request)
+        return account
+
 
 def _resolve_tenant_id(*, user=None, request=None):
     payload = stamp_tenant_id({}, user=user, request=request)
     return payload.get("tenant_id")
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}

@@ -10,11 +10,20 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from apps.audit.services import write_audit
 from apps.housing_rental.models import HousingTenant, Lease, LeaseCharge
 from apps.property_management.models import PropertyUnit
 from apps.property_management.services import PropertyError, PropertyService
 from apps.settings_app.models import Branch
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}
 
 
 class HousingError(ValueError):
@@ -130,7 +139,7 @@ class HousingService:
         if not name:
             raise HousingError("Tenant full_name is required.")
         customer_id = payload.get("customer_id") or None
-        return HousingTenant.objects.create(
+        row = HousingTenant.objects.create(
             tenant_id=payload.get("tenant_id")
             or (branch.tenant_id if branch else None),
             branch=branch,
@@ -140,9 +149,62 @@ class HousingService:
             email=(payload.get("email") or "").strip(),
             id_number=(payload.get("id_number") or "").strip(),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="housing_rental",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"full_name": row.full_name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_tenant(*, housing_tenant: HousingTenant, data, user=None, request=None) -> HousingTenant:
+        payload = dict(data or {})
+        if "full_name" in payload:
+            name = (payload.get("full_name") or "").strip()
+            if not name:
+                raise HousingError("Tenant full_name is required.")
+            housing_tenant.full_name = name
+        if "phone" in payload:
+            housing_tenant.phone = (payload.get("phone") or "").strip()
+        if "email" in payload:
+            housing_tenant.email = (payload.get("email") or "").strip()
+        if "id_number" in payload:
+            housing_tenant.id_number = (payload.get("id_number") or "").strip()
+        if "notes" in payload:
+            housing_tenant.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            housing_tenant.is_active = _as_bool(payload.get("is_active"))
+        if "customer_id" in payload:
+            housing_tenant.customer_id = payload.get("customer_id") or None
+        housing_tenant.updated_by = user
+        housing_tenant.save()
+        write_audit(
+            action="update",
+            module="housing_rental",
+            entity=housing_tenant,
+            user=user,
+            request=request,
+        )
+        return housing_tenant
+
+    @staticmethod
+    def soft_delete_tenant(*, housing_tenant: HousingTenant, user=None, request=None) -> HousingTenant:
+        housing_tenant.soft_delete(user=user)
+        write_audit(
+            action="delete",
+            module="housing_rental",
+            entity=housing_tenant,
+            user=user,
+            request=request,
+        )
+        return housing_tenant
 
     # --- Leases ---
     @staticmethod

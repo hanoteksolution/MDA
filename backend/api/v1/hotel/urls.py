@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api.v1.hotel.views import (
+    GuestDetailView,
     GuestListCreateView,
     HotelSummaryView,
     OpenFoliosView,
@@ -10,8 +11,10 @@ from api.v1.hotel.views import (
     ReservationDetailView,
     ReservationFolioView,
     ReservationListCreateView,
+    RoomDetailView,
     RoomListCreateView,
     RoomStatusView,
+    RoomTypeDetailView,
     RoomTypeListCreateView,
 )
 
@@ -19,9 +22,12 @@ urlpatterns = [
     path("summary/", HotelSummaryView.as_view(), name="hotel-summary"),
     path("folios/open/", OpenFoliosView.as_view(), name="hotel-folios-open"),
     path("room-types/", RoomTypeListCreateView.as_view(), name="hotel-room-types"),
+    path("room-types/<uuid:pk>/", RoomTypeDetailView.as_view(), name="hotel-room-type-detail"),
     path("rooms/", RoomListCreateView.as_view(), name="hotel-rooms"),
+    path("rooms/<uuid:pk>/", RoomDetailView.as_view(), name="hotel-room-detail"),
     path("rooms/<uuid:pk>/status/", RoomStatusView.as_view(), name="hotel-room-status"),
     path("guests/", GuestListCreateView.as_view(), name="hotel-guests"),
+    path("guests/<uuid:pk>/", GuestDetailView.as_view(), name="hotel-guest-detail"),
     path("reservations/", ReservationListCreateView.as_view(), name="hotel-reservations"),
     path(
         "reservations/<uuid:pk>/",

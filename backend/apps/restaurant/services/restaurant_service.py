@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
+from apps.audit.services import write_audit
 from apps.restaurant.models import (
     DiningTable,
     MenuCategory,
@@ -16,7 +17,15 @@ from apps.restaurant.models import (
     RestaurantOrder,
 )
 from apps.settings_app.models import Branch
-from core.tenancy import apply_tenant_scope, resolve_acting_tenant, stamp_tenant_id
+from core.tenancy import apply_tenant_scope, stamp_tenant_id
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}
 
 
 class RestaurantError(ValueError):
@@ -109,15 +118,50 @@ class RestaurantService:
         name = (payload.get("name") or "").strip()
         if not name:
             raise RestaurantError("Category name is required.")
-        return MenuCategory.objects.create(
+        row = MenuCategory.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             name=name,
             sort_order=int(payload.get("sort_order") or 100),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             notes=(payload.get("notes") or "").strip(),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="restaurant",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"name": row.name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_category(*, category: MenuCategory, data, user=None, request=None) -> MenuCategory:
+        payload = dict(data or {})
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise RestaurantError("Category name is required.")
+            category.name = name
+        if "sort_order" in payload:
+            category.sort_order = int(payload.get("sort_order") or 100)
+        if "is_active" in payload:
+            category.is_active = _as_bool(payload.get("is_active"))
+        if "notes" in payload:
+            category.notes = (payload.get("notes") or "").strip()
+        category.updated_by = user
+        category.save()
+        write_audit(action="update", module="restaurant", entity=category, user=user, request=request)
+        return category
+
+    @staticmethod
+    def soft_delete_category(*, category: MenuCategory, user=None, request=None) -> MenuCategory:
+        category.soft_delete(user=user)
+        write_audit(action="delete", module="restaurant", entity=category, user=user, request=request)
+        return category
 
     # --- Items ---
     @staticmethod
@@ -147,7 +191,7 @@ class RestaurantService:
         name = (payload.get("name") or "").strip()
         if not name:
             raise RestaurantError("Item name is required.")
-        return MenuItem.objects.create(
+        row = MenuItem.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id or category.tenant_id,
             branch=branch,
             category=category,
@@ -156,10 +200,55 @@ class RestaurantService:
             sku=(payload.get("sku") or "").strip(),
             description=(payload.get("description") or "").strip(),
             unit_price=Decimal(str(payload.get("unit_price") or 0)),
-            is_available=bool(payload.get("is_available", True)),
+            is_available=_as_bool(payload.get("is_available"), True),
             sort_order=int(payload.get("sort_order") or 100),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="restaurant",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"name": row.name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_item(*, item: MenuItem, data, user=None, request=None) -> MenuItem:
+        payload = dict(data or {})
+        if payload.get("category_id"):
+            item.category = RestaurantService.get_category(
+                pk=payload["category_id"], user=user, request=request
+            )
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise RestaurantError("Item name is required.")
+            item.name = name
+        if "sku" in payload:
+            item.sku = (payload.get("sku") or "").strip()
+        if "description" in payload:
+            item.description = (payload.get("description") or "").strip()
+        if "unit_price" in payload:
+            item.unit_price = Decimal(str(payload.get("unit_price") or 0))
+        if "is_available" in payload:
+            item.is_available = _as_bool(payload.get("is_available"))
+        if "sort_order" in payload:
+            item.sort_order = int(payload.get("sort_order") or 100)
+        if "product_id" in payload:
+            item.product_id = payload.get("product_id") or None
+        item.updated_by = user
+        item.save()
+        write_audit(action="update", module="restaurant", entity=item, user=user, request=request)
+        return item
+
+    @staticmethod
+    def soft_delete_item(*, item: MenuItem, user=None, request=None) -> MenuItem:
+        item.soft_delete(user=user)
+        write_audit(action="delete", module="restaurant", entity=item, user=user, request=request)
+        return item
 
     # --- Tables ---
     @staticmethod
@@ -184,17 +273,58 @@ class RestaurantService:
         code = (payload.get("code") or "").strip()
         if not code:
             raise RestaurantError("Table code is required.")
-        return DiningTable.objects.create(
+        row = DiningTable.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             code=code,
             label=(payload.get("label") or code).strip(),
             capacity=int(payload.get("capacity") or 4),
             status=payload.get("status") or DiningTable.STATUS_FREE,
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             notes=(payload.get("notes") or "").strip(),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="restaurant",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"code": row.code},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_table(*, table: DiningTable, data, user=None, request=None) -> DiningTable:
+        payload = dict(data or {})
+        if "code" in payload:
+            code = (payload.get("code") or "").strip()
+            if not code:
+                raise RestaurantError("Table code is required.")
+            table.code = code
+        if "label" in payload:
+            table.label = (payload.get("label") or table.code).strip()
+        if "capacity" in payload:
+            table.capacity = int(payload.get("capacity") or 4)
+        if "status" in payload and payload.get("status"):
+            if payload["status"] not in dict(DiningTable.STATUS_CHOICES):
+                raise RestaurantError(f"Invalid table status: {payload['status']}")
+            table.status = payload["status"]
+        if "is_active" in payload:
+            table.is_active = _as_bool(payload.get("is_active"))
+        if "notes" in payload:
+            table.notes = (payload.get("notes") or "").strip()
+        table.updated_by = user
+        table.save()
+        write_audit(action="update", module="restaurant", entity=table, user=user, request=request)
+        return table
+
+    @staticmethod
+    def soft_delete_table(*, table: DiningTable, user=None, request=None) -> DiningTable:
+        table.soft_delete(user=user)
+        write_audit(action="delete", module="restaurant", entity=table, user=user, request=request)
+        return table
 
     @staticmethod
     def set_table_status(*, table: DiningTable, status: str, user=None) -> DiningTable:

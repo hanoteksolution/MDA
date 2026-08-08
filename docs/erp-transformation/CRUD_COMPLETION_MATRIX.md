@@ -29,20 +29,20 @@ Dedicated Detail pages are almost universally **—** (except platform tenant/sh
 
 | Entity | List | Create | View | Update | Delete | Workflow | Perms | Tests |
 |---|---|---|---|---|---|---|---|---|
-| Chart of Accounts | Y | API — / FE — | P | — | deactivate — | — | view | Y seed |
-| Journal | Y | **FE this phase** (API Y) | expand | draft only | discard draft | post / self-approve | view/create/approve | Y |
+| Chart of Accounts | Y | **Y** | P | **Y** | deactivate **Y** | — | view/create | Y |
+| Journal | Y | **FE this phase** (API Y) | expand | draft only | discard draft | post / self-approve / **reverse** | view/create/approve | Y |
 | Period | Y | auto | Y | — | — | close/lock/reopen | Y | Y |
 | Cost center / BU | API L+C | API C | — | — | — | — | P | Y |
 | Receipt voucher | — | API POST | — | — | — | — | Y | Y |
 | Supplier payment | — | API POST | — | — | — | — | Y | Y |
 | Bank rec | Y | I | Y | match | — | complete | Y | Y |
-| Reverse posted JE | — | service only | — | — | **never** | **API missing** | — | Y service |
+| Reverse posted JE | Y list via source | **POST /journal/:id/reverse/** | Y | **never mutate original** | **never** | reverse | finance.approve | Y |
 
 ## Gym
 
 | Entity | List | Create | View | Update | Delete | Archive | Perms | Tests |
 |---|---|---|---|---|---|---|---|---|
-| Member | Y | I | P | I | I | — | gym.manage | Y |
+| Member | Y | **Y `/new`** | **Y `:id`** | **Y** | Y | — | gym.members.* / gym.manage | Y |
 | Plan | Y | I | — | I | I | — | gym.manage | Y |
 | Subscription | Y | I sell | — | — | — | freeze/cancel/pay | gym.manage | Y |
 | Attendance | Y | check-in W | — | check-out W | — | — | checkin | Y |
@@ -63,9 +63,9 @@ Dedicated Detail pages are almost universally **—** (except platform tenant/sh
 
 | Entity | List | Create | View | Update | Delete | Archive | Perms | Tests |
 |---|---|---|---|---|---|---|---|---|
-| Menu category | Y | I | — | **API —** | **API —** | — | restaurant.manage | P |
-| Menu item | Y | I | — | **API —** | **API —** | — | restaurant.manage | P |
-| Table | Y | I | — | status W / **U/D API —** | **API —** | — | floor/manage | P |
+| Menu category | Y | I | Y | **Y** | **Y** | — | restaurant.menu.* / manage | Y |
+| Menu item | Y | I | Y | **Y** | **Y** | — | restaurant.menu.* / manage | Y |
+| Table | Y | I | Y | **Y** + status W | **Y** | — | restaurant.tables.* / manage | Y |
 | Order | Y | I | Y | status W | — | — | floor | P |
 | Kitchen | **tab this phase** | N/A | queue | status | — | — | kitchen | — |
 
@@ -73,18 +73,18 @@ Dedicated Detail pages are almost universally **—** (except platform tenant/sh
 
 | Entity | List | Create | View | Update | Delete | Archive | Perms | Tests |
 |---|---|---|---|---|---|---|---|---|
-| Room type | Y | I | — | **API —** | **API —** | — | manage | P |
-| Room | Y | I | — | status W | **API —** | — | housekeeping/manage | P |
-| Guest | **no page** | on reservation | — | **API —** | **API —** | — | manage | P |
-| Reservation | Y | I | folio | check-in/out/cancel W | — | cancel | front_desk | Y |
+| Room type | Y | I | Y | **Y** | **Y** | — | hotel.rooms.* / manage | Y |
+| Room | Y | I | Y | **Y** + status W | **Y** | — | hotel.rooms.* / housekeeping | Y |
+| Guest | list | on reservation | Y | **Y** | **Y** | — | hotel.guests.* / front_desk | Y |
+| Reservation | Y | I + **`/new`** | **Y `:id` folio** | **Y booked** + check-in/out/cancel W | — | cancel | hotel.reservations.* / front_desk | Y |
 | Folio | open list | charge W | Y | settle W | — | — | front_desk | Y |
 
 ## Property / Housing / Office
 
 | Entity | List | Create | View | Update | Delete | Archive | Perms | Tests |
 |---|---|---|---|---|---|---|---|---|
-| Owner / Asset / Building / Unit / Maint / Doc | Y | I | — | status W / **U/D API —** | **API —** | — | *.manage | P |
-| Housing/Office tenant | Y | I | — | **API —** | **API —** | — | *.manage | P |
+| Owner / Asset / Building / Unit / Maint / Doc | Y | I + **unit `/new` `:id`** | **unit Y** | **Y** + status W | **Y** | — | property_management.masters.* / manage | Y |
+| Housing/Office tenant | Y | I | Y | **Y** | **Y** | — | *.tenants.* / manage | Y |
 | Lease | Y | I | Y | activate/terminate W | — | terminate | *.manage | Y |
 | Lease charge | Y | I | — | invoice/paid W | — | — | *.manage | Y |
 
@@ -109,8 +109,8 @@ Dedicated Detail pages are almost universally **—** (except platform tenant/sh
 1. URL → tab sync (workspace IA actually works) — **this phase**
 2. FE Create where API already exists: Warehouse, Journal, Pharmacy batch — **this phase**
 3. Restaurant kitchen tab + hotel housekeeping tab — **this phase**
-4. Vertical master-data PATCH/DELETE APIs (menu, table, room, guest, property, lease tenant)
-5. Dedicated `/new` + `/edit` + `/ :id` Detail shells for gym members, hotel reservations, property units
-6. CoA write API + deactivate; journal reverse API
-7. Fine-grained permissions + audit write on all mutations
-8. FE automated tests + E2E CRUD flows
+4. Vertical master-data PATCH/DELETE APIs — **this phase**
+5. Dedicated `/new` + `/edit` + `/:id` for gym members, hotel reservations, property units — **this phase**
+6. CoA write API + deactivate; journal reverse API — **this phase**
+7. Fine-grained permissions + audit write on mutations — **this phase**
+8. FE Vitest (postLogin / workspace tab / hub filter) — **this phase**; Playwright E2E later

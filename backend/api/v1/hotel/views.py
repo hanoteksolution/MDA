@@ -14,7 +14,7 @@ from apps.hotel.serializers import (
 from apps.hotel.services import HotelError, HotelService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
-from permissions.base import HasPermission
+from permissions.base import HasPermission, user_has_any
 
 
 def _branch_id(request):
@@ -27,6 +27,14 @@ def _not_found(entity="Record"):
 
 def _can_manage(user):
     return user.has_permission("hotel.manage") or user.has_permission("hotel.front_desk")
+
+
+def _can_rooms_write(user, *extra):
+    return user_has_any(user, "hotel.manage", *extra)
+
+
+def _can_guest_write(user, *extra):
+    return _can_manage(user) or user_has_any(user, *extra)
 
 
 class HotelSummaryView(APIView):
@@ -51,7 +59,7 @@ class RoomTypeListCreateView(APIView):
         )
 
     def post(self, request):
-        if not request.user.has_permission("hotel.manage"):
+        if not _can_rooms_write(request.user, "hotel.rooms.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = dict(request.data)
         data.setdefault("branch_id", _branch_id(request))
@@ -66,6 +74,47 @@ class RoomTypeListCreateView(APIView):
             message="Room type created.",
             status=status.HTTP_201_CREATED,
         )
+
+
+class RoomTypeDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("hotel.view")]
+
+    def get(self, request, pk):
+        try:
+            row = HotelService.get_room_type(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Room type")
+        return success_response(data=serialize_room_type(row))
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not _can_rooms_write(request.user, "hotel.rooms.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_room_type(pk=pk, user=request.user, request=request)
+            row = HotelService.update_room_type(
+                room_type=row, data=request.data, user=request.user, request=request
+            )
+        except ObjectDoesNotExist:
+            return _not_found("Room type")
+        except HotelError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_room_type(row), message="Room type updated.")
+
+    def delete(self, request, pk):
+        if not _can_rooms_write(request.user, "hotel.rooms.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_room_type(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Room type")
+        HotelService.soft_delete_room_type(room_type=row, user=request.user, request=request)
+        return success_response(message="Room type deleted.")
 
 
 class RoomListCreateView(APIView):
@@ -83,7 +132,7 @@ class RoomListCreateView(APIView):
         )
 
     def post(self, request):
-        if not request.user.has_permission("hotel.manage"):
+        if not _can_rooms_write(request.user, "hotel.rooms.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = dict(request.data)
         data.setdefault("branch_id", _branch_id(request))
@@ -96,6 +145,47 @@ class RoomListCreateView(APIView):
             message="Room created.",
             status=status.HTTP_201_CREATED,
         )
+
+
+class RoomDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("hotel.view")]
+
+    def get(self, request, pk):
+        try:
+            row = HotelService.get_room(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Room")
+        return success_response(data=serialize_room(row))
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not _can_rooms_write(request.user, "hotel.rooms.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_room(pk=pk, user=request.user, request=request)
+            row = HotelService.update_room(
+                room=row, data=request.data, user=request.user, request=request
+            )
+        except ObjectDoesNotExist:
+            return _not_found("Room")
+        except HotelError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_room(row), message="Room updated.")
+
+    def delete(self, request, pk):
+        if not _can_rooms_write(request.user, "hotel.rooms.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_room(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Room")
+        HotelService.soft_delete_room(room=row, user=request.user, request=request)
+        return success_response(message="Room deleted.")
 
 
 class RoomStatusView(APIView):
@@ -130,7 +220,7 @@ class GuestListCreateView(APIView):
         )
 
     def post(self, request):
-        if not _can_manage(request.user):
+        if not _can_guest_write(request.user, "hotel.guests.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = dict(request.data)
         data.setdefault("branch_id", _branch_id(request))
@@ -143,6 +233,47 @@ class GuestListCreateView(APIView):
             message="Guest created.",
             status=status.HTTP_201_CREATED,
         )
+
+
+class GuestDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("hotel.view")]
+
+    def get(self, request, pk):
+        try:
+            row = HotelService.get_guest(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Guest")
+        return success_response(data=serialize_guest(row))
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not _can_guest_write(request.user, "hotel.guests.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_guest(pk=pk, user=request.user, request=request)
+            row = HotelService.update_guest(
+                guest=row, data=request.data, user=request.user, request=request
+            )
+        except ObjectDoesNotExist:
+            return _not_found("Guest")
+        except HotelError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_guest(row), message="Guest updated.")
+
+    def delete(self, request, pk):
+        if not _can_guest_write(request.user, "hotel.guests.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_guest(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return _not_found("Guest")
+        HotelService.soft_delete_guest(guest=row, user=request.user, request=request)
+        return success_response(message="Guest deleted.")
 
 
 class ReservationListCreateView(APIView):
@@ -160,7 +291,10 @@ class ReservationListCreateView(APIView):
         )
 
     def post(self, request):
-        if not _can_manage(request.user):
+        if not (
+            _can_manage(request.user)
+            or user_has_any(request.user, "hotel.reservations.create")
+        ):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = dict(request.data)
         data.setdefault("branch_id", _branch_id(request))
@@ -188,6 +322,31 @@ class ReservationDetailView(APIView):
         except ObjectDoesNotExist:
             return _not_found("Reservation")
         return success_response(data=serialize_reservation(row))
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not (
+            _can_manage(request.user)
+            or user_has_any(request.user, "hotel.reservations.update")
+        ):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = HotelService.get_reservation(
+                pk=pk, user=request.user, request=request
+            )
+            row = HotelService.update_reservation(
+                reservation=row, data=request.data, user=request.user, request=request
+            )
+        except ObjectDoesNotExist:
+            return _not_found("Reservation")
+        except HotelError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_reservation(row), message="Reservation updated.")
 
 
 class ReservationCheckInView(APIView):

@@ -19,6 +19,9 @@ export interface FinanceAccount {
   type: string;
   balance: number;
   is_system?: boolean;
+  is_active?: boolean;
+  parent_id?: string | null;
+  description?: string;
 }
 
 export interface FinanceActivity {
@@ -63,6 +66,7 @@ export interface FinanceJournalEntry {
   created_by_id?: string | null;
   approved_by_id?: string | null;
   approved_at?: string | null;
+  reverses_entry_id?: string | null;
 }
 
 export interface FinanceSummary {
@@ -278,6 +282,29 @@ export const financeApi = {
   accounts: (params: Record<string, string | undefined> = {}) =>
     apiRequest<ApiListResponse<FinanceAccount>>(`/finance/accounts/${qs(params)}`),
 
+  createAccount: (data: {
+    code: string;
+    name: string;
+    type: string;
+    parent_id?: string;
+    description?: string;
+  }) =>
+    apiRequest<ApiResponse<FinanceAccount>>("/finance/accounts/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateAccount: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<FinanceAccount>>(`/finance/accounts/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deactivateAccount: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/finance/accounts/${id}/`, {
+      method: "DELETE",
+    }),
+
   costCenters: (params: { is_active?: string } = {}) =>
     apiRequest<ApiListResponse<{ id: string; code: string; name: string; is_active: boolean }>>(
       `/finance/cost-centers/${qs(params)}`
@@ -342,6 +369,12 @@ export const financeApi = {
     apiRequest<ApiResponse<Record<string, unknown>>>(`/finance/journal/${entryId}/discard/`, {
       method: "POST",
       body: JSON.stringify({}),
+    }),
+
+  reverseJournal: (entryId: string, reason = "") =>
+    apiRequest<ApiResponse<FinanceJournalEntry>>(`/finance/journal/${entryId}/reverse/`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
     }),
 
   trialBalance: (params: { date_from?: string; date_to?: string } = {}) =>

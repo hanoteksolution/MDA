@@ -22,6 +22,21 @@ import {
 } from "@/app/routes/modules";
 import { ProductsPage, InventoryDashboardPage } from "@/app/routes/phase2";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
+import {
+  GymMemberDetailPage,
+  GymMemberEditPage,
+  GymMemberFormPage,
+} from "@/modules/gym/pages/GymMemberFormPage";
+import {
+  HotelReservationDetailPage,
+  HotelReservationEditPage,
+  HotelReservationFormPage,
+} from "@/modules/hotel/pages/HotelReservationPages";
+import {
+  PropertyUnitDetailPage,
+  PropertyUnitEditPage,
+  PropertyUnitFormPage,
+} from "@/modules/property/pages/PropertyUnitPages";
 
 function gated(
   workspace: string,
@@ -131,6 +146,21 @@ export function industryFeatureRoutes() {
       path="/retail"
       element={gated("retail", ["pos.access", "sales.view", "inventory.view", "dashboard.view"], undefined, <DashboardPage />)}
     />,
+    <Route
+      key="gym-members-new"
+      path="/gym/members/new"
+      element={gated("gym", ["gym.manage", "gym.members.create"], "gym", <GymMemberFormPage />)}
+    />,
+    <Route
+      key="gym-members-edit"
+      path="/gym/members/:id/edit"
+      element={gated("gym", ["gym.manage", "gym.members.update"], "gym", <GymMemberEditPage />)}
+    />,
+    <Route
+      key="gym-members-detail"
+      path="/gym/members/:id"
+      element={gated("gym", "gym.view", "gym", <GymMemberDetailPage />)}
+    />,
     <Route key="gym-members" path="/gym/members" element={gated("gym", "gym.view", "gym", <GymPage />)} />,
     <Route key="gym-memberships" path="/gym/memberships" element={gated("gym", "gym.view", "gym", <GymPage />)} />,
     <Route key="gym-plans" path="/gym/plans" element={gated("gym", "gym.view", "gym", <GymPage />)} />,
@@ -184,6 +214,21 @@ export function industryFeatureRoutes() {
       element={gated("pharmacy", "pharmacy.view", "pharmacy", <PharmacyPage />)}
     />,
     <Route key="hotel-types" path="/hotel/types" element={gated("hotel", "hotel.view", "hotel", <HotelPage />)} />,
+    <Route
+      key="hotel-reservations-new"
+      path="/hotel/reservations/new"
+      element={gated("hotel", ["hotel.manage", "hotel.front_desk", "hotel.reservations.create"], "hotel", <HotelReservationFormPage />)}
+    />,
+    <Route
+      key="hotel-reservations-edit"
+      path="/hotel/reservations/:id/edit"
+      element={gated("hotel", ["hotel.manage", "hotel.front_desk", "hotel.reservations.update"], "hotel", <HotelReservationEditPage />)}
+    />,
+    <Route
+      key="hotel-reservations-detail"
+      path="/hotel/reservations/:id"
+      element={gated("hotel", "hotel.view", "hotel", <HotelReservationDetailPage />)}
+    />,
     <Route key="hotel-reservations" path="/hotel/reservations" element={gated("hotel", "hotel.view", "hotel", <HotelPage />)} />,
     <Route key="hotel-rooms" path="/hotel/rooms" element={gated("hotel", "hotel.view", "hotel", <HotelPage />)} />,
     <Route key="hotel-guests" path="/hotel/guests" element={gated("hotel", "hotel.view", "hotel", <HotelPage />)} />,
@@ -192,6 +237,21 @@ export function industryFeatureRoutes() {
       key="hotel-housekeeping"
       path="/hotel/housekeeping"
       element={gated("hotel", "hotel.view", "hotel", <HotelPage />)}
+    />,
+    <Route
+      key="property-units-new"
+      path="/property/units/new"
+      element={gated("property", ["property_management.manage", "property_management.masters.create"], "property_management", <PropertyUnitFormPage />)}
+    />,
+    <Route
+      key="property-units-edit"
+      path="/property/units/:id/edit"
+      element={gated("property", ["property_management.manage", "property_management.masters.update"], "property_management", <PropertyUnitEditPage />)}
+    />,
+    <Route
+      key="property-units-detail"
+      path="/property/units/:id"
+      element={gated("property", "property_management.view", "property_management", <PropertyUnitDetailPage />)}
     />,
     <Route
       key="property-units"

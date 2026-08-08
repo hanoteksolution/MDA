@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api.v1.finance.views import (
+    AccountDetailView,
     AccountListView,
     AccountingBackfillView,
     AccountingCutoverView,
@@ -17,6 +18,7 @@ from api.v1.finance.views import (
     JournalDiscardView,
     JournalListCreateView,
     JournalPostView,
+    JournalReverseView,
     PayablesAgingView,
     PeriodActionView,
     PeriodListView,
@@ -37,6 +39,7 @@ from api.v1.finance.views import (
 urlpatterns = [
     path("summary/", FinanceSummaryView.as_view(), name="finance-summary"),
     path("accounts/", AccountListView.as_view(), name="finance-accounts"),
+    path("accounts/<uuid:pk>/", AccountDetailView.as_view(), name="finance-account-detail"),
     path("cost-centers/", CostCenterListCreateView.as_view(), name="finance-cost-centers"),
     path(
         "business-units/",
@@ -53,6 +56,11 @@ urlpatterns = [
         "journal/<uuid:entry_id>/discard/",
         JournalDiscardView.as_view(),
         name="finance-journal-discard",
+    ),
+    path(
+        "journal/<uuid:entry_id>/reverse/",
+        JournalReverseView.as_view(),
+        name="finance-journal-reverse",
     ),
     path("periods/", PeriodListView.as_view(), name="finance-periods"),
     path(

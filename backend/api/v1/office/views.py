@@ -11,7 +11,7 @@ from apps.office_rental.serializers import (
 from apps.office_rental.services import OfficeError, OfficeService
 from core.responses.api_response import error_response, success_response
 from core.utils.pagination import paginate_queryset
-from permissions.base import HasPermission
+from permissions.base import HasPermission, user_has_any
 
 
 def _branch_id(request):
@@ -20,6 +20,10 @@ def _branch_id(request):
 
 def _can_manage(user):
     return user.has_permission("office_rental.manage")
+
+
+def _can_tenants(user, *extra):
+    return _can_manage(user) or user_has_any(user, *extra)
 
 
 class OfficeSummaryView(APIView):
@@ -44,7 +48,7 @@ class TenantListCreateView(APIView):
         )
 
     def post(self, request):
-        if not _can_manage(request.user):
+        if not _can_tenants(request.user, "office_rental.tenants.create"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         data = dict(request.data)
         data.setdefault("branch_id", _branch_id(request))
@@ -59,6 +63,49 @@ class TenantListCreateView(APIView):
             message="Tenant created.",
             status=status.HTTP_201_CREATED,
         )
+
+
+class TenantDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("office_rental.view")]
+
+    def get(self, request, pk):
+        try:
+            row = OfficeService.get_tenant(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return error_response(message="Tenant not found.", status=status.HTTP_404_NOT_FOUND)
+        return success_response(data=serialize_tenant(row))
+
+    def put(self, request, pk):
+        return self._update(request, pk)
+
+    def patch(self, request, pk):
+        return self._update(request, pk)
+
+    def _update(self, request, pk):
+        if not _can_tenants(request.user, "office_rental.tenants.update"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = OfficeService.get_tenant(pk=pk, user=request.user, request=request)
+            row = OfficeService.update_tenant(
+                office_tenant=row, data=request.data, user=request.user, request=request
+            )
+        except ObjectDoesNotExist:
+            return error_response(message="Tenant not found.", status=status.HTTP_404_NOT_FOUND)
+        except OfficeError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_tenant(row), message="Tenant updated.")
+
+    def delete(self, request, pk):
+        if not _can_tenants(request.user, "office_rental.tenants.delete"):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            row = OfficeService.get_tenant(pk=pk, user=request.user, request=request)
+        except ObjectDoesNotExist:
+            return error_response(message="Tenant not found.", status=status.HTTP_404_NOT_FOUND)
+        OfficeService.soft_delete_tenant(
+            office_tenant=row, user=request.user, request=request
+        )
+        return success_response(message="Tenant deleted.")
 
 
 class LeaseListCreateView(APIView):

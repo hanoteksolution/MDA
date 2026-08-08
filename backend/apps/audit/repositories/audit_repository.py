@@ -3,14 +3,28 @@ from apps.audit.models.audit_log import AuditLog
 
 class AuditRepository:
     @staticmethod
-    def create(*, user=None, action, module, entity_type="", entity_id=None, old_values=None, new_values=None, request=None):
+    def create(
+        *,
+        user=None,
+        action,
+        module,
+        entity_type="",
+        entity_id=None,
+        old_values=None,
+        new_values=None,
+        request=None,
+        tenant=None,
+    ):
         ip_address = None
         user_agent = ""
         if request:
             ip_address = request.META.get("REMOTE_ADDR")
             user_agent = request.META.get("HTTP_USER_AGENT", "")
+        if tenant is None and user is not None:
+            tenant = getattr(user, "tenant", None)
 
         return AuditLog.objects.create(
+            tenant=tenant,
             user=user,
             action=action,
             module=module,

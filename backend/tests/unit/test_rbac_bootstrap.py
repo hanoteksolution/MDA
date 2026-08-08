@@ -72,9 +72,11 @@ def test_industry_role_matrix():
         )
 
     assert {"pharmacy.view", "pharmacy.manage", "pharmacy.dispense"} <= codes_for("pharmacist")
-    assert {"gym.view", "gym.manage", "gym.attendance.checkin"} <= codes_for("gym_manager")
+    assert {"gym.view", "gym.manage", "gym.attendance.checkin", "gym.members.create", "gym.members.update", "gym.members.delete"} <= codes_for("gym_manager")
     assert "gym.attendance.checkin" in codes_for("receptionist")
     assert "gym.manage" not in codes_for("receptionist")
+    assert {"gym.members.create", "gym.members.update"} <= codes_for("receptionist")
+    assert "gym.members.delete" not in codes_for("receptionist")
     assert {"gym.view", "gym.attendance.checkin"} <= codes_for("trainer")
     assert "gym.manage" not in codes_for("trainer")
     assert {"restaurant.view", "restaurant.floor"} <= codes_for("waiter")

@@ -15,29 +15,30 @@ Status: `done` · `in_progress` · `next` · `later`
 | 6 | Dynamic navigation | **done** | Switcher + sidebar + URL→tab sync |
 | 7 | Workspace dashboards | **next** | Use existing summary APIs; dedicated headers |
 | 8 | CRUD audit | **done** | `CRUD_COMPLETION_MATRIX.md` |
-| 9 | Create pages | **in_progress** | Warehouse, journal, pharmacy batch FE shipped; dedicated `/new` routes next |
-| 10 | Update pages | **next** | Vertical PATCH APIs + FE |
-| 11 | Detail pages | **later** | Master data `:id` shells |
-| 12 | Delete / archive / restore | **later** | Soft delete + accounting void |
+| 9 | Create pages | **done** | Warehouse, journal, pharmacy batch + gym/hotel/property `/new` |
+| 10 | Update pages | **done** | Vertical PATCH APIs + dedicated edit routes |
+| 11 | Detail pages | **in_progress** | Gym member, hotel reservation, property unit shells |
+| 12 | Delete / archive / restore | **in_progress** | Soft delete on vertical masters; journal reverse (never mutate posted) |
 | 13 | Bulk actions | **later** | After list standard |
 | 14 | Forms & validation | **later** | Unsaved guard, Save & New |
-| 15–21 | Restaurant → Retail depth | **in_progress** | Kitchen + housekeeping + guests tabs live; master U/D APIs next |
-| 22 | CAE integration | **KEEP** + **next** | Reverse API, BU map gaps, expense BU |
+| 15–21 | Restaurant → Retail depth | **in_progress** | Kitchen + housekeeping + guests tabs; master U/D APIs shipped |
+| 22 | CAE integration | **KEEP** + **in_progress** | Journal reverse API + CoA write shipped; BU map gaps remain |
 | 23 | Reporting | **KEEP** / **EXTEND** | Bind packs to workspace |
 | 24 | Demo tenant | **KEEP** / **EXTEND** | Futsal seeder; finance/pos stubs |
 | 25 | Subscription entitlements | **KEEP** | |
 | 26 | React Native | **later** | Same workspace model |
-| 27 | Security | **KEEP** / **EXTEND** | Audit writes + isolation tests |
+| 27 | Security | **KEEP** / **EXTEND** | Audit writes on vertical + finance mutations; isolation tests remain |
 | 28 | Performance | **later** | |
-| 29 | Automated FE/E2E tests | **later** | |
+| 29 | Automated FE/E2E tests | **in_progress** | Vitest unit tests; Playwright E2E later |
 | 30 | Production hardening | **later** | |
 
-## This delivery (Phase 1–9 slice)
+## This delivery (Phase 9–12 + 22 + 29 slice)
 
-1. Transformation docs (this directory).
-2. Workspace URL ↔ mega-page tab sync (gym, hotel, restaurant, pharmacy, property, futsal).
-3. Create CTAs using **existing** APIs: warehouses, pharmacy batches, manual journals.
-4. Restaurant **Kitchen** tab + Hotel **Housekeeping** tab (real filtered UI, not dead aliases).
+1. Vertical master PATCH/DELETE APIs (menu, table, room, guest, property, tenants).
+2. Dedicated `/new` + `/:id` + `/:id/edit` for gym members, hotel reservations, property units.
+3. CoA write + journal reverse (`POST /finance/journal/:id/reverse/`).
+4. Audit writes on mutations + fine-grained perms (`gym.members.create`, …).
+5. Vitest unit tests; Playwright E2E later.
 
 ## Non-goals now
 

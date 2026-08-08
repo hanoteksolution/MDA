@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { BedDouble, CalendarCheck, DoorOpen, Plus, Sparkles } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -45,6 +46,7 @@ function dayAfterTomorrowISO() {
 }
 
 export function HotelPage() {
+  const navigate = useNavigate();
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("hotel.manage");
@@ -222,6 +224,9 @@ export function HotelPage() {
       cell: (r) =>
         canFrontDesk ? (
           <div className="flex justify-end gap-1">
+            <Button size="sm" variant="ghost" onClick={() => navigate(`/hotel/reservations/${r.id}`)}>
+              View
+            </Button>
             {r.status === "booked" ? (
               <Button size="sm" onClick={() => hotelApi.checkIn(r.id).then(reload)}>
                 Check in
@@ -399,10 +404,13 @@ export function HotelPage() {
                   onChange={(e) => setResForm((f) => ({ ...f, check_out_date: e.target.value }))}
                 />
               </FormField>
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
                 <Button onClick={addReservation}>
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Book
+                  Quick book
+                </Button>
+                <Button variant="secondary" onClick={() => navigate("/hotel/reservations/new")}>
+                  Full form
                 </Button>
               </div>
             </FormGrid>

@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from apps.audit.services import write_audit
 from apps.customers.models import Customer
 from apps.gym.models import Member
 from apps.settings_app.models import Branch
@@ -202,7 +203,16 @@ class MemberService:
             tenant_id=tenant_id, membership_number=number
         ).exists():
             raise MemberError(f"Membership number '{number}' already exists.")
-        return Member.objects.create(**prepared, created_by=user)
+        member = Member.objects.create(**prepared, created_by=user)
+        write_audit(
+            action="create",
+            module="gym",
+            entity=member,
+            user=user,
+            request=request,
+            new_values={"membership_number": member.membership_number},
+        )
+        return member
 
     @staticmethod
     @transaction.atomic
@@ -230,9 +240,11 @@ class MemberService:
             setattr(member, key, value)
         member.updated_by = user
         member.save()
+        write_audit(action="update", module="gym", entity=member, user=user, request=request)
         return member
 
     @staticmethod
-    def soft_delete(*, member: Member, user=None) -> Member:
+    def soft_delete(*, member: Member, user=None, request=None) -> Member:
         member.soft_delete(user=user)
+        write_audit(action="delete", module="gym", entity=member, user=user, request=request)
         return member

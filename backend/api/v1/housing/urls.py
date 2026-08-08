@@ -9,12 +9,14 @@ from api.v1.housing.views import (
     LeaseDetailView,
     LeaseListCreateView,
     LeaseTerminateView,
+    TenantDetailView,
     TenantListCreateView,
 )
 
 urlpatterns = [
     path("summary/", HousingSummaryView.as_view(), name="housing-summary"),
     path("tenants/", TenantListCreateView.as_view(), name="housing-tenants"),
+    path("tenants/<uuid:pk>/", TenantDetailView.as_view(), name="housing-tenant-detail"),
     path("leases/", LeaseListCreateView.as_view(), name="housing-leases"),
     path("leases/<uuid:pk>/", LeaseDetailView.as_view(), name="housing-lease-detail"),
     path(

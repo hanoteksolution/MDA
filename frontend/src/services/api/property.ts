@@ -137,6 +137,19 @@ export const propertyApi = {
       body: JSON.stringify(data),
     }),
 
+  unit: (id: string) => apiRequest<ApiResponse<PropertyUnit>>(`/property/units/${id}/`),
+
+  updateUnit: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<PropertyUnit>>(`/property/units/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteUnit: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/property/units/${id}/`, {
+      method: "DELETE",
+    }),
+
   setUnitStatus: (id: string, status: string) =>
     apiRequest<ApiResponse<PropertyUnit>>(`/property/units/${id}/status/`, {
       method: "POST",

@@ -87,6 +87,7 @@ function DateRangeFilters({
 export function FinancePage() {
   const { hasPermission } = usePermissions();
   const canCreateJournal = hasPermission("finance.create");
+  const canApproveJournal = hasPermission("finance.approve");
   const [tab, setTab] = useState("overview");
   const [data, setData] = useState<FinanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,10 @@ export function FinancePage() {
   const [journalBusy, setJournalBusy] = useState<string | null>(null);
   const [journalMsg, setJournalMsg] = useState<string | null>(null);
   const [showJournalForm, setShowJournalForm] = useState(false);
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [accountForm, setAccountForm] = useState({ code: "", name: "", type: "expense" });
+  const [accountMsg, setAccountMsg] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
   const [journalForm, setJournalForm] = useState({
     description: "",
     entry_date: "",
@@ -368,6 +373,46 @@ export function FinancePage() {
       setJournalMsg(err instanceof Error ? err.message : "Could not discard draft.");
     } finally {
       setJournalBusy(null);
+    }
+  };
+
+  const reversePostedJournal = async (entryId: string) => {
+    if (!confirm("Post an offsetting reversal journal? The original entry stays immutable.")) return;
+    setJournalBusy(entryId);
+    setJournalMsg(null);
+    try {
+      await financeApi.reverseJournal(entryId, "UI reversal");
+      setJournalMsg("Reversal journal posted.");
+      loadJournals();
+    } catch (err) {
+      setJournalMsg(err instanceof Error ? err.message : "Could not reverse journal.");
+    } finally {
+      setJournalBusy(null);
+    }
+  };
+
+  const createAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountForm.code.trim() || !accountForm.name.trim()) {
+      setAccountMsg("Code and name are required.");
+      return;
+    }
+    setAccountBusy(true);
+    setAccountMsg(null);
+    try {
+      await financeApi.createAccount({
+        code: accountForm.code.trim(),
+        name: accountForm.name.trim(),
+        type: accountForm.type,
+      });
+      setShowAccountForm(false);
+      setAccountForm({ code: "", name: "", type: "expense" });
+      setAccountMsg("Account created.");
+      financeApi.summary().then((r) => setData(r.data)).catch(() => undefined);
+    } catch (err) {
+      setAccountMsg(err instanceof Error ? err.message : "Could not create account.");
+    } finally {
+      setAccountBusy(false);
     }
   };
 
@@ -709,6 +754,44 @@ export function FinancePage() {
           }
           noPadding
         >
+          <div className="mb-3 flex flex-wrap items-center gap-3 px-4 pt-4">
+            {canCreateJournal ? (
+              <Button type="button" size="sm" onClick={() => setShowAccountForm((v) => !v)}>
+                <Plus className="h-4 w-4 mr-1" />
+                {showAccountForm ? "Cancel" : "New account"}
+              </Button>
+            ) : null}
+            {accountMsg ? <p className="text-sm text-muted-foreground">{accountMsg}</p> : null}
+          </div>
+          {showAccountForm && canCreateJournal ? (
+            <form onSubmit={createAccount} className="mb-4 grid gap-3 px-4 sm:grid-cols-4">
+              <Input
+                placeholder="Code"
+                value={accountForm.code}
+                onChange={(e) => setAccountForm((f) => ({ ...f, code: e.target.value }))}
+              />
+              <Input
+                placeholder="Name"
+                value={accountForm.name}
+                onChange={(e) => setAccountForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <select
+                className="h-10 rounded-md border bg-background px-2 text-sm"
+                value={accountForm.type}
+                onChange={(e) => setAccountForm((f) => ({ ...f, type: e.target.value }))}
+              >
+                <option value="asset">Asset</option>
+                <option value="liability">Liability</option>
+                <option value="equity">Equity</option>
+                <option value="revenue">Revenue</option>
+                <option value="expense">Expense</option>
+              </select>
+              <Button type="submit" size="sm" disabled={accountBusy}>
+                {accountBusy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </form>
+          ) : null}
           <DataTable
             embedded
             exportTitle="Finance Accounts"
@@ -992,6 +1075,17 @@ export function FinancePage() {
                             Discard
                           </Button>
                         </>
+                      ) : null}
+                      {entry.status === "posted" && !entry.reverses_entry_id && canApproveJournal ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={journalBusy === entry.id}
+                          onClick={() => reversePostedJournal(entry.id)}
+                        >
+                          Reverse
+                        </Button>
                       ) : null}
                     </div>
                   </div>

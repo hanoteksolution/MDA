@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.audit.services import write_audit
 from apps.property_management.models import (
     Building,
     MaintenanceRequest,
@@ -18,6 +19,14 @@ from apps.property_management.models import (
 )
 from apps.settings_app.models import Branch
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}
 
 
 class PropertyError(ValueError):
@@ -113,7 +122,7 @@ class PropertyService:
         name = (payload.get("full_name") or "").strip()
         if not name:
             raise PropertyError("Owner full_name is required.")
-        return Owner.objects.create(
+        row = Owner.objects.create(
             tenant_id=payload.get("tenant_id")
             or (branch.tenant_id if branch else None),
             branch=branch,
@@ -121,9 +130,46 @@ class PropertyService:
             phone=(payload.get("phone") or "").strip(),
             email=(payload.get("email") or "").strip(),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="property_management",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"full_name": row.full_name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_owner(*, owner: Owner, data, user=None, request=None) -> Owner:
+        payload = dict(data or {})
+        if "full_name" in payload:
+            name = (payload.get("full_name") or "").strip()
+            if not name:
+                raise PropertyError("Owner full_name is required.")
+            owner.full_name = name
+        if "phone" in payload:
+            owner.phone = (payload.get("phone") or "").strip()
+        if "email" in payload:
+            owner.email = (payload.get("email") or "").strip()
+        if "notes" in payload:
+            owner.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            owner.is_active = _as_bool(payload.get("is_active"))
+        owner.updated_by = user
+        owner.save()
+        write_audit(action="update", module="property_management", entity=owner, user=user, request=request)
+        return owner
+
+    @staticmethod
+    def soft_delete_owner(*, owner: Owner, user=None, request=None) -> Owner:
+        owner.soft_delete(user=user)
+        write_audit(action="delete", module="property_management", entity=owner, user=user, request=request)
+        return owner
 
     # --- Properties ---
     @staticmethod
@@ -155,7 +201,7 @@ class PropertyService:
         kind = payload.get("kind") or PropertyAsset.KIND_MIXED
         if kind not in dict(PropertyAsset.KIND_CHOICES):
             raise PropertyError(f"Invalid property kind: {kind}")
-        return PropertyAsset.objects.create(
+        row = PropertyAsset.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             owner=owner,
@@ -165,9 +211,58 @@ class PropertyService:
             address=(payload.get("address") or "").strip(),
             city=(payload.get("city") or "").strip(),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="property_management",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"name": row.name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_property(*, asset: PropertyAsset, data, user=None, request=None) -> PropertyAsset:
+        payload = dict(data or {})
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise PropertyError("Property name is required.")
+            asset.name = name
+        if "code" in payload:
+            asset.code = (payload.get("code") or "").strip()
+        if "kind" in payload and payload.get("kind"):
+            if payload["kind"] not in dict(PropertyAsset.KIND_CHOICES):
+                raise PropertyError(f"Invalid property kind: {payload['kind']}")
+            asset.kind = payload["kind"]
+        if "address" in payload:
+            asset.address = (payload.get("address") or "").strip()
+        if "city" in payload:
+            asset.city = (payload.get("city") or "").strip()
+        if "notes" in payload:
+            asset.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            asset.is_active = _as_bool(payload.get("is_active"))
+        if "owner_id" in payload:
+            asset.owner = (
+                PropertyService.get_owner(pk=payload["owner_id"], user=user, request=request)
+                if payload.get("owner_id")
+                else None
+            )
+        asset.updated_by = user
+        asset.save()
+        write_audit(action="update", module="property_management", entity=asset, user=user, request=request)
+        return asset
+
+    @staticmethod
+    def soft_delete_property(*, asset: PropertyAsset, user=None, request=None) -> PropertyAsset:
+        asset.soft_delete(user=user)
+        write_audit(action="delete", module="property_management", entity=asset, user=user, request=request)
+        return asset
 
     # --- Buildings ---
     @staticmethod
@@ -199,7 +294,7 @@ class PropertyService:
         name = (payload.get("name") or "").strip()
         if not name:
             raise PropertyError("Building name is required.")
-        return Building.objects.create(
+        row = Building.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             property_asset=prop,
@@ -207,9 +302,52 @@ class PropertyService:
             code=(payload.get("code") or "").strip(),
             floors=int(payload.get("floors") or 1),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="property_management",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"name": row.name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_building(*, building: Building, data, user=None, request=None) -> Building:
+        payload = dict(data or {})
+        if payload.get("property_id") or payload.get("property_asset_id"):
+            building.property_asset = PropertyService.get_property(
+                pk=payload.get("property_id") or payload.get("property_asset_id"),
+                user=user,
+                request=request,
+            )
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise PropertyError("Building name is required.")
+            building.name = name
+        if "code" in payload:
+            building.code = (payload.get("code") or "").strip()
+        if "floors" in payload:
+            building.floors = int(payload.get("floors") or 1)
+        if "notes" in payload:
+            building.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            building.is_active = _as_bool(payload.get("is_active"))
+        building.updated_by = user
+        building.save()
+        write_audit(action="update", module="property_management", entity=building, user=user, request=request)
+        return building
+
+    @staticmethod
+    def soft_delete_building(*, building: Building, user=None, request=None) -> Building:
+        building.soft_delete(user=user)
+        write_audit(action="delete", module="property_management", entity=building, user=user, request=request)
+        return building
 
     # --- Units ---
     @staticmethod
@@ -252,7 +390,7 @@ class PropertyService:
         if status not in dict(PropertyUnit.STATUS_CHOICES):
             raise PropertyError(f"Invalid unit status: {status}")
         area = payload.get("area_sqm")
-        return PropertyUnit.objects.create(
+        row = PropertyUnit.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             building=building,
@@ -267,9 +405,69 @@ class PropertyService:
             rent_amount=Decimal(str(payload.get("rent_amount") or 0)),
             deposit_amount=Decimal(str(payload.get("deposit_amount") or 0)),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="property_management",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"code": row.code},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_unit(*, unit: PropertyUnit, data, user=None, request=None) -> PropertyUnit:
+        payload = dict(data or {})
+        if payload.get("building_id"):
+            unit.building = PropertyService.get_building(
+                pk=payload["building_id"], user=user, request=request
+            )
+        if "code" in payload:
+            code = (payload.get("code") or "").strip()
+            if not code:
+                raise PropertyError("Unit code is required.")
+            unit.code = code
+        if "label" in payload:
+            unit.label = (payload.get("label") or unit.code).strip()
+        if "floor" in payload:
+            unit.floor = (payload.get("floor") or "").strip()
+        if "kind" in payload and payload.get("kind"):
+            if payload["kind"] not in dict(PropertyUnit.KIND_CHOICES):
+                raise PropertyError(f"Invalid unit kind: {payload['kind']}")
+            unit.kind = payload["kind"]
+        if "status" in payload and payload.get("status"):
+            if payload["status"] not in dict(PropertyUnit.STATUS_CHOICES):
+                raise PropertyError(f"Invalid unit status: {payload['status']}")
+            unit.status = payload["status"]
+        if "bedrooms" in payload:
+            unit.bedrooms = int(payload.get("bedrooms") or 0)
+        if "bathrooms" in payload:
+            unit.bathrooms = int(payload.get("bathrooms") or 0)
+        if "area_sqm" in payload:
+            area = payload.get("area_sqm")
+            unit.area_sqm = Decimal(str(area)) if area not in (None, "") else None
+        if "rent_amount" in payload:
+            unit.rent_amount = Decimal(str(payload.get("rent_amount") or 0))
+        if "deposit_amount" in payload:
+            unit.deposit_amount = Decimal(str(payload.get("deposit_amount") or 0))
+        if "notes" in payload:
+            unit.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            unit.is_active = _as_bool(payload.get("is_active"))
+        unit.updated_by = user
+        unit.save()
+        write_audit(action="update", module="property_management", entity=unit, user=user, request=request)
+        return unit
+
+    @staticmethod
+    def soft_delete_unit(*, unit: PropertyUnit, user=None, request=None) -> PropertyUnit:
+        unit.soft_delete(user=user)
+        write_audit(action="delete", module="property_management", entity=unit, user=user, request=request)
+        return unit
 
     @staticmethod
     def set_unit_status(*, unit: PropertyUnit, status: str, user=None) -> PropertyUnit:

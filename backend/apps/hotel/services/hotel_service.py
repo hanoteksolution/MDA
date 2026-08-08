@@ -10,9 +10,18 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from apps.audit.services import write_audit
 from apps.hotel.models import Folio, FolioLine, Guest, Reservation, Room, RoomType
 from apps.settings_app.models import Branch
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
+
+
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() not in {"0", "false", "no", ""}
 
 
 class HotelError(ValueError):
@@ -125,7 +134,7 @@ class HotelService:
         name = (payload.get("name") or "").strip()
         if not name:
             raise HotelError("Room type name is required.")
-        return RoomType.objects.create(
+        row = RoomType.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             name=name,
@@ -133,10 +142,51 @@ class HotelService:
             base_rate=Decimal(str(payload.get("base_rate") or 0)),
             capacity=int(payload.get("capacity") or 2),
             description=(payload.get("description") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             sort_order=int(payload.get("sort_order") or 100),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="hotel",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"name": row.name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_room_type(*, room_type: RoomType, data, user=None, request=None) -> RoomType:
+        payload = dict(data or {})
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise HotelError("Room type name is required.")
+            room_type.name = name
+        if "code" in payload:
+            room_type.code = (payload.get("code") or "").strip()
+        if "base_rate" in payload:
+            room_type.base_rate = Decimal(str(payload.get("base_rate") or 0))
+        if "capacity" in payload:
+            room_type.capacity = int(payload.get("capacity") or 2)
+        if "description" in payload:
+            room_type.description = (payload.get("description") or "").strip()
+        if "is_active" in payload:
+            room_type.is_active = _as_bool(payload.get("is_active"))
+        if "sort_order" in payload:
+            room_type.sort_order = int(payload.get("sort_order") or 100)
+        room_type.updated_by = user
+        room_type.save()
+        write_audit(action="update", module="hotel", entity=room_type, user=user, request=request)
+        return room_type
+
+    @staticmethod
+    def soft_delete_room_type(*, room_type: RoomType, user=None, request=None) -> RoomType:
+        room_type.soft_delete(user=user)
+        write_audit(action="delete", module="hotel", entity=room_type, user=user, request=request)
+        return room_type
 
     # --- Rooms ---
     @staticmethod
@@ -164,17 +214,60 @@ class HotelService:
         code = (payload.get("code") or "").strip()
         if not code:
             raise HotelError("Room code is required.")
-        return Room.objects.create(
+        row = Room.objects.create(
             tenant_id=payload.get("tenant_id") or branch.tenant_id,
             branch=branch,
             room_type=room_type,
             code=code,
             floor=(payload.get("floor") or "").strip(),
             status=payload.get("status") or Room.STATUS_VACANT,
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             notes=(payload.get("notes") or "").strip(),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="hotel",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"code": row.code},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_room(*, room: Room, data, user=None, request=None) -> Room:
+        payload = dict(data or {})
+        if payload.get("room_type_id"):
+            room.room_type = HotelService.get_room_type(
+                pk=payload["room_type_id"], user=user, request=request
+            )
+        if "code" in payload:
+            code = (payload.get("code") or "").strip()
+            if not code:
+                raise HotelError("Room code is required.")
+            room.code = code
+        if "floor" in payload:
+            room.floor = (payload.get("floor") or "").strip()
+        if "status" in payload and payload.get("status"):
+            if payload["status"] not in dict(Room.STATUS_CHOICES):
+                raise HotelError(f"Invalid room status: {payload['status']}")
+            room.status = payload["status"]
+        if "is_active" in payload:
+            room.is_active = _as_bool(payload.get("is_active"))
+        if "notes" in payload:
+            room.notes = (payload.get("notes") or "").strip()
+        room.updated_by = user
+        room.save()
+        write_audit(action="update", module="hotel", entity=room, user=user, request=request)
+        return room
+
+    @staticmethod
+    def soft_delete_room(*, room: Room, user=None, request=None) -> Room:
+        room.soft_delete(user=user)
+        write_audit(action="delete", module="hotel", entity=room, user=user, request=request)
+        return room
 
     @staticmethod
     def set_room_status(*, room: Room, status: str, user=None) -> Room:
@@ -210,7 +303,7 @@ class HotelService:
         name = (payload.get("full_name") or "").strip()
         if not name:
             raise HotelError("Guest full_name is required.")
-        return Guest.objects.create(
+        row = Guest.objects.create(
             tenant_id=payload.get("tenant_id")
             or (branch.tenant_id if branch else None),
             branch=branch,
@@ -219,9 +312,48 @@ class HotelService:
             email=(payload.get("email") or "").strip(),
             id_number=(payload.get("id_number") or "").strip(),
             notes=(payload.get("notes") or "").strip(),
-            is_active=bool(payload.get("is_active", True)),
+            is_active=_as_bool(payload.get("is_active"), True),
             created_by=user,
         )
+        write_audit(
+            action="create",
+            module="hotel",
+            entity=row,
+            user=user,
+            request=request,
+            new_values={"full_name": row.full_name},
+        )
+        return row
+
+    @staticmethod
+    @transaction.atomic
+    def update_guest(*, guest: Guest, data, user=None, request=None) -> Guest:
+        payload = dict(data or {})
+        if "full_name" in payload:
+            name = (payload.get("full_name") or "").strip()
+            if not name:
+                raise HotelError("Guest full_name is required.")
+            guest.full_name = name
+        if "phone" in payload:
+            guest.phone = (payload.get("phone") or "").strip()
+        if "email" in payload:
+            guest.email = (payload.get("email") or "").strip()
+        if "id_number" in payload:
+            guest.id_number = (payload.get("id_number") or "").strip()
+        if "notes" in payload:
+            guest.notes = (payload.get("notes") or "").strip()
+        if "is_active" in payload:
+            guest.is_active = _as_bool(payload.get("is_active"))
+        guest.updated_by = user
+        guest.save()
+        write_audit(action="update", module="hotel", entity=guest, user=user, request=request)
+        return guest
+
+    @staticmethod
+    def soft_delete_guest(*, guest: Guest, user=None, request=None) -> Guest:
+        guest.soft_delete(user=user)
+        write_audit(action="delete", module="hotel", entity=guest, user=user, request=request)
+        return guest
 
     # --- Reservations ---
     @staticmethod
@@ -325,6 +457,71 @@ class HotelService:
             HotelService.set_room_status(
                 room=room, status=Room.STATUS_RESERVED, user=user
             )
+        write_audit(
+            action="create",
+            module="hotel",
+            entity=reservation,
+            user=user,
+            request=request,
+            new_values={"reservation_number": reservation.reservation_number},
+        )
+        return reservation
+
+    @staticmethod
+    @transaction.atomic
+    def update_reservation(*, reservation: Reservation, data, user=None, request=None) -> Reservation:
+        if reservation.status not in (Reservation.STATUS_BOOKED,):
+            raise HotelError("Only booked reservations can be edited.")
+        payload = dict(data or {})
+        if payload.get("guest_id"):
+            reservation.guest = HotelService.get_guest(
+                pk=payload["guest_id"], user=user, request=request
+            )
+        if payload.get("room_type_id"):
+            reservation.room_type = HotelService.get_room_type(
+                pk=payload["room_type_id"], user=user, request=request
+            )
+        check_in = reservation.check_in_date
+        check_out = reservation.check_out_date
+        if "check_in_date" in payload:
+            check_in = _as_date(payload.get("check_in_date")) or check_in
+        if "check_out_date" in payload:
+            check_out = _as_date(payload.get("check_out_date")) or check_out
+        if check_out <= check_in:
+            raise HotelError("check_out_date must be after check_in_date.")
+        reservation.check_in_date = check_in
+        reservation.check_out_date = check_out
+        if "room_id" in payload:
+            room = None
+            if payload.get("room_id"):
+                room = HotelService.get_room(
+                    pk=payload["room_id"], user=user, request=request
+                )
+                HotelService._assert_room_available(
+                    room=room,
+                    check_in=check_in,
+                    check_out=check_out,
+                    exclude_id=reservation.id,
+                )
+            reservation.room = room
+        elif reservation.room_id:
+            HotelService._assert_room_available(
+                room=reservation.room,
+                check_in=check_in,
+                check_out=check_out,
+                exclude_id=reservation.id,
+            )
+        if "adults" in payload:
+            reservation.adults = int(payload.get("adults") or 1)
+        if "children" in payload:
+            reservation.children = int(payload.get("children") or 0)
+        if "rate_amount" in payload and payload.get("rate_amount") not in (None, ""):
+            reservation.rate_amount = Decimal(str(payload.get("rate_amount")))
+        if "notes" in payload:
+            reservation.notes = (payload.get("notes") or "").strip()
+        reservation.updated_by = user
+        reservation.save()
+        write_audit(action="update", module="hotel", entity=reservation, user=user, request=request)
         return reservation
 
     @staticmethod
