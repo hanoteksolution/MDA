@@ -80,9 +80,14 @@ export function FormSection({
 
 export function FormGrid({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("grid grid-cols-1 gap-6 md:grid-cols-2", className)}>{children}</div>
+    <div className={cn("grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-3", className)}>
+      {children}
+    </div>
   );
 }
+
+/** Use on FormField when the control should span the full form row. */
+export const formFieldFullWidthClass = "md:col-span-2 xl:col-span-3";
 
 interface FormPanelProps {
   title?: string;

@@ -789,7 +789,7 @@ export function PharmacyPage() {
                 onChange={(e) => setRxForm({ ...rxForm, quantity: e.target.value })}
               />
               <Input
-                className="sm:col-span-2"
+                className="md:col-span-2 xl:col-span-3"
                 placeholder="Notes"
                 value={rxForm.notes}
                 onChange={(e) => setRxForm({ ...rxForm, notes: e.target.value })}

@@ -499,7 +499,7 @@ export function PlatformSubscriptionsPage() {
                 <FormField
                   label="Payment steps (one per line)"
                   htmlFor="pay-steps"
-                  className="md:col-span-2"
+                  className="md:col-span-2 xl:col-span-3"
                 >
                   <textarea
                     id="pay-steps"

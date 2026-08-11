@@ -27,3 +27,5 @@ export { HotelPage } from "@/modules/hotel/pages/HotelPage";
 export { PropertyPage } from "@/modules/property/pages/PropertyPage";
 export { HousingPage } from "@/modules/housing/pages/HousingPage";
 export { OfficePage } from "@/modules/office/pages/OfficePage";
+export { ProjectManagementPage } from "@/modules/projects/pages/ProjectManagementPage";
+export { TravelAgencyPage } from "@/modules/travel/pages/TravelAgencyPage";

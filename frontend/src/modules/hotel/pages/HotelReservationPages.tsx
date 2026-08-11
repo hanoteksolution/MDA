@@ -184,7 +184,7 @@ export function HotelReservationFormPage({ editId }: { editId?: string }) {
                 <FormField label="Nightly rate">
                   <Input type="number" min="0" step="0.01" value={form.rate_amount} onChange={(e) => setForm({ ...form, rate_amount: e.target.value })} />
                 </FormField>
-                <FormField label="Notes" className="sm:col-span-2">
+                <FormField label="Notes" className="md:col-span-2 xl:col-span-3">
                   <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                 </FormField>
               </FormGrid>

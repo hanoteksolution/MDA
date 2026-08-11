@@ -160,7 +160,7 @@ export function PropertyUnitFormPage({ editId }: { editId?: string }) {
                 <FormField label="Deposit">
                   <Input type="number" min="0" step="0.01" value={form.deposit_amount} onChange={(e) => setForm({ ...form, deposit_amount: e.target.value })} />
                 </FormField>
-                <FormField label="Notes" className="sm:col-span-2">
+                <FormField label="Notes" className="md:col-span-2 xl:col-span-3">
                   <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                 </FormField>
               </FormGrid>

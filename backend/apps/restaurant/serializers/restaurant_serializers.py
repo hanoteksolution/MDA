@@ -76,3 +76,106 @@ def serialize_order(row, *, include_lines=True) -> dict:
         data["lines"] = [serialize_line(l) for l in lines]
         data["line_count"] = len(lines)
     return data
+
+
+def serialize_floor(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "branch_name": row.branch.name if row.branch_id else "",
+        "name": row.name,
+        "code": row.code,
+        "sort_order": row.sort_order,
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+    }
+
+
+def serialize_station(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "branch_name": row.branch.name if row.branch_id else "",
+        "name": row.name,
+        "code": row.code,
+        "sort_order": row.sort_order,
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+    }
+
+
+def serialize_modifier_group(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "branch_name": row.branch.name if row.branch_id else "",
+        "name": row.name,
+        "code": row.code,
+        "required": row.required,
+        "min_select": row.min_select,
+        "max_select": row.max_select,
+        "sort_order": row.sort_order,
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+    }
+
+
+def serialize_modifier(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "group_id": str(row.group_id),
+        "group_name": row.group.name if row.group_id else "",
+        "name": row.name,
+        "code": row.code,
+        "price_delta": float(row.price_delta or 0),
+        "sort_order": row.sort_order,
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+    }
+
+
+def serialize_ingredient(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "product_id": str(row.product_id) if row.product_id else None,
+        "name": row.name,
+        "code": row.code,
+        "unit": row.unit,
+        "unit_cost": float(row.unit_cost or 0),
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+    }
+
+
+def serialize_recipe_ingredient(row) -> dict:
+    return {
+        "id": str(row.id),
+        "ingredient_id": str(row.ingredient_id),
+        "ingredient_name": row.ingredient.name if row.ingredient_id else "",
+        "quantity": float(row.quantity or 0),
+        "unit": row.unit,
+        "unit_cost": float(row.unit_cost or 0),
+        "notes": row.notes or "",
+    }
+
+
+def serialize_recipe(row, *, include_ingredients=True) -> dict:
+    data = {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "menu_item_id": str(row.menu_item_id),
+        "menu_item_name": row.menu_item.name if row.menu_item_id else "",
+        "name": row.name,
+        "version": row.version,
+        "yield_qty": float(row.yield_qty or 0),
+        "waste_percent": float(row.waste_percent or 0),
+        "is_active": row.is_active,
+        "notes": row.notes or "",
+        "total_cost": float(row.total_cost() or 0),
+    }
+    if include_ingredients:
+        rows = list(row.ingredients.filter(deleted_at__isnull=True).select_related("ingredient"))
+        data["ingredients"] = [serialize_recipe_ingredient(i) for i in rows]
+    return data

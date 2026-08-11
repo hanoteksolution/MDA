@@ -192,7 +192,7 @@ export function SupplierFormPage({ editId }: { editId?: string }) {
             <FormField label="Payment Terms (days)">
               <Input type="number" min="0" value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} />
             </FormField>
-            <FormField label="Address" className="md:col-span-2">
+            <FormField label="Address" className="md:col-span-2 xl:col-span-3">
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </FormField>
           </FormGrid>

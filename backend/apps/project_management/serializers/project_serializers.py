@@ -1,0 +1,41 @@
+def serialize_project(row) -> dict:
+    return {
+        "id": str(row.id),
+        "branch_id": str(row.branch_id),
+        "branch_name": row.branch.name if row.branch_id else "",
+        "client_id": str(row.client_id) if row.client_id else None,
+        "client_name": row.client.full_name if row.client_id else "",
+        "project_manager_id": str(row.project_manager_id) if row.project_manager_id else None,
+        "project_manager_name": (
+            row.project_manager.get_full_name() or row.project_manager.username
+            if row.project_manager_id
+            else ""
+        ),
+        "cost_center_id": str(row.cost_center_id) if row.cost_center_id else None,
+        "cost_center_code": row.cost_center.code if row.cost_center_id else "",
+        "project_code": row.project_code,
+        "name": row.name,
+        "project_type": row.project_type,
+        "owner_name": row.owner_name or "",
+        "location": row.location or "",
+        "description": row.description or "",
+        "start_date": row.start_date.isoformat() if row.start_date else None,
+        "planned_end_date": row.planned_end_date.isoformat() if row.planned_end_date else None,
+        "actual_end_date": row.actual_end_date.isoformat() if row.actual_end_date else None,
+        "status": row.status,
+        "priority": row.priority,
+        "health": row.health,
+        "progress_percent": float(row.progress_percent or 0),
+        "budget": float(row.budget or 0),
+        "contract_value": float(row.contract_value or 0),
+        "expected_revenue": float(row.expected_revenue or 0),
+        "cost_estimate": float(row.cost_estimate or 0),
+        "profit_estimate": float(row.profit_estimate or 0),
+        "currency": row.currency or "USD",
+        "tax_rate": float(row.tax_rate or 0),
+        "payment_terms": row.payment_terms or "",
+        "notes": row.notes or "",
+        "is_archived": row.is_archived,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }

@@ -1,0 +1,21 @@
+def serialize_milestone(row) -> dict:
+    return {
+        "id": str(row.id),
+        "project_id": str(row.project_id),
+        "project_code": row.project.project_code if row.project_id else "",
+        "project_name": row.project.name if row.project_id else "",
+        "wbs_node_id": str(row.wbs_node_id) if row.wbs_node_id else None,
+        "wbs_code": row.wbs_node.code if row.wbs_node_id else "",
+        "wbs_name": row.wbs_node.name if row.wbs_node_id else "",
+        "code": row.code,
+        "name": row.name,
+        "description": row.description or "",
+        "due_date": row.due_date.isoformat() if row.due_date else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "status": row.status,
+        "is_critical": row.is_critical,
+        "sort_order": row.sort_order,
+        "notes": row.notes or "",
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }

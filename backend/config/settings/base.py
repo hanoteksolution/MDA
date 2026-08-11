@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "apps.property_management",
     "apps.housing_rental",
     "apps.office_rental",
+    "apps.project_management",
+    "apps.travel_agency",
     "apps.finance",
     "apps.reports",
     "apps.notifications",

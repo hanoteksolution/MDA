@@ -246,7 +246,7 @@ export function SettingsPage() {
                   onChange={(e) => setCompany({ ...company, phone: e.target.value })}
                 />
               </FormField>
-              <FormField label="Address" className="md:col-span-2">
+              <FormField label="Address" className="md:col-span-2 xl:col-span-3">
                 <Input
                   value={company.address ?? ""}
                   onChange={(e) => setCompany({ ...company, address: e.target.value })}

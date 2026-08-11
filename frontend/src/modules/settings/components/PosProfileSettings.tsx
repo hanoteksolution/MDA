@@ -132,7 +132,7 @@ export function PosProfileSettings() {
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Receipt Footer" className="md:col-span-2">
+          <FormField label="Receipt Footer" className="md:col-span-2 xl:col-span-3">
             <Input
               value={profile.receipt_footer}
               onChange={(e) => setProfile({ ...profile, receipt_footer: e.target.value })}

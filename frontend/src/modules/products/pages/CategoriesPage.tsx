@@ -232,7 +232,7 @@ export function CategoriesPage() {
                 Active
               </label>
             </FormField>
-            <FormField label="Description" className="sm:col-span-2">
+            <FormField label="Description" className="md:col-span-2 xl:col-span-3">
               <Input
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}

@@ -285,7 +285,7 @@ export function CustomerFormPage({ editId }: { editId?: string }) {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Address" className="md:col-span-2">
+            <FormField label="Address" className="md:col-span-2 xl:col-span-3">
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </FormField>
           </FormGrid>

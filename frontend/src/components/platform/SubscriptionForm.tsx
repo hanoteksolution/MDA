@@ -166,7 +166,7 @@ export function PlanCreateInline({ onCreated }: { onCreated: (plan: PlatformPlan
             onChange={(e) => setPlanForm({ ...planForm, max_branches: e.target.value })}
           />
         </FormField>
-        <FormField label="Description" className="md:col-span-2">
+        <FormField label="Description" className="md:col-span-2 xl:col-span-3">
           <Input
             value={planForm.description}
             onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
@@ -201,7 +201,7 @@ export function SubscriptionFormFields({
 
   return (
     <FormGrid>
-      <FormField label="Plan" required className="md:col-span-2">
+      <FormField label="Plan" required className="md:col-span-2 xl:col-span-3">
         <div className="flex flex-wrap items-start gap-2">
           <div className="min-w-[220px] flex-1">
             <Select
@@ -360,7 +360,7 @@ export function SubscriptionFormFields({
       </FormField>
       <FormField
         label="Alert message"
-        className="md:col-span-2"
+        className="md:col-span-2 xl:col-span-3"
         hint={`Use placeholders: ${ALERT_TEMPLATE_PLACEHOLDERS}`}
       >
         <textarea
@@ -370,7 +370,7 @@ export function SubscriptionFormFields({
           placeholder="Payment due for {shop_name}. {days_left} days left. Monthly fee: ${monthly_fee}."
         />
       </FormField>
-      <FormField label="Notes" className="md:col-span-2">
+      <FormField label="Notes" className="md:col-span-2 xl:col-span-3">
         <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </FormField>
     </FormGrid>

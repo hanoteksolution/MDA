@@ -137,6 +137,26 @@ MODULE_SEEDS = [
         "/futsal",
         {"supports_mobile": False},
     ),
+    (
+        "project_management",
+        "Project Management",
+        "industry",
+        "Projects, budgets, tasks, BOQ, workforce, and cost control",
+        150,
+        ["inventory", "purchases", "sales"],
+        "/project",
+        {"supports_inventory": True, "supports_mobile": True},
+    ),
+    (
+        "travel_agency",
+        "Travel Agency",
+        "industry",
+        "Bookings, tours, flights, hotels, visa, and travel finance",
+        160,
+        ["sales", "purchases"],
+        "/travel",
+        {"supports_mobile": True},
+    ),
 ]
 
 # API path prefix → required module code (first match wins).
@@ -147,6 +167,8 @@ MODULE_PATH_PREFIXES: list[tuple[str, str]] = [
     ("/api/v1/restaurant/", "restaurant"),
     ("/api/v1/hotel/", "hotel"),
     ("/api/v1/property/", "property_management"),
+    ("/api/v1/projects/", "project_management"),
+    ("/api/v1/travel/", "travel_agency"),
     ("/api/v1/housing/", "housing_rental"),
     ("/api/v1/office/", "office_rental"),
     ("/api/v1/pos/", "pos"),

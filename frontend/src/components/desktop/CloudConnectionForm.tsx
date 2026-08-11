@@ -125,7 +125,7 @@ export function CloudConnectionForm({ onSaved, showBackLink = false }: CloudConn
               onChange={(e) => setForm({ ...form, tenant_slug: e.target.value })}
             />
           </FormField>
-          <FormField label="Sync secret" hint="Copy from Edit Shop on the platform" className="md:col-span-2">
+          <FormField label="Sync secret" hint="Copy from Edit Shop on the platform" className="md:col-span-2 xl:col-span-3">
             <Input
               value={form.sync_secret}
               disabled={loading}

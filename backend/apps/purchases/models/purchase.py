@@ -26,6 +26,14 @@ class PurchaseOrder(TenantScopedModel, BaseModel):
     ordered_by = models.ForeignKey(
         "authentication.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="purchase_orders"
     )
+    project = models.ForeignKey(
+        "project_management.Project", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="purchase_orders",
+    )
+    wbs_node = models.ForeignKey(
+        "project_management.WbsNode", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="purchase_orders",
+    )
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True)
     order_date = models.DateField(default=timezone.localdate)
     expected_date = models.DateField(null=True, blank=True)

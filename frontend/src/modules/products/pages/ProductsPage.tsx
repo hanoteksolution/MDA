@@ -402,7 +402,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                 description="Classification, identity, and internal notes."
               >
                 <FormGrid>
-                  <FormField label="Category" required className="md:col-span-2">
+                  <FormField label="Category" required className="md:col-span-2 xl:col-span-3">
                     <CreatableSelect
                       value={form.category_id}
                       onChange={(v) => setForm({ ...form, category_id: v })}

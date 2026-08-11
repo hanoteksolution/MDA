@@ -127,7 +127,7 @@ export function ConnectionSettings() {
                   onChange={(e) => setCloudPass(e.target.value)}
                 />
               </FormField>
-              <div className="md:col-span-2">
+              <div className="md:col-span-2 xl:col-span-3">
                 <Button type="button" onClick={signInCloud}>
                   Sign in to cloud
                 </Button>

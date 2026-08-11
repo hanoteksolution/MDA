@@ -45,5 +45,7 @@ urlpatterns = [
     path("property/", include("api.v1.property.urls")),
     path("housing/", include("api.v1.housing.urls")),
     path("office/", include("api.v1.office.urls")),
+    path("projects/", include("api.v1.projects.urls")),
+    path("travel/", include("api.v1.travel.urls")),
     path("notifications/", include("api.v1.notifications.urls")),
 ]

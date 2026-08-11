@@ -85,7 +85,7 @@ export function BranchFormPage({ editId }: { editId?: string }) {
             <FormField label="Email">
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </FormField>
-            <FormField label="Address" className="md:col-span-2">
+            <FormField label="Address" className="md:col-span-2 xl:col-span-3">
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </FormField>
           </FormGrid>

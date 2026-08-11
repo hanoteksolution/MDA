@@ -289,7 +289,7 @@ export function RoleFormPage({ editId }: { editId?: string }) {
                         disabled={isSystem}
                       />
                     </FormField>
-                    <FormField label="Description" className="md:col-span-2">
+                    <FormField label="Description" className="md:col-span-2 xl:col-span-3">
                       <Input
                         value={form.description}
                         onChange={(e) => setForm({ ...form, description: e.target.value })}

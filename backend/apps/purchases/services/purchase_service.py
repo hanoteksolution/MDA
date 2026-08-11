@@ -11,7 +11,7 @@ from core.tenancy import apply_tenant_scope, stamp_tenant_id
 class PurchaseOrderService:
     @staticmethod
     def list(*, search=None, status=None, supplier_id=None, branch_id=None, user=None, request=None):
-        qs = PurchaseOrder.active_objects().select_related("supplier", "branch", "ordered_by").prefetch_related("items__product")
+        qs = PurchaseOrder.active_objects().select_related("supplier", "branch", "ordered_by", "project", "wbs_node").prefetch_related("items__product")
         qs = apply_tenant_scope(qs, user=user, request=request)
         if search:
             qs = qs.filter(
@@ -52,6 +52,15 @@ class PurchaseOrderService:
         payload = stamp_tenant_id(dict(data), user=user)
         if not payload.get("tenant_id") and getattr(branch, "tenant_id", None):
             payload["tenant_id"] = branch.tenant_id
+        if payload.get("project_id"):
+            from apps.project_management.services.project_service import ProjectService
+            project = ProjectService.get_project(pk=payload["project_id"], user=user)
+            if project.tenant_id != payload.get("tenant_id"):
+                raise ValueError("Project must belong to the purchase order tenant.")
+            if payload.get("wbs_node_id"):
+                from apps.project_management.models import WbsNode
+                if not WbsNode.active_objects().filter(pk=payload["wbs_node_id"], project=project).exists():
+                    raise ValueError("WBS node does not belong to the project.")
         order = PurchaseOrder.objects.create(
             order_number=PurchaseOrderService._next_order_number(branch=branch),
             supplier_id=supplier_id,

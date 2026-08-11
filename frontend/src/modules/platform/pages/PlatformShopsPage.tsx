@@ -617,7 +617,7 @@ export function PlatformShopsPage() {
                     onChange={(e) => setEditingShop({ ...editingShop, timezone: e.target.value })}
                   />
                 </FormField>
-                <FormField label="Address" className="md:col-span-2">
+                <FormField label="Address" className="md:col-span-2 xl:col-span-3">
                   <Input
                     value={editingShop.address}
                     onChange={(e) => setEditingShop({ ...editingShop, address: e.target.value })}
@@ -657,7 +657,7 @@ export function PlatformShopsPage() {
                         Link shops under one owner (e.g. Shop A and Shop B) for a multi-shop manager on the cloud.
                       </p>
                       <FormGrid className="mt-4">
-                        <FormField label="Group assignment" className="md:col-span-2">
+                        <FormField label="Group assignment" className="md:col-span-2 xl:col-span-3">
                           <Select
                             value={editingShop.shop_group_id || "__none__"}
                             onValueChange={(v) =>
@@ -697,7 +697,7 @@ export function PlatformShopsPage() {
                         : ""}
                     </p>
                     <FormGrid className="mt-4">
-                      <FormField label="Plan" className="md:col-span-2">
+                      <FormField label="Plan" className="md:col-span-2 xl:col-span-3">
                         <div className="flex flex-wrap items-start gap-2">
                           <div className="min-w-[220px] flex-1">
                             <Select
@@ -754,7 +754,7 @@ export function PlatformShopsPage() {
                       This shop has no subscription. Assign a plan or existing license below.
                     </p>
                     <FormGrid className="mt-4">
-                      <FormField label="Assign subscription" className="md:col-span-2">
+                      <FormField label="Assign subscription" className="md:col-span-2 xl:col-span-3">
                         <Select
                           value={editingShop.subscription_mode}
                           onValueChange={(v) =>
@@ -776,7 +776,7 @@ export function PlatformShopsPage() {
                       </FormField>
                       {editingShop.subscription_mode === "plan" && (
                         <>
-                          <FormField label="Plan" required className="md:col-span-2">
+                          <FormField label="Plan" required className="md:col-span-2 xl:col-span-3">
                             <div className="flex flex-wrap items-start gap-2">
                               <div className="min-w-[220px] flex-1">
                                 <Select
@@ -836,7 +836,7 @@ export function PlatformShopsPage() {
                         </>
                       )}
                       {editingShop.subscription_mode === "existing" && (
-                        <FormField label="Existing license" required className="md:col-span-2">
+                        <FormField label="Existing license" required className="md:col-span-2 xl:col-span-3">
                           <Select
                             value={editingShop.subscription_id || undefined}
                             onValueChange={(v) =>
@@ -975,7 +975,7 @@ export function PlatformShopsPage() {
               <FormField label="Phone">
                 <Input value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
               </FormField>
-              <FormField label="Address" className="md:col-span-2">
+              <FormField label="Address" className="md:col-span-2 xl:col-span-3">
                 <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </FormField>
             </FormGrid>
@@ -996,7 +996,7 @@ export function PlatformShopsPage() {
                       Optional — group multiple cafeterias under one multi-shop manager account.
                     </p>
                     <FormGrid className="mt-4">
-                      <FormField label="Group" className="md:col-span-2">
+                      <FormField label="Group" className="md:col-span-2 xl:col-span-3">
                         <Select
                           value={form.shop_group_mode}
                           onValueChange={(v) =>
@@ -1019,7 +1019,7 @@ export function PlatformShopsPage() {
                         </Select>
                       </FormField>
                       {form.shop_group_mode === "existing" && (
-                        <FormField label="Existing group" required className="md:col-span-2">
+                        <FormField label="Existing group" required className="md:col-span-2 xl:col-span-3">
                           <Select
                             value={form.shop_group_id || undefined}
                             onValueChange={(v) => setForm({ ...form, shop_group_id: v })}
@@ -1038,7 +1038,7 @@ export function PlatformShopsPage() {
                         </FormField>
                       )}
                       {form.shop_group_mode === "new" && (
-                        <FormField label="New group name" required className="md:col-span-2">
+                        <FormField label="New group name" required className="md:col-span-2 xl:col-span-3">
                           <Input
                             required
                             value={form.shop_group_name}
@@ -1118,7 +1118,7 @@ export function PlatformShopsPage() {
             <div className="mt-8 border-t border-border pt-6">
               <h3 className="text-base font-semibold text-foreground">Subscription</h3>
               <FormGrid className="mt-4">
-              <FormField label="Subscription" className="md:col-span-2">
+              <FormField label="Subscription" className="md:col-span-2 xl:col-span-3">
                 <Select
                   value={form.subscription_mode}
                   onValueChange={(v) =>
@@ -1141,7 +1141,7 @@ export function PlatformShopsPage() {
               </FormField>
               {form.subscription_mode === "plan" && (
                 <>
-                  <FormField label="Plan" required className="md:col-span-2">
+                  <FormField label="Plan" required className="md:col-span-2 xl:col-span-3">
                     <div className="flex flex-wrap items-start gap-2">
                       <div className="min-w-[220px] flex-1">
                         <Select
@@ -1193,7 +1193,7 @@ export function PlatformShopsPage() {
                 </>
               )}
               {form.subscription_mode === "existing" && (
-                <FormField label="Existing license" required className="md:col-span-2">
+                <FormField label="Existing license" required className="md:col-span-2 xl:col-span-3">
                   <Select
                     value={form.subscription_id || undefined}
                     onValueChange={(v) => setForm({ ...form, subscription_id: v })}

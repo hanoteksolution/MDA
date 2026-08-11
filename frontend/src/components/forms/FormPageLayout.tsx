@@ -8,17 +8,28 @@ interface FormPageLayoutProps {
   className?: string;
 }
 
-/** Full-width form layout: 2/3 main column + 1/3 sticky sidebar on xl screens. */
+/**
+ * Form layout used by create/edit pages.
+ * - With aside: 2/3 main + 1/3 sticky sidebar on xl
+ * - Without aside: full-width main (no empty right column)
+ */
 export function FormPageLayout({ main, aside, actions, className }: FormPageLayoutProps) {
+  if (!aside) {
+    return (
+      <div className={cn("w-full space-y-6", className)}>
+        <div className="w-full space-y-6">{main}</div>
+        {actions}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("w-full space-y-6", className)}>
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">{main}</div>
-        {aside && (
-          <div className="space-y-6 xl:sticky xl:top-0 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:scrollbar-thin">
-            {aside}
-          </div>
-        )}
+        <div className="min-w-0 space-y-6 xl:col-span-2">{main}</div>
+        <div className="min-w-0 space-y-6 xl:sticky xl:top-0 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:scrollbar-thin">
+          {aside}
+        </div>
       </div>
       {actions}
     </div>

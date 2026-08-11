@@ -134,6 +134,18 @@ class PlatformService:
             ),
             ("salon", "Salon / Spa", ["pos", "inventory", "sales"], 110),
             ("futsal", "Futsal", ["pos", "inventory", "sales", "futsal"], 120),
+            (
+                "project_management",
+                "Project Management",
+                ["inventory", "sales", "purchases", "project_management"],
+                130,
+            ),
+            (
+                "travel_agency",
+                "Travel Agency",
+                ["sales", "purchases", "travel_agency"],
+                140,
+            ),
             ("other", "Other", ["pos", "inventory", "sales"], 200),
         ]
         for code, name, modules, sort_order in seeds:

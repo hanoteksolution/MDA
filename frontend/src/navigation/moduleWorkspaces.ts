@@ -19,7 +19,6 @@ import {
   Settings,
   Star,
   Clock,
-  Zap,
   HeartPulse,
   Users,
   UserCog,
@@ -28,6 +27,8 @@ import {
   UserPlus,
   CalendarPlus,
   PackagePlus,
+  Plane,
+  HardHat,
   Store,
   ShoppingBag,
   type LucideIcon,
@@ -62,6 +63,8 @@ export type WorkspaceCategoryId =
   | "healthcare"
   | "fitness"
   | "property"
+  | "construction"
+  | "travel"
   | "admin"
   | "reports"
   | "crm"
@@ -240,25 +243,42 @@ export interface WorkspaceCategory {
 }
 
 export const WORKSPACE_CATEGORIES: WorkspaceCategory[] = [
+  { id: "retail", label: "Retail & Commerce", icon: ShoppingBag, tone: "orange" },
+  { id: "hospitality", label: "Hospitality", icon: UtensilsCrossed, tone: "orange" },
+  { id: "healthcare", label: "Healthcare", icon: HeartPulse, tone: "emerald" },
+  { id: "fitness", label: "Fitness", icon: Dumbbell, tone: "violet" },
+  { id: "property", label: "Property", icon: Building2, tone: "teal" },
+  { id: "construction", label: "Construction", icon: HardHat, tone: "blue" },
+  { id: "travel", label: "Travel", icon: Plane, tone: "cyan" },
   { id: "operations", label: "Business Operations", icon: Briefcase, tone: "blue" },
   { id: "finance", label: "Finance", icon: Wallet, tone: "emerald" },
-  { id: "retail", label: "Retail & Commerce", icon: ShoppingBag, tone: "cyan" },
-  { id: "hospitality", label: "Hospitality", icon: UtensilsCrossed, tone: "orange" },
-  { id: "healthcare", label: "Healthcare", icon: HeartPulse, tone: "purple" },
-  { id: "fitness", label: "Fitness", icon: Dumbbell, tone: "pink" },
-  { id: "property", label: "Property Management", icon: Building2, tone: "rose" },
-  { id: "admin", label: "Administration", icon: Shield, tone: "zinc" },
   { id: "reports", label: "Reports & Analytics", icon: BarChart3, tone: "slate" },
+  { id: "admin", label: "Administration", icon: Shield, tone: "zinc" },
+  { id: "platform", label: "Platform", icon: Globe2, tone: "slate" },
   { id: "crm", label: "CRM", icon: Users, tone: "orange" },
   { id: "hr", label: "HR & Payroll", icon: UserCog, tone: "amber" },
-  { id: "platform", label: "Platform", icon: Globe2, tone: "rose" },
+];
+
+/** Hub sidebar grouping — Business industries vs Core platform services. */
+export const HUB_CATEGORY_GROUPS: { id: "business" | "core"; label: string; categories: WorkspaceCategoryId[] }[] = [
+  {
+    id: "business",
+    label: "Business",
+    categories: ["retail", "hospitality", "healthcare", "fitness", "property", "construction", "travel", "operations"],
+  },
+  {
+    id: "core",
+    label: "Core",
+    categories: ["finance", "reports", "admin", "platform"],
+  },
 ];
 
 export const HUB_NAV_SECTIONS = [
   { id: "all", label: "Overview", icon: LayoutDashboard },
   { id: "favorites", label: "Favorites", icon: Star },
   { id: "recent", label: "Recent", icon: Clock },
-  { id: "actions", label: "Quick Actions", icon: Zap },
+  { id: "business", label: "Business", icon: Briefcase },
+  { id: "core", label: "Core", icon: Shield },
 ] as const;
 
 export interface WorkspaceQuickAction {
@@ -542,6 +562,42 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     kind: "industry",
   }),
   ws({
+    code: "project",
+    label: "Project Management",
+    description: "Projects, budgets, BOQ, workforce, procurement, and delivery.",
+    route: "/project",
+    icon: HardHat,
+    tone: "blue",
+    category: "construction",
+    modules: ["project_management"],
+    permission: "projects.view",
+    pages: ["Projects", "Budgets", "Tasks", "BOQ", "Workforce", "Materials", "Finance", "Reports"],
+    quickActions: [
+      { label: "Projects", route: "/project", icon: HardHat },
+      { label: "Finance", route: "/project/finance", icon: Wallet },
+    ],
+    group: "venue",
+    kind: "industry",
+  }),
+  ws({
+    code: "travel",
+    label: "Travel Agency",
+    description: "Bookings, flights, hotels, visas, tours, and travel finance.",
+    route: "/travel",
+    icon: Plane,
+    tone: "cyan",
+    category: "travel",
+    modules: ["travel_agency"],
+    permission: "travel.bookings.view",
+    pages: ["Dashboard", "Bookings", "Flights", "Hotels", "Tours", "Visa", "Payments", "Reports"],
+    quickActions: [
+      { label: "Bookings", route: "/travel", icon: Plane },
+      { label: "Reports", route: "/travel/reports", icon: BarChart3 },
+    ],
+    group: "venue",
+    kind: "industry",
+  }),
+  ws({
     code: "housing",
     label: "Housing",
     description: "Residential leases and charges.",
@@ -782,6 +838,8 @@ export const VENUE_MODULE_CODES = [
   "property_management",
   "housing_rental",
   "office_rental",
+  "project_management",
+  "travel_agency",
 ] as const;
 
 export const ENGINE_MODULE_CODES = ["pos", "sales", "inventory", "purchases"] as const;

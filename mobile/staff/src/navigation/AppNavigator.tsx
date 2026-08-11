@@ -6,6 +6,7 @@ import { CustomersWorkspaceScreen } from "@/screens/CustomersWorkspaceScreen";
 import { DashboardWorkspaceScreen } from "@/screens/DashboardWorkspaceScreen";
 import { FinanceWorkspaceScreen } from "@/screens/FinanceWorkspaceScreen";
 import { FutsalWorkspaceScreen } from "@/screens/FutsalWorkspaceScreen";
+import { FieldOpsScreen } from "@/screens/FieldOpsScreen";
 import { GymWorkspaceScreen } from "@/screens/GymWorkspaceScreen";
 import { HotelWorkspaceScreen } from "@/screens/HotelWorkspaceScreen";
 import { HousingWorkspaceScreen } from "@/screens/HousingWorkspaceScreen";
@@ -54,6 +55,7 @@ export function AppNavigator() {
       <Stack.Screen name="HousingWorkspace" component={HousingWorkspaceScreen} />
       <Stack.Screen name="OfficeWorkspace" component={OfficeWorkspaceScreen} />
       <Stack.Screen name="FutsalWorkspace" component={FutsalWorkspaceScreen} />
+      <Stack.Screen name="FieldOps" component={FieldOpsScreen} />
     </Stack.Navigator>
   );
 }

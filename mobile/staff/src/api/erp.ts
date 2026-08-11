@@ -14,6 +14,14 @@ export function money(value: unknown): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+export function fetchProjectFieldSummary() {
+  return apiRequest<Record<string, unknown>>("/projects/mobile/summary/");
+}
+
+export function fetchProjectFieldTasks() {
+  return apiRequest<Record<string, unknown>[]>("/projects/mobile/my-tasks/");
+}
+
 export function fetchDashboardKpis(period = "today") {
   return apiRequest<Record<string, unknown>>(`/dashboard/kpis/?period=${period}`);
 }

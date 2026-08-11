@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Armchair, CookingPot, Plus, UtensilsCrossed } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -33,11 +33,18 @@ const RESTAURANT_TAB_PATHS: Record<string, Tab> = {
 };
 
 export function RestaurantPage() {
+  const navigate = useNavigate();
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("restaurant.manage");
   const canFloor = hasPermission("restaurant.floor") || canManage;
   const canKitchen = hasPermission("restaurant.kitchen") || canFloor;
+  const canMenuCreate = hasPermission("restaurant.menu.create") || canManage;
+  const canMenuUpdate = hasPermission("restaurant.menu.update") || canManage;
+  const canOrderUpdate = hasPermission("restaurant.orders.update") || canFloor || canKitchen;
+  const canOrderCancel = hasPermission("restaurant.orders.cancel") || canFloor || canManage;
+  const canOrderVoid = hasPermission("restaurant.orders.void") || canManage;
+  const canOrderRefund = hasPermission("restaurant.orders.refund") || canManage;
 
   const location = useLocation();
   const restaurantRoot = location.pathname.startsWith("/cafeteria") ? "/cafeteria" : "/restaurant";
@@ -156,18 +163,36 @@ export function RestaurantPage() {
       key: "actions",
       header: "",
       cell: (r) =>
-        canFloor && r.status !== "paid" && r.status !== "cancelled" ? (
+        (canOrderUpdate || canOrderCancel || canOrderVoid || canOrderRefund) ? (
           <div className="flex gap-1 justify-end">
-            {r.status === "open" ? (
+            {(r.status === "open" || r.status === "draft") && canOrderUpdate ? (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => restaurantApi.updateOrderStatus(r.id, "sent").then(reload)}
+                onClick={() => restaurantApi.submitOrder(r.id).then(reload)}
               >
-                Send
+                Submit
               </Button>
             ) : null}
-            {r.status === "sent" || r.status === "ready" ? (
+            {r.status === "submitted" && canKitchen ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => restaurantApi.updateOrderStatus(r.id, "preparing").then(reload)}
+              >
+                Start
+              </Button>
+            ) : null}
+            {(r.status === "preparing" || r.status === "sent") && canKitchen ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => restaurantApi.updateOrderStatus(r.id, "ready").then(reload)}
+              >
+                Ready
+              </Button>
+            ) : null}
+            {r.status === "ready" && canOrderUpdate ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -176,12 +201,35 @@ export function RestaurantPage() {
                 Serve
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              onClick={() => restaurantApi.updateOrderStatus(r.id, "paid").then(reload)}
-            >
-              Mark paid
-            </Button>
+            {r.status === "served" && canOrderUpdate ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => restaurantApi.updateOrderStatus(r.id, "completed").then(reload)}
+              >
+                Complete
+              </Button>
+            ) : null}
+            {(r.status === "completed" || r.status === "served") && canOrderUpdate ? (
+              <Button size="sm" onClick={() => restaurantApi.updateOrderStatus(r.id, "paid").then(reload)}>
+                Mark paid
+              </Button>
+            ) : null}
+            {canOrderCancel && ["draft", "open", "submitted", "preparing", "sent", "ready", "served"].includes(r.status) ? (
+              <Button size="sm" variant="ghost" onClick={() => restaurantApi.cancelOrder(r.id).then(reload)}>
+                Cancel
+              </Button>
+            ) : null}
+            {canOrderVoid && ["open", "submitted", "preparing", "sent", "ready", "served"].includes(r.status) ? (
+              <Button size="sm" variant="ghost" onClick={() => restaurantApi.voidOrder(r.id).then(reload)}>
+                Void
+              </Button>
+            ) : null}
+            {canOrderRefund && r.status === "paid" ? (
+              <Button size="sm" variant="ghost" onClick={() => restaurantApi.refundOrder(r.id).then(reload)}>
+                Refund
+              </Button>
+            ) : null}
           </div>
         ) : null,
     },
@@ -198,6 +246,22 @@ export function RestaurantPage() {
         <Badge variant={r.is_available ? "success" : "secondary"}>
           {r.is_available ? "Yes" : "No"}
         </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (r) => (
+        <div className="flex justify-end gap-1">
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/restaurant/menu/items/${r.id}`)}>
+            View
+          </Button>
+          {canMenuUpdate ? (
+            <Button size="sm" variant="ghost" onClick={() => navigate(`/restaurant/menu/items/${r.id}/edit`)}>
+              Edit
+            </Button>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -340,9 +404,16 @@ export function RestaurantPage() {
 
       {tab === "kitchen" ? (
         <ContentSection title="Kitchen" description="Tickets sent to the pass. Mark ready then serve on the floor.">
+          {canKitchen ? (
+            <div className="mb-3 flex gap-2">
+              <Button variant="secondary" onClick={() => navigate("/restaurant/stations/new")}>
+                New station
+              </Button>
+            </div>
+          ) : null}
           <DataTable
             columns={orderColumns}
-            data={orders.filter((o) => ["sent", "ready", "preparing"].includes(o.status))}
+            data={orders.filter((o) => ["submitted", "sent", "preparing", "ready"].includes(o.status))}
             loading={loading}
             emptyMessage="No tickets in the kitchen."
           />
@@ -354,6 +425,22 @@ export function RestaurantPage() {
 
       {tab === "menu" ? (
         <ContentSection title="Menu" description="Categories and sellable items">
+          {canMenuCreate ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => navigate("/restaurant/menu/items/new")}>
+                New menu item
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/restaurant/modifiers/new")}>
+                New modifier
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/restaurant/recipes/new")}>
+                New recipe
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/restaurant/ingredients/new")}>
+                New ingredient
+              </Button>
+            </div>
+          ) : null}
           {canManage ? (
             <>
               <FormGrid className="mb-4">
@@ -417,6 +504,13 @@ export function RestaurantPage() {
 
       {tab === "tables" ? (
         <ContentSection title="Floor tables" description="Dining room layout">
+          {canManage ? (
+            <div className="mb-3 flex gap-2">
+              <Button variant="secondary" onClick={() => navigate("/restaurant/floors/new")}>
+                New floor
+              </Button>
+            </div>
+          ) : null}
           {canManage ? (
             <FormGrid className="mb-4">
               <FormField label="Code">

@@ -19,4 +19,5 @@ export type RootStackParamList = {
   HousingWorkspace: undefined;
   OfficeWorkspace: undefined;
   FutsalWorkspace: undefined;
+  FieldOps: undefined;
 };

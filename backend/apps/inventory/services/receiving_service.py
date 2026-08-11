@@ -235,6 +235,12 @@ class PurchaseReceivingService:
             user=user,
             warehouse=warehouse,
         )
+        if po.project_id:
+            from apps.project_management.services.project_operations_service import ProjectInventoryService
+
+            ProjectInventoryService.allocate_from_grn(
+                purchase_order=po, lines=lines, user=user, notes=notes
+            )
 
         return {
             "purchase_order_id": str(po.id),

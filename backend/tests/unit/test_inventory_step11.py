@@ -19,6 +19,7 @@ from apps.inventory.services.transfer_service import (
 from apps.platform.models import Tenant
 from apps.products.models import Category, Product, Unit
 from apps.purchases.models import PurchaseOrder, PurchaseOrderItem
+from apps.project_management.models import Project, ProjectInventoryAllocation
 from apps.settings_app.models import Branch, Company
 from apps.suppliers.models import Supplier
 
@@ -124,6 +125,26 @@ def test_receive_increases_stock(inv_env):
     assert po.status == PurchaseOrder.STATUS_ORDERED
     item = po.items.get(product=product)
     assert item.quantity_received == Decimal("4")
+
+
+@pytest.mark.django_db
+def test_project_purchase_receipt_creates_inventory_allocation(inv_env):
+    project = Project.objects.create(
+        tenant=inv_env["tenant"], branch=inv_env["branch"],
+        project_code="PRJ-GRN-1", name="Receipt project",
+    )
+    po = inv_env["po"]
+    po.project = project
+    po.save(update_fields=["project", "updated_at"])
+    PurchaseReceivingService.receive(
+        purchase_order_id=po.id,
+        warehouse_id=inv_env["wh_a"].id,
+        lines=[ReceiveLineInput(product_id=inv_env["product"].id, quantity_received=Decimal("4"))],
+    )
+    allocation = ProjectInventoryAllocation.active_objects().get(project=project, product=inv_env["product"])
+    assert allocation.quantity == Decimal("4")
+    assert allocation.source_type == "grn"
+    assert allocation.source_id == po.id
 
 
 @pytest.mark.django_db

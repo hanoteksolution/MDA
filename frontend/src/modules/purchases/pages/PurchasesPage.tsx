@@ -387,7 +387,7 @@ export function PurchaseFormPage({ editId }: { editId?: string }) {
                   <FormField label="Expected Date">
                     <Input type="date" value={form.expected_date} onChange={(e) => setForm({ ...form, expected_date: e.target.value })} />
                   </FormField>
-                  <FormField label="Notes" className="md:col-span-2">
+                  <FormField label="Notes" className="md:col-span-2 xl:col-span-3">
                     <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes..." />
                   </FormField>
                 </FormGrid>

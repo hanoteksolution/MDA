@@ -29,6 +29,7 @@ const ROUTE_BY_WORKSPACE: Record<string, keyof RootStackParamList> = {
   housing_staff: "HousingWorkspace",
   office_staff: "OfficeWorkspace",
   futsal_staff: "FutsalWorkspace",
+  field_ops: "FieldOps",
 };
 
 const GROUPS: { id: string; label: string }[] = [
