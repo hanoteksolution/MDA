@@ -448,6 +448,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     pages: ["POS", "Sales", "Medicines", "Batches", "Expiry", "Finance"],
     quickActions: [
       { label: "Batches", route: "/pharmacy/batches", icon: Pill },
+      { label: "Medicines", route: "/pharmacy/medicines", icon: PackagePlus },
       { label: "Open POS", route: "/pharmacy/pos", icon: Store },
     ],
     group: "venue",
@@ -844,11 +845,44 @@ export const VENUE_MODULE_CODES = [
 
 export const ENGINE_MODULE_CODES = ["pos", "sales", "inventory", "purchases"] as const;
 
-export function retailUnlocked(enabled: string[] | undefined, elevated: boolean): boolean {
+const VENUE_VIEW_PERMISSIONS = [
+  "restaurant.view",
+  "gym.view",
+  "pharmacy.view",
+  "hotel.view",
+  "futsal.view",
+  "property_management.view",
+  "housing_rental.view",
+  "office_rental.view",
+  "projects.view",
+  "travel.bookings.view",
+] as const;
+
+/**
+ * Retail shell for POS / sales / inventory.
+ * - Pure retail shops: always unlocked when any engine module is enabled.
+ * - Multi-vertical shops (gym + restaurant + POS, etc.): still unlock Retail for
+ *   staff who can operate engines but cannot open venue workspaces (cashiers,
+ *   inventory). Venue managers keep engines nested under Gym/Restaurant.
+ */
+export function retailUnlocked(
+  enabled: string[] | undefined,
+  elevated: boolean,
+  hasPermission?: (code: string) => boolean
+): boolean {
   if (elevated || enabled == null) return true;
   const hasEngine = ENGINE_MODULE_CODES.some((m) => enabled.includes(m));
   if (!hasEngine) return false;
-  return !VENUE_MODULE_CODES.some((m) => enabled.includes(m));
+  const hasVenueModule = VENUE_MODULE_CODES.some((m) => enabled.includes(m));
+  if (!hasVenueModule) return true;
+  if (!hasPermission) return false;
+  const canEngine =
+    hasPermission("pos.access") ||
+    hasPermission("sales.view") ||
+    hasPermission("inventory.view");
+  if (!canEngine) return false;
+  const canVenue = VENUE_VIEW_PERMISSIONS.some((c) => hasPermission(c));
+  return !canVenue;
 }
 
 export function propertyUnlocked(enabled: string[] | undefined, elevated: boolean): boolean {
@@ -887,7 +921,7 @@ export function filterVisibleWorkspaces(
     if (w.code === "overview") return opts?.includeOverview !== false;
     if (w.code === "finance") return opts?.includeFinance !== false && permOk(w.permission, hasPermission, elevated);
     if (!permOk(w.permission, hasPermission, elevated)) return false;
-    if (w.code === "retail") return retailUnlocked(enabled, elevated);
+    if (w.code === "retail") return retailUnlocked(enabled, elevated, hasPermission);
     if (w.code === "property") return propertyUnlocked(enabled, elevated);
     if (!w.modules.length) return true;
     if (elevated) return true;

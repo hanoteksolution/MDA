@@ -43,10 +43,13 @@ export const settingsApi = {
 };
 
 export const adminApi = {
-  users: (search?: string) =>
-    apiRequest<ApiResponse<AdminUser[]>>(
-      `/users/${search ? `?search=${encodeURIComponent(search)}` : ""}`
-    ),
+  users: (params: { search?: string; tenant?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.tenant) q.set("tenant", params.tenant);
+    const qs = q.toString();
+    return apiRequest<ApiResponse<AdminUser[]>>(`/users/${qs ? `?${qs}` : ""}`);
+  },
 
   getUser: (id: string) => apiRequest<ApiResponse<AdminUser>>(`/users/${id}/`),
 
@@ -84,8 +87,12 @@ export const adminApi = {
   deleteRole: (id: string) =>
     apiRequest<ApiResponse<null>>(`/roles/${id}/`, { method: "DELETE" }),
 
-  permissions: () =>
-    apiRequest<ApiResponse<Record<string, { id: string; name: string; codename: string; module: string }[]>>>(
-      "/roles/permissions/"
-    ),
+  permissions: (params: { tenant?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.tenant) q.set("tenant", params.tenant);
+    const qs = q.toString();
+    return apiRequest<
+      ApiResponse<Record<string, { id: string; name: string; codename: string; module: string }[]>>
+    >(`/roles/permissions/${qs ? `?${qs}` : ""}`);
+  },
 };

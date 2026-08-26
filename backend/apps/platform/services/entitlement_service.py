@@ -162,13 +162,16 @@ class EntitlementService:
 
         Trial and demo tenants keep full business-type / preset modules so
         onboarding and demos are not stripped by a starter plan catalog.
+        Explicit provisioned_modules (multi-module demos/shops) are preserved.
         Paid (non-trial) subscriptions apply business ∩ plan inclusions.
         """
         EntitlementService.ensure_default_plan_modules()
         sub = EntitlementService.get_subscription(tenant)
         business_codes = default_module_codes_for_tenant(tenant)
         if sub is None or EntitlementService.is_trial_or_demo(tenant=tenant, sub=sub):
-            enabled = business_codes
+            # Never strip verticals already enabled (e.g. gym+restaurant demo).
+            current = enabled_module_codes(tenant=tenant)
+            enabled = sorted({*business_codes, *current})
         else:
             plan_codes = EntitlementService.plan_module_codes(plan=sub.plan)
             enabled = [c for c in business_codes if c in plan_codes]
@@ -177,6 +180,7 @@ class EntitlementService:
             enabled_codes=enabled,
             user=user,
             disable_missing=True,
+            persist_snapshot=False,
         )
         return enabled
 

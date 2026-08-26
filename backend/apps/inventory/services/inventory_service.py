@@ -17,6 +17,38 @@ from apps.products.models import Product
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
 
 
+def _normalize_module_code(module_code=None) -> str:
+    raw = (module_code or "").strip().lower()
+    if not raw:
+        return ""
+    aliases = {
+        "cafeteria": "restaurant",
+        "property": "property_management",
+        "project": "project_management",
+        "travel": "travel_agency",
+    }
+    return aliases.get(raw, raw)
+
+
+def _module_scope_inventory(qs, *, module_code=None):
+    """Restrict inventory rows to products belonging to one industry module."""
+    code = _normalize_module_code(module_code)
+    if not code:
+        return qs
+    if code in {"retail", "shared"}:
+        return qs.filter(Q(product__module_code="") | Q(product__module_code="retail"))
+    return qs.filter(product__module_code=code)
+
+
+def _module_scope_products(qs, *, module_code=None):
+    code = _normalize_module_code(module_code)
+    if not code:
+        return qs
+    if code in {"retail", "shared"}:
+        return qs.filter(Q(module_code="") | Q(module_code="retail"))
+    return qs.filter(module_code=code)
+
+
 class WarehouseService:
     @staticmethod
     def list_warehouses(*, branch_id=None, is_active=None, user=None, request=None):
@@ -51,7 +83,7 @@ class WarehouseService:
 class InventoryService:
     @staticmethod
     @transaction.atomic
-    def backfill_missing_inventory(*, user=None, warehouse=None):
+    def backfill_missing_inventory(*, user=None, warehouse=None, module_code=None):
         """Create qty=0 inventory rows for products that have none (so they appear in Stock)."""
         wh = warehouse or (
             Warehouse.active_objects().filter(is_default=True).first()
@@ -64,7 +96,8 @@ class InventoryService:
             .filter(warehouse=wh)
             .values_list("product_id", flat=True)
         )
-        missing = list(Product.active_objects().exclude(id__in=existing_ids))
+        products = _module_scope_products(Product.active_objects(), module_code=module_code)
+        missing = list(products.exclude(id__in=existing_ids))
         for product in missing:
             InventoryService.ensure_inventory_record(product=product, warehouse=wh, user=user)
         return len(missing)
@@ -160,6 +193,7 @@ class InventoryService:
         low_stock=False,
         ensure_rows=True,
         branch_id=None,
+        module_code=None,
         user=None,
         request=None,
     ):
@@ -177,6 +211,7 @@ class InventoryService:
                     )
                 ),
                 user=user,
+                module_code=module_code,
             )
         qs = (
             Inventory.active_objects()
@@ -184,6 +219,7 @@ class InventoryService:
             .filter(product__deleted_at__isnull=True)
         )
         qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = _module_scope_inventory(qs, module_code=module_code)
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)
         if branch_id:
@@ -200,27 +236,35 @@ class InventoryService:
         return qs.order_by("product__name")
 
     @staticmethod
-    def get_reorder_candidates(*, branch_id=None, user=None, request=None):
+    def get_reorder_candidates(*, branch_id=None, module_code=None, user=None, request=None):
         """Products at/below minimum stock — hook for future Celery reorder alerts."""
         return InventoryService.list_inventory(
             branch_id=branch_id,
             low_stock=True,
             ensure_rows=False,
+            module_code=module_code,
             user=user,
             request=request,
         )
 
     @staticmethod
-    def get_out_of_stock(*, branch_id=None, user=None, request=None):
+    def get_low_stock(*, branch_id=None, module_code=None, user=None, request=None):
+        return InventoryService.get_reorder_candidates(
+            branch_id=branch_id, module_code=module_code, user=user, request=request
+        )
+
+    @staticmethod
+    def get_out_of_stock(*, branch_id=None, module_code=None, user=None, request=None):
         return InventoryService.list_inventory(
-            branch_id=branch_id, user=user, request=request
+            branch_id=branch_id, module_code=module_code, user=user, request=request
         ).filter(quantity__lte=0)
 
     @staticmethod
-    def get_summary(*, branch_id=None, user=None, request=None):
+    def get_summary(*, branch_id=None, module_code=None, user=None, request=None):
         InventoryService.dedupe_inventory(preferred_branch_id=branch_id, user=user)
         qs = Inventory.active_objects().select_related("product")
         qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = _module_scope_inventory(qs, module_code=module_code)
         if branch_id:
             qs = qs.filter(warehouse__branch_id=branch_id)
         agg = qs.aggregate(
@@ -311,7 +355,7 @@ class InventoryService:
                 product=product, warehouse=warehouse, user=user
             )
             qty_before = inv.quantity
-            qty_after = Decimal(str(item["quantity_after"]))
+            qty_after = max(Decimal("0"), Decimal(str(item["quantity_after"])))
             qty_change = qty_after - qty_before
 
             inv.quantity = qty_after
@@ -667,7 +711,14 @@ class InventoryService:
             product=product, warehouse=warehouse, user=user
         )
         qty_before = inv.quantity
+        # Never drive on-hand below zero: oversell clamps to out-of-stock (0).
+        # Example: sell 150 with only 100 on hand → stock becomes 0, not -50.
         qty_after = qty_before + delta
+        if qty_after < 0:
+            qty_after = Decimal("0")
+            delta = qty_after - qty_before
+            if delta == 0:
+                return inv
         inv.quantity = qty_after
         inv.updated_by = user
         inv.save(update_fields=["quantity", "updated_by", "updated_at"])

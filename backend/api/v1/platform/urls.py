@@ -2,6 +2,7 @@ from django.urls import path
 
 from api.v1.platform.views import (
     PlatformBusinessTypesView,
+    PlatformDnsWildcardCheckView,
     PlatformEntitlementsView,
     PlatformModulesCatalogView,
     PlatformMySubscriptionAlertView,
@@ -28,6 +29,7 @@ from api.v1.platform.views import (
     PlatformTenantModulesView,
     PlatformTenantSettingsView,
     PlatformTenantUsersView,
+    PlatformTenantUserDetailView,
     PlatformBusinessPresetsView,
     PlatformDemoTenantActionView,
     PlatformDemoTenantListCreateView,
@@ -38,6 +40,11 @@ urlpatterns = [
     path("tenants/", PlatformTenantListCreateView.as_view(), name="platform-tenants"),
     path("tenants/<uuid:pk>/", PlatformTenantDetailView.as_view(), name="platform-tenant-detail"),
     path("tenants/<uuid:pk>/users/", PlatformTenantUsersView.as_view(), name="platform-tenant-users"),
+    path(
+        "tenants/<uuid:pk>/users/<uuid:user_id>/",
+        PlatformTenantUserDetailView.as_view(),
+        name="platform-tenant-user-detail",
+    ),
     path(
         "tenants/<uuid:pk>/settings/",
         PlatformTenantSettingsView.as_view(),
@@ -65,6 +72,7 @@ urlpatterns = [
     path("modules/", PlatformModulesCatalogView.as_view(), name="platform-modules"),
     path("slug-check/", PlatformSlugCheckView.as_view(), name="platform-slug-check"),
     path("resolve-host/", PlatformResolveHostView.as_view(), name="platform-resolve-host"),
+    path("dns-wildcard-check/", PlatformDnsWildcardCheckView.as_view(), name="platform-dns-wildcard-check"),
     path("subscriptions/", PlatformSubscriptionListCreateView.as_view(), name="platform-subscriptions"),
     path("subscriptions/alerts/", PlatformSubscriptionAlertsView.as_view(), name="platform-subscription-alerts"),
     path("subscriptions/my-alert/", PlatformMySubscriptionAlertView.as_view(), name="platform-my-subscription-alert"),

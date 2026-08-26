@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
@@ -29,6 +30,7 @@ interface SaleFormPageProps {
 
 export function SaleFormPage({ type, editId }: SaleFormPageProps) {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const isInvoice = type === "invoice";
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
@@ -116,7 +118,7 @@ export function SaleFormPage({ type, editId }: SaleFormPageProps) {
         if (isInvoice) await salesApi.createInvoice(payload);
         else await salesApi.createQuotation(payload);
       }
-      navigate("/sales");
+      navigate(scoped("/sales"));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -256,7 +258,7 @@ export function SaleFormPage({ type, editId }: SaleFormPageProps) {
               <Button type="submit" loading={saving}>
                 {editId ? "Save Changes" : (isInvoice ? "Create Invoice" : "Create Quotation")}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate("/sales")}>Cancel</Button>
+              <Button type="button" variant="secondary" onClick={() => navigate(scoped("/sales"))}>Cancel</Button>
             </FormActions>
           }
         />

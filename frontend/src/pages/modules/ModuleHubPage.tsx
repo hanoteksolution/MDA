@@ -207,16 +207,33 @@ export function ModuleHubPage() {
       <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-6 p-4 sm:p-6 2xl:p-8">
         <motion.div variants={staggerSlow} initial="hidden" animate="show">
           <motion.div variants={fadeUp} className="hub-hero">
-            <div className="px-5 pb-1 pt-6 sm:px-7 sm:pt-7">
-              <p className="text-[13px] text-muted-foreground">
-                {user?.branch?.name || "Main Branch"} · {todayLabel}
-              </p>
-              <h1 className="mt-1.5 text-[1.75rem] font-semibold tracking-[-0.04em] text-foreground sm:text-[2rem]">
-                {greeting}, {displayName}.
-              </h1>
-              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                One workspace. One platform. Everything your business needs to operate.
-              </p>
+            <div className="relative z-[1] flex flex-col gap-5 px-5 pb-1 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-7 sm:pt-7">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+                  <span className="hub-live-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {user?.branch?.name || "Main Branch"} · {todayLabel}
+                </div>
+                <h1 className="mt-3 font-[family-name:var(--font-display,inherit)] text-[1.85rem] font-semibold tracking-[-0.045em] text-foreground sm:text-[2.15rem]">
+                  {greeting}, {displayName}.
+                </h1>
+                <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+                  One workspace. One platform. Everything your business needs to operate.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <div className="rounded-2xl border border-border/60 bg-background/70 px-3.5 py-2.5 shadow-sm backdrop-blur-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Business</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight">
+                    {launcherWorkspaces.filter((w) => isBusinessWorkspace(w.category)).length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background/70 px-3.5 py-2.5 shadow-sm backdrop-blur-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Core</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight">
+                    {launcherWorkspaces.filter((w) => isCoreWorkspace(w.category)).length}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="hub-kpi-strip mt-5">
@@ -231,7 +248,7 @@ export function ModuleHubPage() {
                     {overview.loading ? (
                       <div className="hub-shimmer mt-2 h-7 w-[4.5rem] rounded-md" />
                     ) : (
-                      <p className="mt-1.5 text-[1.25rem] font-semibold tabular-nums tracking-tight">
+                      <p className="mt-1.5 text-[1.35rem] font-semibold tabular-nums tracking-tight">
                         <AnimatedNumber value={kpi.value} money={kpi.money} integer={kpi.integer} duration={900} />
                       </p>
                     )}
@@ -251,8 +268,10 @@ export function ModuleHubPage() {
                       {kpi.delta != null && kpi.value !== 0 ? (
                         <span
                           className={cn(
-                            "inline-flex items-center gap-0.5 text-[10px] font-semibold",
-                            up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                            up
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
                           )}
                         >
                           {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -266,7 +285,7 @@ export function ModuleHubPage() {
             </div>
 
             {quickActions.length ? (
-              <div className="flex gap-2 overflow-x-auto border-t border-border/70 px-4 py-3 scrollbar-thin sm:px-5">
+              <div className="relative z-[1] flex gap-2 overflow-x-auto border-t border-border/60 px-4 py-3.5 scrollbar-thin sm:px-5">
                 {quickActions.map((action) => {
                   const Icon = action.icon;
                   return (
@@ -276,7 +295,9 @@ export function ModuleHubPage() {
                       onClick={() => navigate(action.route)}
                       className="hub-action-chip"
                     >
-                      <Icon className={cn("h-3.5 w-3.5", TONE_STYLES[action.tone].text)} />
+                      <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg bg-muted/80", TONE_STYLES[action.tone].text)}>
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
                       {action.label}
                     </button>
                   );
@@ -287,39 +308,40 @@ export function ModuleHubPage() {
         </motion.div>
 
         <div>
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold tracking-tight">Workspaces</h2>
+              <p className="hub-section-label">Launch</p>
+              <h2 className="mt-1 text-[17px] font-semibold tracking-tight">Workspaces</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Business industries and core platform services
+                Business industries and core platform services side by side
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="hub-filter-bar">
               <label className="relative hidden sm:block">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={workspaceQuery}
                   onChange={(e) => setWorkspaceQuery(e.target.value)}
                   placeholder="Search workspaces…"
-                  className="h-8 w-44 rounded-lg border border-border/80 bg-background pl-8 pr-3 text-[12px] outline-none ring-foreground/10 placeholder:text-muted-foreground focus:ring-2"
+                  className="h-8 w-48 rounded-xl border-0 bg-transparent pl-8 pr-3 text-[12px] outline-none ring-0 placeholder:text-muted-foreground focus:bg-muted/40"
                   aria-label="Search workspaces"
                 />
               </label>
-              <div className="relative flex rounded-lg bg-muted/70 p-0.5 text-[12px]">
+              <div className="relative flex rounded-xl bg-muted/60 p-0.5 text-[12px]">
                 {(["all", "favorites", "business", "core"] as const).map((id) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setFilter(id)}
                     className={cn(
-                      "relative rounded-md px-2.5 py-1.5 font-medium capitalize",
+                      "relative rounded-lg px-2.5 py-1.5 font-medium capitalize",
                       filter === id ? "text-foreground" : "text-muted-foreground"
                     )}
                   >
                     {filter === id ? (
                       <motion.span
                         layoutId="hub-view-pill"
-                        className="absolute inset-0 rounded-md bg-card shadow-sm"
+                        className="absolute inset-0 rounded-lg bg-card shadow-sm"
                         transition={{ type: "spring", stiffness: 400, damping: 32 }}
                       />
                     ) : null}
@@ -362,7 +384,7 @@ export function ModuleHubPage() {
               })}
             </Reorder.Group>
           ) : showGrouped ? (
-            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2 lg:gap-6">
+            <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2 lg:gap-6">
               {businessGrid.length ? renderBusinessZone(businessGrid, "zone") : null}
               {coreGrid.length ? renderCoreZone(coreGrid, "zone") : null}
             </div>

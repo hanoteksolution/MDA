@@ -32,6 +32,7 @@ import { SalesReceiptDialog } from "../components/SalesReceiptDialog";
 import { useSalesReceipt } from "../hooks/useSalesReceipt";
 import { appDialog } from "@/components/feedback/AppDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useScopedPath } from "@/hooks/useScopedPath";
 
 const INVOICE_STATUS: Record<string, "secondary" | "warning" | "success" | "destructive"> = {
   draft: "secondary", sent: "warning", paid: "success", overdue: "destructive", cancelled: "destructive",
@@ -43,6 +44,7 @@ function canMarkPaid(status: string) {
 
 export function SalesPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission("sales.create");
   const canUpdate = hasPermission("sales.update");
@@ -277,7 +279,13 @@ export function SalesPage() {
                 className="h-8 w-8 p-0"
                 title="Edit"
                 onClick={() =>
-                  navigate(tab === "invoices" ? `/sales/invoices/${r.id}/edit` : `/sales/quotations/${r.id}/edit`)
+                  navigate(
+                    scoped(
+                      tab === "invoices"
+                        ? `/sales/invoices/${r.id}/edit`
+                        : `/sales/quotations/${r.id}/edit`
+                    )
+                  )
                 }
               >
                 <Pencil className="h-4 w-4" />
@@ -300,7 +308,7 @@ export function SalesPage() {
     },
   ];
 
-  const newPath = tab === "invoices" ? "/sales/invoices/new" : "/sales/quotations/new";
+  const newPath = scoped(tab === "invoices" ? "/sales/invoices/new" : "/sales/quotations/new");
 
   return (
     <PageLayout

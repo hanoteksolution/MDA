@@ -150,6 +150,9 @@ class ProductListCreateView(APIView):
             category_id=request.query_params.get("category"),
             brand_id=request.query_params.get("brand"),
             is_active=is_active,
+            module_code=request.query_params.get("module_code")
+            or request.query_params.get("module")
+            or request.query_params.get("workspace"),
             user=request.user,
         )
         return paginate_queryset(
@@ -239,10 +242,16 @@ class ProductSearchView(APIView):
         q = request.query_params.get("q", "")
         limit = min(int(request.query_params.get("limit", 20)), 50)
         category_id = request.query_params.get("category")
+        module_code = (
+            request.query_params.get("module_code")
+            or request.query_params.get("module")
+            or request.query_params.get("workspace")
+        )
         products = list(
             ProductService.search_for_pos(
                 search=q,
                 category_id=category_id,
+                module_code=module_code,
                 limit=limit,
                 user=request.user,
                 request=request,

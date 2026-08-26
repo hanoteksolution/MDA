@@ -112,14 +112,7 @@ export interface PlatformShopOverview {
     products?: PlatformShopProduct[];
   };
   recent_sales?: PlatformShopSale[];
-  users: {
-    id: string;
-    username: string;
-    full_name: string;
-    email?: string;
-    role: string;
-    is_active: boolean;
-  }[];
+  users: PlatformUserOption[];
   waiters?: { id: string; name: string; user_id?: string | null; is_active?: boolean }[];
 }
 
@@ -129,7 +122,18 @@ export interface PlatformUserOption {
   username: string;
   full_name: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
   role: string | null;
+  role_slug?: string | null;
+  role_id?: string | null;
+  branch_id?: string | null;
+  tenant_id?: string | null;
+  is_active?: boolean;
+  permission_ids?: string[];
+  role_permission_ids?: string[];
+  revoke_ids?: string[];
 }
 
 export interface PlatformPlanRow {
@@ -295,7 +299,26 @@ export interface PlatformDemoTenantRow {
   is_active: boolean;
   contact_email: string;
   created_at?: string | null;
-  seed_report?: Record<string, unknown>;
+  shop_group_id?: string | null;
+  shop_group_name?: string | null;
+  seed_status?: "none" | "pending" | "running" | "done" | "failed" | string | null;
+  seed_report?: Record<string, unknown> | null;
+  seed_error?: string | null;
+  primary_domain?: PlatformTenantDomainRow | null;
+}
+
+
+export interface PlatformDnsWildcardCheck {
+  base_domain: string;
+  host: string;
+  base_resolves: boolean;
+  wildcard_resolves: boolean;
+  requested_host_resolves: boolean;
+  base_ips: string[];
+  wildcard_ips: string[];
+  requested_ips: string[];
+  warning: boolean;
+  message: string;
 }
 
 export interface PlatformBusinessTypeRow {
@@ -418,14 +441,17 @@ export const platformApi = {
   },
 
   createDemoTenant: (payload: {
-    name: string;
+    name?: string;
     business_type_code?: string;
     preset_code?: string;
     duration_days?: number;
     contact_email?: string;
     modules?: string[];
     generate_data?: boolean;
+    seed_async?: boolean;
     plan_code?: string;
+    shop_group_id?: string;
+    source_tenant_id?: string;
   }) =>
     platformCloudRequest<ApiResponse<PlatformDemoTenantRow & { seed_report?: Record<string, unknown> }>>(
       "/platform/demo-tenants/",
@@ -434,7 +460,7 @@ export const platformApi = {
 
   demoTenantAction: (
     id: string,
-    action: "extend" | "suspend" | "expire" | "convert",
+    action: "extend" | "suspend" | "expire" | "convert" | "seed" | "modules" | "add-modules",
     payload: Record<string, unknown> = {}
   ) =>
     platformCloudRequest<ApiResponse<PlatformDemoTenantRow>>(
@@ -531,6 +557,7 @@ export const platformApi = {
       last_name?: string;
       phone?: string;
       role_slug?: string;
+      permission_ids?: string[];
     }
   ) =>
     platformCloudRequest<ApiResponse<PlatformUserOption>>(`/platform/tenants/${tenantId}/users/`, {
@@ -538,6 +565,36 @@ export const platformApi = {
       body: JSON.stringify(data),
     }),
 
+  updateTenantUser: (
+    tenantId: string,
+    userId: string,
+    data: {
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      role_slug?: string;
+      password?: string;
+      is_active?: boolean;
+      permission_ids?: string[];
+    }
+  ) =>
+    platformCloudRequest<ApiResponse<PlatformUserOption>>(
+      `/platform/tenants/${tenantId}/users/${userId}/`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }
+    ),
+
+
+
+  dnsWildcardCheck: (subdomain?: string) => {
+    const q = subdomain ? `?slug=${encodeURIComponent(subdomain)}` : "";
+    return platformCloudRequest<ApiResponse<PlatformDnsWildcardCheck>>(
+      `/platform/dns-wildcard-check/${q}`
+    );
+  },
   createShop: (data: Record<string, unknown>) =>
     platformCloudRequest<ApiResponse<Record<string, unknown>>>("/platform/tenants/", {
       method: "POST",

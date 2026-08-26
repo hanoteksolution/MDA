@@ -134,21 +134,24 @@ export function workspaceFromPath(pathname: string): string | null {
   if (first && INDUSTRY_PATH_SET.has(first)) return first;
   if (pathname.startsWith("/housing")) return "property";
   if (pathname.startsWith("/office")) return "property";
-  if (pathname.startsWith("/pos")) return "pos";
-  if (pathname.startsWith("/inventory") || pathname.startsWith("/products") || pathname.startsWith("/categories")) {
-    return "inventory";
-  }
+  // Shared engines (products, sales, inventory, …) must NOT steal focus from the
+  // active industry workspace — keep brand/sidebar pinned via activeWorkspace.
   if (
+    pathname.startsWith("/pos") ||
+    pathname.startsWith("/inventory") ||
+    pathname.startsWith("/products") ||
+    pathname.startsWith("/categories") ||
     pathname.startsWith("/sales") ||
     pathname.startsWith("/receipts") ||
     pathname.startsWith("/customers") ||
     pathname.startsWith("/daily-ops") ||
     pathname.startsWith("/expenses") ||
-    pathname.startsWith("/trash")
+    pathname.startsWith("/trash") ||
+    pathname.startsWith("/purchases") ||
+    pathname.startsWith("/suppliers")
   ) {
-    return "sales";
+    return null;
   }
-  if (pathname.startsWith("/purchases") || pathname.startsWith("/suppliers")) return "purchases";
   if (pathname.startsWith("/reports") || pathname.startsWith("/staff-performance")) return "reports";
   if (pathname.startsWith("/finance")) return "finance";
   if (pathname.startsWith("/platform")) return "platform";

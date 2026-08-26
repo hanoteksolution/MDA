@@ -17,9 +17,11 @@ import { clearBrandingCache } from "@/documents/branding";
 import type { BranchDetail, Company } from "@/types/models/admin";
 import { appDialog } from "@/components/feedback/AppDialog";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { useScopedPath } from "@/hooks/useScopedPath";
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState("company");
   const [company, setCompany] = useState<Partial<Company>>({});
@@ -159,7 +161,7 @@ export function SettingsPage() {
       header: "",
       cell: (r) => (
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/settings/branches/${r.id}/edit`)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(scoped(`/settings/branches/${r.id}/edit`))}>
             <Pencil className="h-4 w-4" />
           </Button>
           {!r.is_default && (
@@ -330,7 +332,7 @@ export function SettingsPage() {
           description="Each shop gets its own Main Branch when created. Delete unused duplicates here — you cannot delete a company’s only branch."
           action={
             <Button asChild size="sm">
-              <Link to="/settings/branches/new"><Plus className="h-4 w-4" /> Add Branch</Link>
+              <Link to={scoped("/settings/branches/new")}><Plus className="h-4 w-4" /> Add Branch</Link>
             </Button>
           }
           noPadding

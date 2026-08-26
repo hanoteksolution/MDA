@@ -195,7 +195,7 @@ ROLE_PERMISSIONS = {
         "customers.view", "customers.create", "customers.update",
         "suppliers.view", "suppliers.create", "suppliers.update",
         "finance.view", "finance.create", "finance.approve", "reports.view", "reports.export",
-        "users.view", "users.create", "users.update",
+        "users.view", "users.create", "users.update", "users.delete",
         "roles.view", "branches.view", "branches.create", "branches.update",
         "settings.view", "settings.update", "audit.view",
         "staff.performance.view", "staff.performance.evaluate",

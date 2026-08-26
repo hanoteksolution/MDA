@@ -18,7 +18,7 @@ from apps.platform.services.desktop_provision import DesktopProvisionService
 from apps.platform.services.tenant_resolver import user_matches_host_tenant
 from core.responses.api_response import error_response, success_response
 from core.throttling import AuthRateThrottle
-from permissions.base import HasPermission
+from permissions.base import HasAnyPermission, HasPermission
 
 
 class MobileTokenRefreshView(TokenRefreshView):
@@ -146,7 +146,10 @@ class UserListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("users.view")]
 
     def get(self, request):
-        users = UserService.list_users(viewer=request.user)
+        users = UserService.list_users(
+            viewer=request.user,
+            tenant_id=request.query_params.get("tenant"),
+        )
         search = request.query_params.get("search")
         if search:
             users = users.filter(
@@ -164,15 +167,6 @@ class UserListCreateView(APIView):
         serializer = UserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data.copy()
-        role_id = data.pop("role_id", None)
-        branch_id = data.pop("branch_id", None)
-        permission_ids = data.pop("permission_ids", None)
-        if role_id:
-            data["role_id"] = role_id
-        if branch_id:
-            data["branch_id"] = branch_id
-        if permission_ids is not None:
-            data["permission_ids"] = permission_ids
         try:
             user = UserService.create_user(data=data, created_by=request.user)
         except ValueError as e:
@@ -207,15 +201,6 @@ class UserDetailView(APIView):
         serializer = UserCreateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data.copy()
-        role_id = data.pop("role_id", None)
-        branch_id = data.pop("branch_id", None)
-        permission_ids = data.pop("permission_ids", None)
-        if role_id is not None:
-            data["role_id"] = role_id
-        if branch_id is not None:
-            data["branch_id"] = branch_id
-        if permission_ids is not None:
-            data["permission_ids"] = permission_ids
         try:
             user = UserService.update_user(user=user, data=data, updated_by=request.user)
         except ValueError as e:
@@ -292,10 +277,17 @@ class RoleDetailView(APIView):
 
 
 class PermissionListView(APIView):
-    permission_classes = [IsAuthenticated, HasPermission("roles.view")]
+    # User managers need the catalog to grant/revoke access even without roles.view.
+    permission_classes = [
+        IsAuthenticated,
+        HasAnyPermission("roles.view", "users.view", "users.update", "users.create"),
+    ]
 
     def get(self, request):
-        permissions = UserService.list_assignable_permissions(viewer=request.user)
+        permissions = UserService.list_assignable_permissions(
+            viewer=request.user,
+            tenant_id=request.query_params.get("tenant"),
+        )
         grouped = {}
         for perm in permissions:
             grouped.setdefault(perm.module, []).append(PermissionSerializer(perm).data)

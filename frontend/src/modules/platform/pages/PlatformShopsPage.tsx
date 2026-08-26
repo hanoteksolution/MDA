@@ -17,6 +17,7 @@ import {
   type PlatformSubscriptionRow,
   type PlatformBusinessTypeRow,
   type PlatformTenantRow,
+  type PlatformDnsWildcardCheck,
 } from "@/services/api/platform";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/authStore";
@@ -146,6 +147,8 @@ export function PlatformShopsPage() {
   const [shopSaving, setShopSaving] = useState(false);
   const [shopEditError, setShopEditError] = useState("");
   const [formError, setFormError] = useState("");
+  const [dnsWarning, setDnsWarning] = useState<PlatformDnsWildcardCheck | null>(null);
+  const [dnsChecking, setDnsChecking] = useState(false);
   const [shopSyncInfo, setShopSyncInfo] = useState({
     slug: "",
     sync_secret: "",
@@ -210,6 +213,23 @@ export function PlatformShopsPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when identity/group changes
   }, [user?.id, user?.managed_shop_group?.id]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const slug = form.subdomain.trim();
+    const timer = window.setTimeout(() => {
+      setDnsChecking(true);
+      platformApi
+        .dnsWildcardCheck(slug || undefined)
+        .then((res) => {
+          setDnsWarning(res.data || null);
+        })
+        .catch(() => setDnsWarning(null))
+        .finally(() => setDnsChecking(false));
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [showForm, form.subdomain]);
+
 
   const handleDeleteShop = async (shop: PlatformTenantRow) => {
     if (
@@ -938,6 +958,15 @@ export function PlatformShopsPage() {
                   value={form.subdomain}
                   onChange={(e) => setForm({ ...form, subdomain: e.target.value })}
                 />
+                {dnsChecking && (
+                  <p className="mt-2 text-xs text-muted-foreground">Checking wildcard DNS…</p>
+                )}
+                {dnsWarning?.warning && (
+                  <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                    <p className="font-medium">Wildcard DNS appears missing for <span className="font-mono">*.{dnsWarning.base_domain}</span>.</p>
+                    <p className="mt-1">{dnsWarning.message}</p>
+                  </div>
+                )}
               </FormField>
               <FormField label="Business type">
                 <Select

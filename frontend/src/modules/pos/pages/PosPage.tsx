@@ -16,6 +16,8 @@ import { customersApi } from "@/services/api/partners";
 import { useAuthStore } from "@/store/authStore";
 import type { Product } from "@/types/models/catalog";
 import type { Category } from "@/types/models/catalog";
+import { useScopedPath } from "@/hooks/useScopedPath";
+import { productModuleCode, normalizeProductModule, productModuleLabel, productModuleToneClass } from "@/utils/productModuleScope";
 import { usePosCart, roundMoney } from "../hooks/usePosCart";
 import { usePosProfile } from "../hooks/usePosProfile";
 import { PosProductCard } from "../components/PosProductCard";
@@ -36,12 +38,15 @@ export function PosPage() {
   useSetPageMeta({ title: "Point of Sale", breadcrumbs: ["Home", "POS"] });
 
   const user = useAuthStore((s) => s.user);
+  const { scope } = useScopedPath();
+  const moduleCode = productModuleCode(scope);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Product[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [categoryId, setCategoryId] = useState<string>("all");
+  const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
@@ -105,7 +110,11 @@ export function PosPage() {
     const load = async () => {
       try {
         const [prodRes, catRes, custRes] = await Promise.all([
-          productsApi.list({ page_size: 60, is_active: "true" }),
+          productsApi.list({
+            page_size: 60,
+            is_active: "true",
+            ...(moduleCode ? { module_code: moduleCode } : {}),
+          }),
           productsApi.categories(),
           customersApi.list({ page_size: 50, is_active: "true" }),
         ]);
@@ -121,12 +130,16 @@ export function PosPage() {
       setWaiters(res.data.waiters ?? []);
       setPosProfile(res.data);
     }).catch(() => {});
-  }, []);
+  }, [moduleCode]);
 
   const refreshCatalog = useCallback(async () => {
     try {
       const [prodRes, catRes, custRes] = await Promise.all([
-        productsApi.list({ page_size: 60, is_active: "true" }),
+        productsApi.list({
+          page_size: 60,
+          is_active: "true",
+          ...(moduleCode ? { module_code: moduleCode } : {}),
+        }),
         productsApi.categories(),
         customersApi.list({ page_size: 50, is_active: "true" }),
       ]);
@@ -136,7 +149,7 @@ export function PosPage() {
     } catch {
       /* keep current catalog on background refresh failure */
     }
-  }, []);
+  }, [moduleCode]);
 
   useAutoRefresh(refreshCatalog, { intervalMs: 45_000 });
 
@@ -153,13 +166,14 @@ export function PosPage() {
         .search(q, {
           limit: 50,
           category: categoryId === "all" ? undefined : categoryId,
+          module_code: moduleCode,
         })
         .then((res) => setSearchResults(res.data ?? []))
         .catch(() => setSearchResults([]))
         .finally(() => setSearchLoading(false));
     }, 300);
     return () => window.clearTimeout(handle);
-  }, [search, categoryId]);
+  }, [search, categoryId, moduleCode]);
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -176,7 +190,10 @@ export function PosPage() {
     const q = search.trim().toLowerCase();
     const source = searchResults ?? products;
     if (searchResults !== null) {
-      return source;
+      return source.filter((p) => {
+        if (moduleFilter === "all") return true;
+        return normalizeProductModule(p.module_code) === moduleFilter;
+      });
     }
     return source.filter((p) => {
       const matchSearch =
@@ -185,9 +202,31 @@ export function PosPage() {
         p.sku.toLowerCase().includes(q) ||
         p.barcode?.toLowerCase().includes(q);
       const matchCat = categoryId === "all" || p.category_id === categoryId;
-      return matchSearch && matchCat;
+      const matchMod =
+        moduleFilter === "all" || normalizeProductModule(p.module_code) === moduleFilter;
+      return matchSearch && matchCat && matchMod;
     });
-  }, [products, search, categoryId, searchResults]);
+  }, [products, search, categoryId, searchResults, moduleFilter]);
+
+  const catalogModules = useMemo(() => {
+    const codes = new Set(
+      products
+        .map((p) => normalizeProductModule(p.module_code))
+        .filter(Boolean)
+    );
+    return Array.from(codes).sort((a, b) =>
+      productModuleLabel(a).localeCompare(productModuleLabel(b))
+    );
+  }, [products]);
+
+  const visibleCategories = useMemo(() => {
+    const scopedProducts =
+      moduleFilter === "all"
+        ? products
+        : products.filter((p) => normalizeProductModule(p.module_code) === moduleFilter);
+    const ids = new Set(scopedProducts.map((p) => p.category_id));
+    return categories.filter((c) => ids.has(c.id));
+  }, [categories, products, moduleFilter]);
 
   const handleAdd = useCallback(
     (product: Product) => {
@@ -678,8 +717,46 @@ export function PosPage() {
           </div>
         </div>
 
-        {/* Category navigation */}
-        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border/40 bg-background/40 px-3 py-2 scrollbar-thin backdrop-blur-md xl:gap-2 xl:px-5 xl:py-2.5">
+        {/* Module + category navigation */}
+        <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/40 bg-background/40 px-3 py-2 backdrop-blur-md xl:px-5 xl:py-2.5">
+          {catalogModules.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
+              <button
+                type="button"
+                onClick={() => {
+                  setModuleFilter("all");
+                  setCategoryId("all");
+                }}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all duration-200",
+                  moduleFilter === "all"
+                    ? "bg-foreground text-background"
+                    : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
+                )}
+              >
+                All modules
+              </button>
+              {catalogModules.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => {
+                    setModuleFilter(code);
+                    setCategoryId("all");
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all duration-200",
+                    moduleFilter === code
+                      ? productModuleToneClass(code)
+                      : "bg-card/70 text-muted-foreground ring-1 ring-border/50 hover:bg-card hover:text-foreground"
+                  )}
+                >
+                  {productModuleLabel(code)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin xl:gap-2">
           <button
             type="button"
             onClick={() => setCategoryId("all")}
@@ -692,7 +769,7 @@ export function PosPage() {
           >
             All
           </button>
-          {categories.map((cat) => (
+          {visibleCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
@@ -716,6 +793,7 @@ export function PosPage() {
               <ArrowUpDown className="h-3.5 w-3.5" />
               Sort
             </Button>
+          </div>
           </div>
         </div>
 

@@ -10,6 +10,7 @@ export interface CartLine {
   image?: string;
   maxStock?: number;
   requires_prescription?: boolean;
+  module_code?: string;
 }
 
 export interface RecentSale {
@@ -246,6 +247,7 @@ export function usePosCart() {
           image: product.image,
           maxStock: stock,
           requires_prescription: Boolean(product.requires_prescription),
+          module_code: product.module_code || "",
         },
       ];
     });

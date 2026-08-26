@@ -1,3 +1,5 @@
+import socket
+
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
@@ -145,16 +147,7 @@ class PlatformTenantUsersView(APIView):
         if not PlatformService.user_can_access_tenant(request.user, tenant):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         users = PlatformService.list_tenant_users(tenant)
-        data = [
-            {
-                "id": str(u.id),
-                "username": u.username,
-                "full_name": u.get_full_name() or u.username,
-                "email": u.email,
-                "role": u.role.name if u.role_id else None,
-            }
-            for u in users
-        ]
+        data = [PlatformService.tenant_user_payload(u) for u in users]
         return success_response(data=data)
 
     def post(self, request, pk):
@@ -175,9 +168,44 @@ class PlatformTenantUsersView(APIView):
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
-            data=PlatformService.owner_payload(user),
+            data=PlatformService.tenant_user_payload(user),
             message="User created. They can sign in on the desktop app with this username and password.",
             status=status.HTTP_201_CREATED,
+        )
+
+
+class PlatformTenantUserDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk, user_id):
+        if not _platform_manage(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            tenant = Tenant.objects.get(pk=pk, deleted_at__isnull=True)
+        except Tenant.DoesNotExist:
+            return error_response(message="Shop not found.", status=status.HTTP_404_NOT_FOUND)
+        if not PlatformService.user_can_access_tenant(request.user, tenant):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        from apps.authentication.models import User
+
+        try:
+            user = User.objects.select_related("role", "branch", "tenant").get(
+                pk=user_id, deleted_at__isnull=True
+            )
+        except User.DoesNotExist:
+            return error_response(message="User not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            user = PlatformService.update_tenant_user(
+                tenant=tenant,
+                user=user,
+                data=request.data,
+                updated_by=request.user,
+            )
+        except ValueError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=PlatformService.tenant_user_payload(user),
+            message="User updated.",
         )
 
 
@@ -355,6 +383,39 @@ class PlatformDemoTenantActionView(APIView):
                 tenant = DemoTenantService.convert(
                     tenant=tenant, plan_code=plan_code, user=request.user
                 )
+            elif action == "seed":
+                seed_async = (request.data or {}).get("seed_async", True)
+                if isinstance(seed_async, str):
+                    seed_async = seed_async.strip().lower() in {"1", "true", "yes", "on"}
+                seed_report = DemoTenantService.request_seed(
+                    tenant=tenant, user=request.user, async_mode=bool(seed_async)
+                )
+                tenant.refresh_from_db()
+                return success_response(
+                    data={**DemoTenantService.serialize(tenant), "seed_report": seed_report},
+                    message="Demo seed started.",
+                )
+            elif action in {"modules", "add-modules", "add_modules"}:
+                body = request.data or {}
+                modules = body.get("modules") or body.get("enabled_modules") or body.get("module_codes")
+                if not isinstance(modules, list):
+                    return error_response(
+                        message="modules must be a list of module codes.",
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                merge = body.get("merge", True)
+                if isinstance(merge, str):
+                    merge = merge.strip().lower() in {"1", "true", "yes", "on"}
+                seed_new = body.get("seed_new") or body.get("generate_data") or False
+                if isinstance(seed_new, str):
+                    seed_new = seed_new.strip().lower() in {"1", "true", "yes", "on"}
+                tenant = DemoTenantService.update_modules(
+                    tenant=tenant,
+                    modules=modules,
+                    user=request.user,
+                    merge=bool(merge),
+                    seed_new=bool(seed_new),
+                )
             else:
                 return error_response(message="Unknown action.", status=status.HTTP_404_NOT_FOUND)
         except DemoTenantError as exc:
@@ -454,6 +515,52 @@ class PlatformSlugCheckView(APIView):
                 "available": not taken,
                 "reason": "already taken" if taken else "",
                 "hostname": f"{slug}.{get_tenant_base_domain()}",
+            }
+        )
+
+
+class PlatformDnsWildcardCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _platform_user(request.user):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+
+        base_domain = get_tenant_base_domain().strip().lstrip(".")
+        slug = (request.query_params.get("slug") or request.query_params.get("subdomain") or "demo").strip().lower()
+        host = f"{slug}.{base_domain}"
+        wildcard_probe = f"cursor-wildcard-check.{base_domain}"
+
+        def _resolve(name: str):
+            try:
+                resolved = socket.gethostbyname_ex(name)[2]
+                return {"ok": bool(resolved), "ips": resolved}
+            except OSError as exc:
+                return {"ok": False, "ips": [], "error": str(exc)}
+
+        base = _resolve(base_domain)
+        wildcard = _resolve(wildcard_probe)
+        requested = _resolve(host)
+
+        warning = bool(base.get("ok") and not wildcard.get("ok"))
+        message = (
+            "Wildcard DNS is missing. Add an A/CNAME for *." + base_domain + " to your server IP."
+            if warning
+            else "Wildcard DNS looks healthy."
+        )
+
+        return success_response(
+            data={
+                "base_domain": base_domain,
+                "host": host,
+                "base_resolves": bool(base.get("ok")),
+                "wildcard_resolves": bool(wildcard.get("ok")),
+                "requested_host_resolves": bool(requested.get("ok")),
+                "base_ips": base.get("ips") or [],
+                "wildcard_ips": wildcard.get("ips") or [],
+                "requested_ips": requested.get("ips") or [],
+                "warning": warning,
+                "message": message,
             }
         )
 

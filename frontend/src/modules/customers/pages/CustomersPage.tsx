@@ -3,6 +3,7 @@ import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
 import { Users, UserPlus, CreditCard, ShoppingBag, Mail, Phone, Pencil, Trash2, Printer, FileDown, Loader2, FileOutput } from "lucide-react";
 import { useCustomerListPrint } from "../hooks/useCustomerListPrint";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -21,6 +22,7 @@ import { appDialog } from "@/components/feedback/AppDialog";
 
 export function CustomersPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [summary, setSummary] = useState<CustomerSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -100,7 +102,7 @@ export function CustomersPage() {
       header: "",
       cell: (r) => (
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/customers/${r.id}/edit`)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(scoped(`/customers/${r.id}/edit`))}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)}>
@@ -137,7 +139,7 @@ export function CustomersPage() {
             PDF
           </Button>
           <Button asChild>
-            <Link to="/customers/new"><UserPlus className="h-4 w-4" /> Add Customer</Link>
+            <Link to={scoped("/customers/new")}><UserPlus className="h-4 w-4" /> Add Customer</Link>
           </Button>
         </div>
       }
@@ -199,6 +201,7 @@ export function CustomersPage() {
 
 export function CustomerFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -235,7 +238,7 @@ export function CustomerFormPage({ editId }: { editId?: string }) {
       };
       if (editId) await customersApi.update(editId, payload);
       else await customersApi.create(payload);
-      navigate("/customers");
+      navigate(scoped("/customers"));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -296,7 +299,7 @@ export function CustomerFormPage({ editId }: { editId?: string }) {
         </FormSection>
         <div className="mt-6 flex gap-3">
           <Button type="submit" loading={saving}>{editId ? "Save Changes" : "Create Customer"}</Button>
-          <Button type="button" variant="secondary" onClick={() => navigate("/customers")}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate(scoped("/customers"))}>Cancel</Button>
         </div>
       </form>
     </PageLayout>

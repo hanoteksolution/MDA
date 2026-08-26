@@ -198,15 +198,22 @@ class BusinessPresetService:
     @transaction.atomic
     def apply_to_tenant(*, tenant, preset: BusinessPreset, user=None, extra_modules=None):
         """Copy preset modules onto tenant (snapshot). Does not bind tenant to preset."""
+        from apps.platform.services.module_service import _settings_extras
+
         codes = set(BusinessPresetService.module_codes(preset))
         if extra_modules:
             codes |= {str(c).strip().lower() for c in extra_modules if c}
+        # Keep multi-module demos/shops when re-applying a single industry preset.
+        provisioned = _settings_extras(tenant).get("provisioned_modules")
+        if isinstance(provisioned, list) and provisioned:
+            codes |= {str(c).strip().lower() for c in provisioned if c}
         sync_tenant_modules(
             tenant=tenant,
             enabled_codes=codes,
             user=user,
             disable_missing=True,
             validate_dependencies=True,
+            persist_snapshot=bool(provisioned or extra_modules),
         )
         # Audit snapshot on settings extras (no live FK)
         settings_row = getattr(tenant, "settings", None)

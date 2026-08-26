@@ -81,6 +81,7 @@ export interface Product {
   image: string;
   is_active: boolean;
   requires_prescription?: boolean;
+  module_code?: string;
   total_stock?: number;
   warehouse_id?: string | null;
   warehouse_name?: string | null;
@@ -104,6 +105,7 @@ export interface InventoryItem {
   product_id: string;
   product_name: string;
   product_sku: string;
+  product_image?: string;
   warehouse_id: string;
   warehouse_name: string;
   quantity: number;
@@ -150,6 +152,7 @@ export interface ProductFormData {
   image?: string;
   is_active?: boolean;
   requires_prescription?: boolean;
+  module_code?: string;
   initial_stock?: number;
   stock?: number;
   warehouse_id?: string;

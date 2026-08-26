@@ -19,9 +19,9 @@ export const productsApi = {
   list: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<Product>>(`/products/${qs(params)}`),
 
-  search: (q: string, params: { limit?: number; category?: string } = {}) =>
+  search: (q: string, params: { limit?: number; category?: string; module_code?: string } = {}) =>
     apiRequest<ApiResponse<Product[]>>(
-      `/products/search/${qs({ q, limit: params.limit ?? 40, category: params.category })}`
+      `/products/search/${qs({ q, limit: params.limit ?? 40, category: params.category, module_code: params.module_code })}`
     ),
 
   get: (id: string) => apiRequest<ApiResponse<Product>>(`/products/${id}/`),
@@ -100,11 +100,18 @@ export const inventoryApi = {
   list: (params: Record<string, string | number | undefined> = {}) =>
     apiRequest<ApiListResponse<InventoryItem>>(`/inventory/${qs(params)}`),
 
-  summary: () => apiRequest<ApiResponse<InventorySummary>>("/inventory/summary/"),
+  summary: (params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiResponse<InventorySummary>>(`/inventory/summary/${qs(params)}`),
 
-  lowStock: () => apiRequest<ApiListResponse<InventoryItem>>("/inventory/low-stock/?page_size=50"),
+  lowStock: (params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiListResponse<InventoryItem>>(
+      `/inventory/low-stock/${qs({ page_size: 50, ...params })}`
+    ),
 
-  outOfStock: () => apiRequest<ApiListResponse<InventoryItem>>("/inventory/out-of-stock/?page_size=50"),
+  outOfStock: (params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiListResponse<InventoryItem>>(
+      `/inventory/out-of-stock/${qs({ page_size: 50, ...params })}`
+    ),
 
   adjustments: () => apiRequest<ApiListResponse<InventoryAdjustment>>("/inventory/adjustments/"),
 

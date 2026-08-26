@@ -160,6 +160,7 @@ def _seed_medicines(*, tenant, user, warehouse) -> dict:
                 minimum_stock=20,
                 is_active=True,
                 requires_prescription=bool(med.get("requires_prescription")),
+                module_code="pharmacy",
                 created_by=user,
             )
             created_products += 1
@@ -171,6 +172,9 @@ def _seed_medicines(*, tenant, user, warehouse) -> dict:
             if bool(med.get("requires_prescription")) and not product.requires_prescription:
                 product.requires_prescription = True
                 updates.append("requires_prescription")
+            if (product.module_code or "") != "pharmacy":
+                product.module_code = "pharmacy"
+                updates.append("module_code")
             if updates:
                 product.updated_by = user
                 product.save(update_fields=[*updates, "updated_by", "updated_at"])

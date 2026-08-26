@@ -77,6 +77,13 @@ class Product(TenantScopedModel, BaseModel):
         db_index=True,
         help_text="When pharmacy module is enabled, POS requires an active Rx covering this product.",
     )
+    module_code = models.SlugField(
+        max_length=40,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Owning industry/module (gym, restaurant, pharmacy, retail, …). Blank = shared retail.",
+    )
 
     class Meta:
         db_table = "products"
@@ -93,6 +100,10 @@ class Product(TenantScopedModel, BaseModel):
             models.Index(
                 fields=["tenant", "category", "is_active"],
                 name="idx_prod_tenant_cat_active",
+            ),
+            models.Index(
+                fields=["tenant", "module_code", "is_active"],
+                name="idx_prod_tenant_module_active",
             ),
         ]
         constraints = [

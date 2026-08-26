@@ -3,6 +3,7 @@ import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
 import { ClipboardList, Truck, Clock, DollarSign, Plus, Pencil, Trash2, Printer, Download, Loader2, FileOutput, PackageCheck } from "lucide-react";
 import { usePurchaseOrderPrint } from "../hooks/usePurchaseOrderPrint";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
@@ -32,6 +33,7 @@ const STATUS_VARIANT: Record<string, "secondary" | "warning" | "success" | "dest
 
 export function PurchasesPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [summary, setSummary] = useState<PurchaseSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -166,7 +168,7 @@ export function PurchasesPage() {
             >
               <PackageCheck className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(`/purchases/${r.id}/edit`)}>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(scoped(`/purchases/${r.id}/edit`))}>
               <Pencil className="h-4 w-4" />
             </Button>
             <Button
@@ -192,7 +194,7 @@ export function PurchasesPage() {
       breadcrumbs={["Home", "Purchases"]}
       actions={
         <Button asChild>
-          <Link to="/purchases/new"><Plus className="h-4 w-4" /> New Purchase Order</Link>
+          <Link to={scoped("/purchases/new")}><Plus className="h-4 w-4" /> New Purchase Order</Link>
         </Button>
       }
     >
@@ -206,8 +208,8 @@ export function PurchasesPage() {
       <ContentSection title="Quick Actions">
         <QuickActions
           actions={[
-            { label: "New PO", description: "Create purchase order", icon: <Plus className="h-5 w-5" />, to: "/purchases/new", variant: "primary" },
-            { label: "Suppliers", description: "Manage vendor list", icon: <Truck className="h-5 w-5" />, to: "/suppliers" },
+            { label: "New PO", description: "Create purchase order", icon: <Plus className="h-5 w-5" />, to: scoped("/purchases/new"), variant: "primary" },
+            { label: "Suppliers", description: "Manage vendor list", icon: <Truck className="h-5 w-5" />, to: scoped("/suppliers") },
           ]}
         />
       </ContentSection>
@@ -254,6 +256,7 @@ interface LineItem {
 
 export function PurchaseFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; company_name: string }[]>([]);
@@ -329,7 +332,7 @@ export function PurchaseFormPage({ editId }: { editId?: string }) {
       };
       if (editId) await purchasesApi.update(editId, payload);
       else await purchasesApi.create(payload);
-      navigate("/purchases");
+      navigate(scoped("/purchases"));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -454,7 +457,7 @@ export function PurchaseFormPage({ editId }: { editId?: string }) {
           actions={
             <FormActions>
               <Button type="submit" loading={saving}>{editId ? "Save Changes" : "Create Purchase Order"}</Button>
-              <Button type="button" variant="secondary" onClick={() => navigate("/purchases")}>Cancel</Button>
+              <Button type="button" variant="secondary" onClick={() => navigate(scoped("/purchases"))}>Cancel</Button>
             </FormActions>
           }
         />

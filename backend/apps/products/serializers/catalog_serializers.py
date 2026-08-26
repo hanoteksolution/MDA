@@ -91,6 +91,7 @@ def serialize_product(
         "image": resolve_product_image_url(p.image, request),
         "is_active": p.is_active,
         "requires_prescription": bool(getattr(p, "requires_prescription", False)),
+        "module_code": getattr(p, "module_code", "") or "",
         "created_at": p.created_at.isoformat(),
     }
     if include_attributes:

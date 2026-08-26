@@ -535,13 +535,15 @@ export function industryNavSections(
     if (cap) {
       if (!can(cap)) return;
       const labelText = code === "products" ? PRODUCT_LABEL[workspace] || cap.label : cap.label;
+      const suffix =
+        code === "products" && workspace === "pharmacy" ? "medicines" : cap.suffix;
       items.push({
-        to: workspacePath(workspace, cap.suffix),
+        to: workspacePath(workspace, suffix),
         label: labelText,
         icon: cap.icon,
         permission: cap.permission,
         module: cap.module,
-        end: !cap.suffix,
+        end: !suffix,
       });
       return;
     }
@@ -562,7 +564,7 @@ export function industryNavSections(
       label: "Platform",
       items: [
         { to: "/modules", label: "All workspaces", icon: LayoutGrid },
-        { to: "/settings", label: "Settings", icon: Settings, permission: "settings.view" },
+        { to: workspacePath(workspace, "settings"), label: "Settings", icon: Settings, permission: "settings.view" },
       ].filter((item) => permOk(item.permission, hasPermission, elevated)),
     },
   ];
@@ -598,6 +600,19 @@ export function overviewNavSections(
     },
   ];
 
+  // When Retail is not in the industry list (or user landed on overview), still
+  // surface engine shortcuts so cashiers / inventory staff are not stranded.
+  const opsItems: WorkspaceNavItem[] = [
+    { to: "/pos", label: "POS", icon: ShoppingCart, permission: "pos.access" },
+    { to: "/sales", label: "Sales", icon: Receipt, permission: "sales.view" },
+    { to: "/products", label: "Products", icon: Package, permission: "products.view" },
+    { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view" },
+  ].filter((item) => permOk(item.permission, hasPermission, elevated));
+  const hasRetailCard = industry.some((w) => w.code === "retail");
+  if (opsItems.length && !hasRetailCard) {
+    sections.push({ label: "Operations", items: opsItems });
+  }
+
   if (opts.includeFinance !== false) {
     const financeItems: WorkspaceNavItem[] = [
           { to: "/finance", label: "General Ledger", icon: Wallet, permission: "finance.view" },
@@ -607,6 +622,7 @@ export function overviewNavSections(
   }
 
   const systemItems: WorkspaceNavItem[] = [];
+  // Administration workspace only when the user can manage users or roles.
   if (opts.includeAdmin !== false && permOk(["users.view", "roles.view"], hasPermission, elevated)) {
     systemItems.push({ to: "/admin", label: "Administration", icon: Shield, permission: ["users.view", "roles.view"] });
   }
@@ -626,7 +642,7 @@ export function overviewNavSections(
       });
     }
   }
-  if (systemItems.length) sections.push({ label: "Administration", items: systemItems });
+  if (systemItems.length) sections.push({ label: "System", items: systemItems });
 
   return sections.filter((s) => s.items.length);
 }
@@ -660,7 +676,7 @@ export function platformNavSections(
   if (workspace === "admin" || workspace === "settings") {
     return [
       {
-        label: "Administration",
+        label: "System",
         items: [
           { to: "/admin", label: "Administration", icon: Shield, permission: ["users.view", "roles.view"] },
           { to: "/settings", label: "Settings", icon: Settings, permission: "settings.view" },

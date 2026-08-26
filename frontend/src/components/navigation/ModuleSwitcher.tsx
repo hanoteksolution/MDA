@@ -5,8 +5,8 @@ import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useModules } from "@/hooks/useModules";
-import { TONE_STYLES, type ModuleWorkspace } from "@/navigation/moduleWorkspaces";
-import { switcherWorkspacesForUser } from "@/navigation/businessWorkspaces";
+import { TONE_STYLES, MODULE_WORKSPACES, type ModuleWorkspace } from "@/navigation/moduleWorkspaces";
+import { switcherWorkspacesForUser, isIndustryPath } from "@/navigation/businessWorkspaces";
 import { recordHubVisit } from "@/pages/modules/hub/hubStorage";
 import { workspaceFromPath } from "@/theme/workspaceBrand";
 import { cn } from "@/utils/cn";
@@ -36,6 +36,8 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
 
   useEffect(() => {
     const inferred = workspaceFromPath(location.pathname);
+    // Only adopt route workspace when it is an explicit industry/platform code.
+    // Shared engine URLs return null so the selected module stays pinned.
     if (inferred && inferred !== activeWorkspace) {
       setActiveWorkspace(inferred);
     }
@@ -45,7 +47,10 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
 
   const current =
     list.find((w) => w.code === activeWorkspace) ||
-    list.find((w) => w.code === "overview") ||
+    (isIndustryPath(activeWorkspace)
+      ? MODULE_WORKSPACES.find((w) => w.code === activeWorkspace)
+      : undefined) ||
+    list.find((w) => w.kind === "industry") ||
     list[0];
 
   useEffect(() => {

@@ -17,6 +17,21 @@ def HasPermission(codename: str):
     return _HasPermission
 
 
+def HasAnyPermission(*codenames: str):
+    """Return a DRF permission class that passes if the user has any of the codenames."""
+
+    class _HasAnyPermission(permissions.BasePermission):
+        def has_permission(self, request, view):
+            if not request.user or not request.user.is_authenticated:
+                return False
+            return any(request.user.has_permission(code) for code in codenames)
+
+    label = "_".join(c.replace(".", "_") for c in codenames) or "none"
+    _HasAnyPermission.__name__ = f"HasAnyPermission_{label}"
+    _HasAnyPermission.__qualname__ = _HasAnyPermission.__name__
+    return _HasAnyPermission
+
+
 def HasModule(code: str):
     """Return a DRF permission class that requires an enabled tenant module."""
 

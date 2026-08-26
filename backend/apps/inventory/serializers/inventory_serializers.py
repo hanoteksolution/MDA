@@ -1,4 +1,5 @@
 from apps.inventory.models import Inventory, InventoryAdjustment, StockTransfer, Warehouse
+from core.utils.media import resolve_product_image_url
 
 
 def serialize_warehouse(w: Warehouse) -> dict:
@@ -15,11 +16,13 @@ def serialize_warehouse(w: Warehouse) -> dict:
 
 
 def serialize_inventory(inv: Inventory) -> dict:
+    product = inv.product
     return {
         "id": str(inv.id),
         "product_id": str(inv.product_id),
-        "product_name": inv.product.name,
-        "product_sku": inv.product.sku,
+        "product_name": product.name,
+        "product_sku": product.sku,
+        "product_image": resolve_product_image_url(product.image or ""),
         "warehouse_id": str(inv.warehouse_id),
         "warehouse_name": inv.warehouse.name,
         "quantity": float(inv.quantity),
@@ -27,8 +30,8 @@ def serialize_inventory(inv: Inventory) -> dict:
         "damaged_quantity": float(inv.damaged_quantity),
         "returned_quantity": float(inv.returned_quantity),
         "available_quantity": float(inv.available_quantity),
-        "minimum_stock": inv.product.minimum_stock,
-        "is_low_stock": float(inv.quantity) <= inv.product.minimum_stock,
+        "minimum_stock": product.minimum_stock,
+        "is_low_stock": float(inv.quantity) <= product.minimum_stock,
         "is_out_of_stock": float(inv.quantity) <= 0,
     }
 

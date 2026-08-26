@@ -38,6 +38,7 @@ import {
   type DashboardTransaction,
 } from "@/services/api/dashboard";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { formatCurrency } from "@/utils/cn";
 import type { DashboardKPIs } from "@/types/models";
 import { DashboardModuleCards } from "@/components/dashboard/DashboardModuleCards";
@@ -85,6 +86,7 @@ const lowStockColumns: Column<DashboardLowStock>[] = [
 ];
 
 export function DashboardPage() {
+  const { scoped } = useScopedPath();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
   const [lowStock, setLowStock] = useState<DashboardLowStock[]>([]);
@@ -190,10 +192,10 @@ export function DashboardPage() {
       <ContentSection index={3} title="Quick Actions" description="Common tasks to get started">
         <QuickActions
           actions={[
-            { label: "New Sale", description: "Open POS terminal", icon: <ShoppingCart className="h-5 w-5" />, to: "/pos", variant: "primary" },
-            { label: "New Purchase", description: "Create purchase order", icon: <Truck className="h-5 w-5" />, to: "/purchases/new" },
-            { label: "Add Product", description: "Add to catalog", icon: <Plus className="h-5 w-5" />, to: "/products/new" },
-            { label: "View Reports", description: "Analytics & exports", icon: <BarChart3 className="h-5 w-5" />, to: "/reports" },
+            { label: "New Sale", description: "Open POS terminal", icon: <ShoppingCart className="h-5 w-5" />, to: scoped("/pos"), variant: "primary" },
+            { label: "New Purchase", description: "Create purchase order", icon: <Truck className="h-5 w-5" />, to: scoped("/purchases/new") },
+            { label: "Add Product", description: "Add to catalog", icon: <Plus className="h-5 w-5" />, to: scoped("/products/new") },
+            { label: "View Reports", description: "Analytics & exports", icon: <BarChart3 className="h-5 w-5" />, to: scoped("/reports") },
           ]}
         />
       </ContentSection>
@@ -206,7 +208,7 @@ export function DashboardPage() {
           noPadding
           action={
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/sales">View all</Link>
+              <Link to={scoped("/sales")}>View all</Link>
             </Button>
           }
         >
@@ -228,7 +230,7 @@ export function DashboardPage() {
           noPadding
           action={
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/inventory/stock">View inventory</Link>
+              <Link to={scoped("/inventory/stock")}>View inventory</Link>
             </Button>
           }
         >

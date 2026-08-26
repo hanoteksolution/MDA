@@ -37,7 +37,7 @@ export function AdminPage() {
     if (!canManageUsers) return;
     setLoading(true);
     try {
-      const res = await adminApi.users(search || undefined);
+      const res = await adminApi.users({ search: search || undefined });
       setUsers(res.data);
     } finally {
       setLoading(false);

@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { settingsApi } from "@/services/api/admin";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { appDialog } from "@/components/feedback/AppDialog";
 
 export function BranchFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [companyId, setCompanyId] = useState("");
@@ -48,7 +50,7 @@ export function BranchFormPage({ editId }: { editId?: string }) {
         if (!companyId) throw new Error("Company profile not found.");
         await settingsApi.createBranch({ ...form, company_id: companyId });
       }
-      navigate("/settings");
+      navigate(scoped("/settings"));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -96,7 +98,7 @@ export function BranchFormPage({ editId }: { editId?: string }) {
         </FormSection>
         <div className="mt-6 flex gap-3">
           <Button type="submit" loading={saving}>{editId ? "Save Changes" : "Create Branch"}</Button>
-          <Button type="button" variant="secondary" onClick={() => navigate("/settings")}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate(scoped("/settings"))}>Cancel</Button>
         </div>
       </form>
     </PageLayout>

@@ -5,6 +5,7 @@ import {
   Clock3,
   MapPin,
   Package,
+  Pencil,
   Plus,
   RefreshCw,
   ShoppingCart,
@@ -19,16 +20,20 @@ import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormField, FormGrid } from "@/components/forms/FormField";
+import { PermissionMatrix, type PermissionItem } from "@/components/auth/PermissionMatrix";
 import { PlatformCloudNotice } from "@/components/platform/PlatformCloudNotice";
 import { PlatformProfileHero } from "@/components/platform/PlatformProfileHero";
 import { appDialog } from "@/components/feedback/AppDialog";
+import { adminApi } from "@/services/api/admin";
 import {
   platformApi,
   type PlatformShopOverview,
   type PlatformShopProduct,
   type PlatformShopSale,
+  type PlatformUserOption,
   type StaffPerformanceRow,
 } from "@/services/api/platform";
 import { cn, formatCurrency } from "@/utils/cn";
@@ -36,12 +41,26 @@ import { cn, formatCurrency } from "@/utils/cn";
 type Tab = "overview" | "modules" | "products" | "sales" | "users" | "performance";
 
 const SHOP_USER_ROLES = [
-  { slug: "admin", name: "Shop Admin (desktop POS)" },
-  { slug: "cashier", name: "Cashier (desktop POS)" },
+  { slug: "admin", name: "Shop Admin" },
+  { slug: "cashier", name: "Cashier (POS)" },
+  { slug: "inventory_manager", name: "Inventory Manager" },
+  { slug: "gym_manager", name: "Gym Manager" },
   { slug: "branch_manager", name: "Branch Manager" },
   { slug: "accountant", name: "Accountant" },
-  { slug: "inventory_manager", name: "Inventory Manager" },
+  { slug: "sales_staff", name: "Sales Staff" },
+  { slug: "waiter", name: "Waiter" },
+  { slug: "kitchen", name: "Kitchen" },
+  { slug: "cafeteria_cashier", name: "Cafeteria Cashier" },
+  { slug: "receptionist", name: "Receptionist" },
+  { slug: "trainer", name: "Trainer" },
+  { slug: "pharmacist", name: "Pharmacist" },
+  { slug: "front_desk", name: "Front Desk" },
+  { slug: "housekeeping", name: "Housekeeping" },
   { slug: "futsal_manager", name: "Futsal Manager" },
+  { slug: "futsal_staff", name: "Futsal Staff" },
+  { slug: "property_manager", name: "Property Manager" },
+  { slug: "property_maintenance", name: "Property Maintenance" },
+  { slug: "read_only", name: "Read Only" },
 ];
 
 const EMPTY_USER_FORM = {
@@ -50,7 +69,9 @@ const EMPTY_USER_FORM = {
   email: "",
   first_name: "",
   last_name: "",
+  phone: "",
   role_slug: "admin",
+  is_active: true,
 };
 
 export function PlatformShopDetailPage() {
@@ -61,9 +82,14 @@ export function PlatformShopDetailPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [savingUser, setSavingUser] = useState(false);
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [userFormError, setUserFormError] = useState("");
+  const [selectedPermIds, setSelectedPermIds] = useState<string[]>([]);
+  const [rolePermIds, setRolePermIds] = useState<string[]>([]);
+  const [allPermissions, setAllPermissions] = useState<Record<string, PermissionItem[]>>({});
+  const [rolesCatalog, setRolesCatalog] = useState<{ slug: string; permissions: { id: string }[] }[]>([]);
   const [moduleItems, setModuleItems] = useState<
     {
       code: string;
@@ -77,6 +103,15 @@ export function PlatformShopDetailPage() {
   >([]);
   const [moduleBusy, setModuleBusy] = useState(false);
   const [moduleMsg, setModuleMsg] = useState<string | null>(null);
+
+  const resetUserForm = () => {
+    setUserForm(EMPTY_USER_FORM);
+    setSelectedPermIds([]);
+    setRolePermIds([]);
+    setEditingUserId(null);
+    setUserFormError("");
+    setShowAddUser(false);
+  };
 
   const load = () => {
     if (!shopId) return;
@@ -107,6 +142,98 @@ export function PlatformShopDetailPage() {
   useEffect(() => {
     if (tab === "modules") loadModules();
   }, [tab, shopId]);
+
+  useEffect(() => {
+    if (tab !== "users" || !shopId) return;
+    adminApi
+      .permissions({ tenant: shopId })
+      .then((res) => setAllPermissions(res.data))
+      .catch(() => setAllPermissions({}));
+    adminApi
+      .roles()
+      .then((res) =>
+        setRolesCatalog(
+          (res.data || []).map((r) => ({
+            slug: r.slug,
+            permissions: (r.permissions || []).map((p) => ({ id: p.id })),
+          }))
+        )
+      )
+      .catch(() => setRolesCatalog([]));
+  }, [tab, shopId]);
+
+  const startEditUser = (u: PlatformUserOption) => {
+    setEditingUserId(u.id);
+    setShowAddUser(true);
+    setUserFormError("");
+    setUserForm({
+      username: u.username,
+      password: "",
+      email: u.email || "",
+      first_name: u.first_name || "",
+      last_name: u.last_name || "",
+      phone: u.phone || "",
+      role_slug: u.role_slug || "admin",
+      is_active: u.is_active !== false,
+    });
+    setSelectedPermIds((u.permission_ids || []).map(String));
+    setRolePermIds((u.role_permission_ids || []).map(String));
+  };
+
+  const saveShopUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopId) return;
+    setUserFormError("");
+    if (!editingUserId && !userForm.username.trim()) {
+      setUserFormError("Username is required.");
+      return;
+    }
+    if (!editingUserId && userForm.password.length < 8) {
+      setUserFormError("Password must be at least 8 characters.");
+      return;
+    }
+    if (userForm.password && userForm.password.length < 8) {
+      setUserFormError("Password must be at least 8 characters.");
+      return;
+    }
+    setSavingUser(true);
+    try {
+      if (editingUserId) {
+        await platformApi.updateTenantUser(shopId, editingUserId, {
+          email: userForm.email.trim() || undefined,
+          first_name: userForm.first_name.trim() || undefined,
+          last_name: userForm.last_name.trim() || undefined,
+          phone: userForm.phone.trim() || undefined,
+          role_slug: userForm.role_slug,
+          is_active: userForm.is_active,
+          permission_ids: selectedPermIds,
+          ...(userForm.password ? { password: userForm.password } : {}),
+        });
+        await appDialog.alert("User updated.", { tone: "success", title: "Saved" });
+      } else {
+        const res = await platformApi.createTenantUser(shopId, {
+          username: userForm.username.trim(),
+          password: userForm.password,
+          email: userForm.email.trim() || undefined,
+          first_name: userForm.first_name.trim() || undefined,
+          last_name: userForm.last_name.trim() || undefined,
+          phone: userForm.phone.trim() || undefined,
+          role_slug: userForm.role_slug,
+          permission_ids: selectedPermIds,
+        });
+        await appDialog.alert(
+          `User created. Desktop login: ${res.data.username}. Use Settings → Connection (shop slug + sync secret), then sign in once online.`,
+          { tone: "success", title: "Shop user ready" }
+        );
+      }
+      resetUserForm();
+      load();
+    } catch (err) {
+      setUserFormError(err instanceof Error ? err.message : "Could not save user.");
+    } finally {
+      setSavingUser(false);
+    }
+  };
 
   const toggleModule = (code: string) => {
     setModuleItems((prev) =>
@@ -158,42 +285,6 @@ export function PlatformShopDetailPage() {
     }
   };
 
-  const createUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shopId) return;
-    setUserFormError("");
-    if (!userForm.username.trim()) {
-      setUserFormError("Username is required.");
-      return;
-    }
-    if (userForm.password.length < 8) {
-      setUserFormError("Password must be at least 8 characters.");
-      return;
-    }
-    setSavingUser(true);
-    try {
-      const res = await platformApi.createTenantUser(shopId, {
-        username: userForm.username.trim(),
-        password: userForm.password,
-        email: userForm.email.trim() || undefined,
-        first_name: userForm.first_name.trim() || undefined,
-        last_name: userForm.last_name.trim() || undefined,
-        role_slug: userForm.role_slug,
-      });
-      setUserForm(EMPTY_USER_FORM);
-      setShowAddUser(false);
-      load();
-      await appDialog.alert(
-        `User created. Desktop login: ${res.data.username}. Use Settings → Connection (shop slug + sync secret), then sign in once online.`,
-        { tone: "success", title: "Shop user ready" }
-      );
-    } catch (err) {
-      setUserFormError(err instanceof Error ? err.message : "Could not create user.");
-    } finally {
-      setSavingUser(false);
-    }
-  };
-
   const tenant = data?.tenant;
   const groupId = tenant?.shop_group_id;
   const products = (data?.catalog?.products || []) as PlatformShopProduct[];
@@ -222,7 +313,7 @@ export function PlatformShopDetailPage() {
     { key: "cashier", header: "Cashier", cell: (r) => r.cashier || "—" },
   ];
 
-  const userCols: Column<(typeof users)[number]>[] = [
+  const userCols: Column<PlatformUserOption>[] = [
     {
       key: "user",
       header: "User",
@@ -239,14 +330,24 @@ export function PlatformShopDetailPage() {
       ),
     },
     { key: "email", header: "Email", cell: (r) => r.email || "—" },
-    { key: "role", header: "Role", cell: (r) => r.role || "—" },
+    { key: "role", header: "Role", cell: (r) => r.role || r.role_slug || "—" },
     {
       key: "status",
       header: "Status",
       cell: (r) => (
-        <Badge variant={r.is_active ? "success" : "secondary"}>
-          {r.is_active ? "Active" : "Inactive"}
+        <Badge variant={r.is_active !== false ? "success" : "secondary"}>
+          {r.is_active !== false ? "Active" : "Inactive"}
         </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (r) => (
+        <Button type="button" size="sm" variant="secondary" onClick={() => startEditUser(r)}>
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Button>
       ),
     },
   ];
@@ -601,29 +702,48 @@ export function PlatformShopDetailPage() {
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Create a Shop Admin or Cashier for the desktop app (offline POS). Share username and password securely.
+                    Users are bound to this shop automatically. Assign a role (e.g. Gym Manager, Cashier, Inventory)
+                    and optional direct permissions such as users.create.
                   </p>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setShowAddUser((v) => !v);
-                      setUserFormError("");
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                    {showAddUser ? "Cancel" : "Add user"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {shopId && (
+                      <Button type="button" variant="secondary" asChild>
+                        <Link to={`/admin/users/new?tenant=${shopId}`}>Open in Admin</Link>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (showAddUser) resetUserForm();
+                        else {
+                          setEditingUserId(null);
+                          setUserForm(EMPTY_USER_FORM);
+                          const role = rolesCatalog.find((r) => r.slug === EMPTY_USER_FORM.role_slug);
+                          const fromRole = (role?.permissions || []).map((p) => String(p.id));
+                          setRolePermIds(fromRole);
+                          setSelectedPermIds(fromRole);
+                          setShowAddUser(true);
+                          setUserFormError("");
+                        }
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {showAddUser ? "Cancel" : "Add user"}
+                    </Button>
+                  </div>
                 </div>
 
                 {showAddUser && (
                   <form
-                    onSubmit={createUser}
+                    onSubmit={saveShopUser}
                     className="platform-panel space-y-4 p-5"
                   >
                     <div>
-                      <p className="text-sm font-semibold">New shop user</p>
+                      <p className="text-sm font-semibold">
+                        {editingUserId ? "Edit shop user" : "New shop user"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        After creating, connect the desktop app with this shop&apos;s slug and sync secret, then sign in online once.
+                        Shop is fixed to {tenant?.name || "this tenant"}. Role sets baseline access; direct permissions add extras.
                       </p>
                     </div>
                     {userFormError && (
@@ -634,16 +754,21 @@ export function PlatformShopDetailPage() {
                     <FormGrid>
                       <FormField label="Username" required>
                         <Input
-                          required
+                          required={!editingUserId}
+                          disabled={Boolean(editingUserId)}
                           value={userForm.username}
                           onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                          placeholder="e.g. somfutsal_admin"
+                          placeholder="e.g. kisima_gym"
                           autoComplete="off"
                         />
                       </FormField>
-                      <FormField label="Password" required hint="Minimum 8 characters">
+                      <FormField
+                        label={editingUserId ? "New password" : "Password"}
+                        required={!editingUserId}
+                        hint={editingUserId ? "Leave blank to keep current" : "Minimum 8 characters"}
+                      >
                         <Input
-                          required
+                          required={!editingUserId}
                           type="password"
                           minLength={8}
                           value={userForm.password}
@@ -670,10 +795,22 @@ export function PlatformShopDetailPage() {
                           onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
                         />
                       </FormField>
+                      <FormField label="Phone">
+                        <Input
+                          value={userForm.phone}
+                          onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
+                        />
+                      </FormField>
                       <FormField label="Role" required>
                         <Select
                           value={userForm.role_slug}
-                          onValueChange={(v) => setUserForm({ ...userForm, role_slug: v })}
+                          onValueChange={(v) => {
+                            setUserForm({ ...userForm, role_slug: v });
+                            const role = rolesCatalog.find((r) => r.slug === v);
+                            const fromRole = (role?.permissions || []).map((p) => String(p.id));
+                            setRolePermIds(fromRole);
+                            setSelectedPermIds(fromRole);
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -688,19 +825,33 @@ export function PlatformShopDetailPage() {
                         </Select>
                       </FormField>
                     </FormGrid>
+                    {editingUserId && (
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={userForm.is_active}
+                          onCheckedChange={(v) => setUserForm({ ...userForm, is_active: !!v })}
+                        />
+                        <span className="text-sm font-medium">Active account</span>
+                      </label>
+                    )}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Permissions</p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective access for this user. Uncheck Users permissions to revoke user management from a Shop Admin.
+                      </p>
+                      <PermissionMatrix
+                        permissions={allPermissions}
+                        selected={selectedPermIds}
+                        rolePermissionIds={rolePermIds}
+                        onChange={setSelectedPermIds}
+                      />
+                    </div>
                     <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          setShowAddUser(false);
-                          setUserFormError("");
-                        }}
-                      >
+                      <Button type="button" variant="secondary" onClick={resetUserForm}>
                         Cancel
                       </Button>
                       <Button type="submit" loading={savingUser}>
-                        Create user
+                        {editingUserId ? "Save user" : "Create user"}
                       </Button>
                     </div>
                   </form>

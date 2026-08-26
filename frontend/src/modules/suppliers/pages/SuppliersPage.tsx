@@ -12,12 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { suppliersApi } from "@/services/api/partners";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { formatCurrency } from "@/utils/cn";
 import type { Supplier, SupplierSummary } from "@/types/models/partners";
 import { appDialog } from "@/components/feedback/AppDialog";
 
 export function SuppliersPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [summary, setSummary] = useState<SupplierSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -74,7 +76,7 @@ export function SuppliersPage() {
       header: "",
       cell: (r) => (
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/suppliers/${r.id}/edit`)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(scoped(`/suppliers/${r.id}/edit`))}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)}>
@@ -94,7 +96,7 @@ export function SuppliersPage() {
       backLabel="Dashboard"
       actions={
         <Button asChild>
-          <Link to="/suppliers/new"><Plus className="h-4 w-4" /> Add Supplier</Link>
+          <Link to={scoped("/suppliers/new")}><Plus className="h-4 w-4" /> Add Supplier</Link>
         </Button>
       }
     >
@@ -129,6 +131,7 @@ export function SuppliersPage() {
 
 export function SupplierFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -156,7 +159,7 @@ export function SupplierFormPage({ editId }: { editId?: string }) {
       const payload = { ...form, payment_terms: parseInt(form.payment_terms, 10) || 30 };
       if (editId) await suppliersApi.update(editId, payload);
       else await suppliersApi.create(payload);
-      navigate("/suppliers");
+      navigate(scoped("/suppliers"));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -203,7 +206,7 @@ export function SupplierFormPage({ editId }: { editId?: string }) {
         </FormSection>
         <div className="mt-6 flex gap-3">
           <Button type="submit" loading={saving}>{editId ? "Save Changes" : "Create Supplier"}</Button>
-          <Button type="button" variant="secondary" onClick={() => navigate("/suppliers")}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate(scoped("/suppliers"))}>Cancel</Button>
         </div>
       </form>
     </PageLayout>

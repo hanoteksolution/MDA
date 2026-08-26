@@ -10,6 +10,7 @@ import { Header } from "@/layouts/Header/Header";
 import { FooterStatusBar } from "@/layouts/Footer/FooterStatusBar";
 import { useUIStore } from "@/store/uiStore";
 import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
+import { IndustryScopeRedirect } from "@/navigation/IndustryScopeRedirect";
 import { cn } from "@/utils/cn";
 import { isPosPath } from "@/navigation/businessWorkspaces";
 
@@ -36,6 +37,7 @@ export function AppShell() {
 
   return (
     <PageMetaProvider>
+      <IndustryScopeRedirect />
       <SubscriptionAlertDialog />
       <CloudSyncManager />
       <NotificationDrawer />

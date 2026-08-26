@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { salesApi, type Invoice } from "@/services/api/sales";
 import { posApi } from "@/services/api/pos";
 import type { HeldSale } from "@/modules/pos/hooks/usePosCart";
@@ -127,6 +128,7 @@ function parseTab(raw: string | null | undefined): StatusTab {
 
 export function ReceiptManagementPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission } = usePermissions();
   const canUpdate = hasPermission("sales.update");
@@ -523,7 +525,7 @@ export function ReceiptManagementPage() {
                 size="sm"
                 className="h-8 w-8 p-0"
                 title="Edit"
-                onClick={() => navigate(`/sales/invoices/${r.id}/edit`)}
+                onClick={() => navigate(scoped(`/sales/invoices/${r.id}/edit`))}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -534,7 +536,7 @@ export function ReceiptManagementPage() {
                 size="sm"
                 className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700"
                 title="Resume in POS"
-                onClick={() => navigate(`/pos?resume=${r.id}`)}
+                onClick={() => navigate(scoped(`/pos?resume=${r.id}`))}
               >
                 <PauseCircle className="h-4 w-4" />
               </Button>

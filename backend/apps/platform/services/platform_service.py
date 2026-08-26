@@ -641,9 +641,13 @@ class PlatformService:
             User.objects.filter(
                 Q(tenant=tenant) | Q(branch__company__tenant=tenant),
                 deleted_at__isnull=True,
-                is_active=True,
             )
-            .select_related("role", "branch")
+            .select_related("role", "branch", "tenant")
+            .prefetch_related(
+                "direct_permissions",
+                "revoked_permissions",
+                "role__role_permissions",
+            )
             .distinct()
             .order_by("username")
         )
@@ -844,17 +848,7 @@ class PlatformService:
             "staff_performance": staff[:20],
             "catalog": catalog,
             "recent_sales": recent_sales,
-            "users": [
-                {
-                    "id": str(u.id),
-                    "username": u.username,
-                    "full_name": u.get_full_name() or u.username,
-                    "email": u.email,
-                    "role": u.role.name if u.role_id else "",
-                    "is_active": u.is_active,
-                }
-                for u in users
-            ],
+            "users": [PlatformService.tenant_user_payload(u) for u in users],
             "waiters": [
                 {
                     "id": str(w.get("id") or ""),
@@ -1189,13 +1183,64 @@ class PlatformService:
 
     @staticmethod
     def _shop_owner_role_slugs():
+        """Roles that may be assigned to shop staff (never elevated platform roles)."""
         return {
             "admin",
             "cashier",
             "branch_manager",
             "accountant",
             "inventory_manager",
+            "sales_staff",
+            "read_only",
             "futsal_manager",
+            "futsal_staff",
+            "pharmacist",
+            "gym_manager",
+            "receptionist",
+            "trainer",
+            "waiter",
+            "kitchen",
+            "cafeteria_cashier",
+            "front_desk",
+            "housekeeping",
+            "property_manager",
+            "property_maintenance",
+        }
+
+    @staticmethod
+    def tenant_user_payload(user: User) -> dict:
+        from apps.authentication.models import Permission
+
+        codes = set(user.get_permissions())
+        permission_ids = [
+            str(p.id)
+            for p in Permission.objects.filter(codename__in=codes, deleted_at__isnull=True)
+        ] if codes else []
+        role_permission_ids = [
+            str(rp.permission_id)
+            for rp in user.role.role_permissions.filter(deleted_at__isnull=True)
+        ] if user.role_id else []
+        revoke_ids = [
+            str(up.permission_id)
+            for up in user.revoked_permissions.filter(deleted_at__isnull=True)
+        ]
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "full_name": user.get_full_name() or user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone": user.phone or "",
+            "role": user.role.name if user.role_id else None,
+            "role_slug": user.role.slug if user.role_id else None,
+            "role_id": str(user.role_id) if user.role_id else None,
+            "branch_id": str(user.branch_id) if user.branch_id else None,
+            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
+            "is_active": user.is_active,
+            "permission_ids": permission_ids,
+            "role_permission_ids": role_permission_ids,
+            "revoke_ids": revoke_ids,
         }
 
     @staticmethod
@@ -1211,10 +1256,19 @@ class PlatformService:
     @staticmethod
     def create_tenant_user(*, tenant: Tenant, data: dict, created_by=None):
         """Create a shop desktop/cloud user bound to this tenant."""
+        from apps.authentication.services.auth_service import UserService
+        from apps.platform.services.entitlement_service import EntitlementError, EntitlementService
+
         branch = PlatformService.default_branch_for_tenant(tenant)
         if not branch:
             raise ValueError("Shop has no branch. Recreate the shop or contact support.")
-        return PlatformService.create_shop_owner(
+        try:
+            EntitlementService.assert_can_add_user(tenant=tenant, user=created_by)
+        except EntitlementError as exc:
+            raise ValueError(str(exc)) from exc
+
+        permission_ids = data.get("permission_ids")
+        user = PlatformService.create_shop_owner(
             tenant=tenant,
             branch=branch,
             owner=data,
@@ -1222,6 +1276,76 @@ class PlatformService:
             as_group_manager=False,
             created_by=created_by,
         )
+        if permission_ids is not None and not user.is_elevated_admin:
+            assignable = UserService.list_assignable_permissions(
+                viewer=created_by, tenant_id=str(tenant.id)
+            )
+            UserService.apply_effective_permission_selection(
+                user=user,
+                selected_ids=permission_ids,
+                granted_by=created_by,
+                assignable_qs=assignable,
+            )
+        return user
+
+    @staticmethod
+    @transaction.atomic
+    def update_tenant_user(*, tenant: Tenant, user: User, data: dict, updated_by=None):
+        """Update a shop user (role, direct permissions, profile, active flag)."""
+        from apps.authentication.models import Role
+        from apps.authentication.services.auth_service import UserService
+
+        belongs = (
+            user.tenant_id == tenant.id
+            or (
+                user.branch_id
+                and getattr(user.branch, "company", None)
+                and user.branch.company.tenant_id == tenant.id
+            )
+        )
+        if not belongs:
+            raise ValueError("User does not belong to this shop.")
+
+        role_slug = (data.get("role_slug") or "").strip()
+        if role_slug:
+            allowed = PlatformService._shop_owner_role_slugs()
+            if role_slug not in allowed:
+                raise ValueError("Invalid shop user role.")
+            role = Role.objects.filter(slug=role_slug, deleted_at__isnull=True).first()
+            if not role:
+                raise ValueError(f"Role '{role_slug}' is not available.")
+            user.role = role
+
+        for field in ("email", "first_name", "last_name", "phone"):
+            if field in data and data[field] is not None:
+                setattr(user, field, str(data[field]).strip())
+
+        if "is_active" in data and data["is_active"] is not None:
+            user.is_active = bool(data["is_active"])
+
+        password = data.get("password") or ""
+        if password:
+            if len(password) < 8:
+                raise ValueError("Password must be at least 8 characters.")
+            user.set_password(password)
+
+        if not user.tenant_id:
+            user.tenant = tenant
+        user.save()
+        if user.apply_elevated_flags():
+            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
+
+        if "permission_ids" in data and not user.is_elevated_admin:
+            assignable = UserService.list_assignable_permissions(
+                viewer=updated_by, tenant_id=str(tenant.id)
+            )
+            UserService.apply_effective_permission_selection(
+                user=user,
+                selected_ids=data.get("permission_ids") or [],
+                granted_by=updated_by,
+                assignable_qs=assignable,
+            )
+        return user
 
     @staticmethod
     def create_shop_owner(
@@ -1429,8 +1553,21 @@ class PlatformService:
             created_sub.save(update_fields=["contact_user", "updated_at"])
 
         from apps.platform.services.entitlement_service import EntitlementService
+        from apps.platform.services.module_service import sync_tenant_modules
 
         EntitlementService.apply_plan_entitlements(tenant=tenant, user=user)
+
+        # Optional explicit modules (multi-module shop / demo provision).
+        raw_modules = data.get("modules") or data.get("enabled_modules") or data.get("module_codes")
+        if isinstance(raw_modules, list) and raw_modules:
+            sync_tenant_modules(
+                tenant=tenant,
+                enabled_codes=[str(c).strip().lower() for c in raw_modules if c],
+                user=user,
+                disable_missing=True,
+                validate_dependencies=True,
+                persist_snapshot=True,
+            )
 
         return tenant, owner_user
 

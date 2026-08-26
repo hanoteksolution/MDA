@@ -21,9 +21,13 @@ class UserSerializer(serializers.ModelSerializer):
     branch = BranchMinimalSerializer(read_only=True)
     role_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     branch_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    tenant_id = serializers.SerializerMethodField()
+    tenant_name = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
     direct_permissions = serializers.SerializerMethodField()
     permission_ids = serializers.SerializerMethodField()
+    role_permission_ids = serializers.SerializerMethodField()
+    revoke_ids = serializers.SerializerMethodField()
     shop_slug = serializers.SerializerMethodField()
     managed_shop_group = serializers.SerializerMethodField()
     enabled_modules = serializers.SerializerMethodField()
@@ -35,9 +39,11 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "phone", "avatar", "role", "branch", "role_id", "branch_id",
+            "tenant_id", "tenant_name",
             "is_active", "is_platform_admin", "is_superuser", "is_super_admin",
             "permissions", "direct_permissions",
-            "permission_ids", "shop_slug", "managed_shop_group", "enabled_modules",
+            "permission_ids", "role_permission_ids", "revoke_ids",
+            "shop_slug", "managed_shop_group", "enabled_modules",
             "module_features",
             "last_login", "date_joined",
         ]
@@ -49,6 +55,20 @@ class UserSerializer(serializers.ModelSerializer):
     def get_is_super_admin(self, obj):
         return bool(getattr(obj, "is_elevated_admin", False))
 
+    def get_tenant_id(self, obj):
+        if obj.tenant_id:
+            return str(obj.tenant_id)
+        if obj.branch_id and getattr(obj.branch, "company", None) and obj.branch.company.tenant_id:
+            return str(obj.branch.company.tenant_id)
+        return None
+
+    def get_tenant_name(self, obj):
+        if obj.tenant_id:
+            return obj.tenant.name
+        if obj.branch_id and getattr(obj.branch, "company", None) and obj.branch.company.tenant_id:
+            return obj.branch.company.tenant.name
+        return None
+
     def get_direct_permissions(self, obj):
         perms = (
             obj.direct_permissions.filter(deleted_at__isnull=True)
@@ -57,9 +77,27 @@ class UserSerializer(serializers.ModelSerializer):
         return PermissionSerializer([up.permission for up in perms], many=True).data
 
     def get_permission_ids(self, obj):
+        """Effective permission UUIDs (role ∪ direct − revokes) for the access matrix."""
+        codes = set(obj.get_permissions())
+        if not codes:
+            return []
+        return [
+            str(p.id)
+            for p in Permission.objects.filter(codename__in=codes, deleted_at__isnull=True)
+        ]
+
+    def get_role_permission_ids(self, obj):
+        if not obj.role_id:
+            return []
+        return [
+            str(rp.permission_id)
+            for rp in obj.role.role_permissions.filter(deleted_at__isnull=True)
+        ]
+
+    def get_revoke_ids(self, obj):
         return [
             str(up.permission_id)
-            for up in obj.direct_permissions.filter(deleted_at__isnull=True)
+            for up in obj.revoked_permissions.filter(deleted_at__isnull=True)
         ]
 
     def get_shop_slug(self, obj):
@@ -95,6 +133,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=True)
     role_id = serializers.UUIDField(required=False, allow_null=True)
     branch_id = serializers.UUIDField(required=False, allow_null=True)
+    tenant_id = serializers.UUIDField(required=False, allow_null=True)
     permission_ids = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )
@@ -103,7 +142,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "username", "email", "password", "first_name", "last_name",
-            "phone", "role_id", "branch_id", "is_active", "permission_ids",
+            "phone", "role_id", "branch_id", "tenant_id", "is_active", "permission_ids",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -112,23 +151,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
             self.fields["password"].required = False
 
     def create(self, validated_data):
-        role_id = validated_data.pop("role_id", None)
-        branch_id = validated_data.pop("branch_id", None)
-        permission_ids = validated_data.pop("permission_ids", None)
-        password = validated_data.pop("password")
-        user = User.objects.create_user(**validated_data, password=password)
-        if role_id:
-            user.role_id = role_id
-        if branch_id:
-            user.branch_id = branch_id
-        user.save()
-        if user.apply_elevated_flags():
-            user.save(update_fields=["is_platform_admin", "is_superuser", "is_staff"])
-        if permission_ids is not None and not user.is_elevated_admin:
-            from apps.authentication.services.auth_service import UserService
+        # Prefer UserService.create_user from the view — this path is a fallback.
+        from apps.authentication.services.auth_service import UserService
 
-            UserService._set_direct_permissions(user, permission_ids)
-        return user
+        return UserService.create_user(data=validated_data)
 
 
 class LoginSerializer(serializers.Serializer):

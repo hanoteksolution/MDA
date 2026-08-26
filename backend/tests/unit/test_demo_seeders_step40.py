@@ -90,3 +90,52 @@ def test_pharmacy_demo_seeder_creates_batches(platform_ready):
     again = generate_demo_data(tenant=tenant, modules=["pharmacy"])
     assert again["results"]["pharmacy"].get("idempotent") is True
     assert again["results"]["pharmacy"].get("prescriptions") >= 2
+
+
+@pytest.mark.django_db
+def test_gym_demo_also_seeds_pos_catalog(platform_ready):
+    tenant, report = DemoTenantService.create(
+        data={
+            "name": "Seed Gym POS",
+            "business_type_code": "gym",
+            "preset_code": "gym",
+            "duration_days": 14,
+            "generate_data": True,
+        }
+    )
+    pos = report["results"].get("pos") or {}
+    catalog = report["results"].get("catalog") or report["results"].get("inventory") or {}
+    assert pos.get("seeded") is True
+    assert catalog.get("seeded") is True
+    assert Product.active_objects().filter(tenant=tenant, sku__startswith="DEMO-POS-").count() >= 4
+    from apps.sales.models import Invoice
+
+    assert Invoice.active_objects().filter(tenant=tenant, idempotency_key="demo-pos-seed-v1").exists()
+
+
+@pytest.mark.django_db
+def test_multi_module_demo_seeds_gym_and_restaurant(platform_ready):
+    tenant, report = DemoTenantService.create(
+        data={
+            "name": "Kisima Multi",
+            "slug": "demo-kisima-test",
+            "business_type_code": "gym",
+            "modules": ["gym", "restaurant", "pos", "inventory", "sales"],
+            "duration_days": 14,
+            "generate_data": True,
+        }
+    )
+    assert report["results"]["gym"].get("seeded") is True
+    assert report["results"]["restaurant"].get("seeded") is True
+    assert report["results"]["pos"].get("seeded") is True
+    from apps.gym.models import Member
+    from apps.restaurant.models import MenuItem
+
+    assert Member.active_objects().filter(tenant=tenant).count() >= 5
+    assert MenuItem.active_objects().filter(tenant=tenant).count() >= 4
+    from apps.platform.models import TenantDomain
+
+    aliases = set(
+        TenantDomain.active_objects().filter(tenant=tenant).values_list("subdomain", flat=True)
+    )
+    assert "kisima-test" in aliases

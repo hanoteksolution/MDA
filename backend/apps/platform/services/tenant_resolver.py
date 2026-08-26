@@ -130,6 +130,12 @@ def resolve_tenant_from_hostname(hostname: str) -> TenantResolution:
             .filter(slug=slug, deleted_at__isnull=True)
             .first()
         )
+        if tenant is None and not slug.startswith("demo-"):
+            tenant = (
+                Tenant.objects.select_related("business_type", "settings")
+                .filter(slug=f"demo-{slug}", deleted_at__isnull=True)
+                .first()
+            )
         if tenant:
             return TenantResolution(
                 mode="tenant",

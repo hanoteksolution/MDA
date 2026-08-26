@@ -930,8 +930,35 @@ class RestaurantService:
                 cost_price=Decimal("0"),
                 selling_price=item.unit_price or Decimal("0"),
                 is_active=True,
+                module_code="restaurant",
                 created_by=user,
             )
+        elif (getattr(product, "module_code", "") or "") != "restaurant":
+            product.module_code = "restaurant"
+            product.save(update_fields=["module_code", "updated_at"])
+        try:
+            from apps.platform.demo.product_images import ensure_product_image
+
+            ensure_product_image(product)
+        except Exception:
+            pass
+        # Ensure a stock row exists so restaurant inventory/POS see the item.
+        try:
+            from apps.inventory.models import Warehouse
+            from apps.inventory.services.inventory_service import InventoryService
+
+            wh = (
+                Warehouse.active_objects()
+                .filter(tenant_id=tenant_id, is_default=True)
+                .first()
+                or Warehouse.active_objects().filter(tenant_id=tenant_id).first()
+            )
+            if wh is not None:
+                InventoryService.ensure_inventory_record(
+                    product=product, warehouse=wh, user=user
+                )
+        except Exception:
+            pass
         item.product = product
         item.save(update_fields=["product", "updated_at"])
         return item

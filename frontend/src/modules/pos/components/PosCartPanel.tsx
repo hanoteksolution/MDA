@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProductModuleBadge } from "@/components/catalog/ProductModuleBadge";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -319,7 +320,10 @@ export function PosCartPanel({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-semibold tracking-tight">{item.name}</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="truncate text-[13px] font-semibold tracking-tight">{item.name}</p>
+                    <ProductModuleBadge moduleCode={item.module_code} size="sm" />
+                  </div>
                   <p className="font-mono text-[10px] text-muted-foreground">{item.sku}</p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {formatCurrency(item.price)} each

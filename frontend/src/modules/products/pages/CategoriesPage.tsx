@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { productsApi } from "@/services/api/catalog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import type { Category } from "@/types/models/catalog";
 import { appDialog } from "@/components/feedback/AppDialog";
 
@@ -27,6 +28,7 @@ const emptyForm: CategoryFormState = {
 
 export function CategoriesPage() {
   const { hasPermission } = usePermissions();
+  const { scoped } = useScopedPath();
   const canCreate = hasPermission("products.create");
   const canUpdate = hasPermission("products.update");
   const canDelete = hasPermission("products.delete");
@@ -184,7 +186,7 @@ export function CategoriesPage() {
       actions={
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" asChild>
-            <Link to="/products">Products</Link>
+            <Link to={scoped("/products")}>Products</Link>
           </Button>
           {canCreate && (
             <Button onClick={openCreate}>

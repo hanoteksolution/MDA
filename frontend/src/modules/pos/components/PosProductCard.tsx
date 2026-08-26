@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn, formatCurrency } from "@/utils/cn";
 import type { Product } from "@/types/models/catalog";
 import { ProductImage, getStockStatus } from "@/components/catalog/ProductImage";
+import { ProductModuleBadge } from "@/components/catalog/ProductModuleBadge";
 
 interface PosProductCardProps {
   product: Product;
@@ -61,7 +62,8 @@ export function PosProductCard({
         <ProductImage product={product} className="transition-transform duration-500 group-hover:scale-[1.03]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
 
-        <div className="absolute left-2 top-2 z-20">
+        <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">
+          <ProductModuleBadge moduleCode={product.module_code} size="sm" />
           <Badge
             variant={status.variant}
             className="border-0 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] shadow-md backdrop-blur-sm xl:px-2 xl:text-[9px]"

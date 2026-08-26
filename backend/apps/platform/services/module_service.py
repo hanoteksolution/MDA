@@ -208,17 +208,52 @@ def ensure_default_modules() -> None:
         )
 
 
-def default_module_codes_for_tenant(tenant: Tenant) -> list[str]:
-    # Prefer preset snapshot if present
+def _settings_extras(tenant: Tenant) -> dict:
     settings_row = getattr(tenant, "settings", None)
-    if settings_row and isinstance(settings_row.extras, dict):
-        preset_code = settings_row.extras.get("preset_used_code")
-        if preset_code:
-            from apps.platform.services.business_preset_service import BusinessPresetService
+    if settings_row is None:
+        from apps.platform.models import TenantSettings
 
-            preset = BusinessPresetService.resolve(code=preset_code)
-            if preset:
-                return BusinessPresetService.module_codes(preset)
+        settings_row = TenantSettings.objects.filter(
+            tenant=tenant, deleted_at__isnull=True
+        ).first()
+    if settings_row and isinstance(settings_row.extras, dict):
+        return dict(settings_row.extras)
+    return {}
+
+
+def persist_provisioned_modules(
+    *, tenant: Tenant, codes: Iterable[str], user=None
+) -> list[str]:
+    """Snapshot explicit module set so trial/demo re-syncs do not strip verticals."""
+    from apps.platform.models import TenantSettings
+
+    cleaned = sorted({str(c).strip().lower() for c in codes if c})
+    row, _ = TenantSettings.objects.get_or_create(
+        tenant=tenant,
+        defaults={"created_by": user},
+    )
+    extras = dict(row.extras or {})
+    extras["provisioned_modules"] = cleaned
+    row.extras = extras
+    row.updated_by = user
+    row.save(update_fields=["extras", "updated_by", "updated_at"])
+    return cleaned
+
+
+def default_module_codes_for_tenant(tenant: Tenant) -> list[str]:
+    extras = _settings_extras(tenant)
+    # Explicit multi-module / platform edits win over single business-type preset.
+    provisioned = extras.get("provisioned_modules")
+    if isinstance(provisioned, list) and provisioned:
+        return [str(c).strip().lower() for c in provisioned if c]
+
+    preset_code = extras.get("preset_used_code")
+    if preset_code:
+        from apps.platform.services.business_preset_service import BusinessPresetService
+
+        preset = BusinessPresetService.resolve(code=preset_code)
+        if preset:
+            return BusinessPresetService.module_codes(preset)
     bt = getattr(tenant, "business_type", None)
     codes = list(bt.default_modules or []) if bt is not None else []
     if not codes:
@@ -234,9 +269,11 @@ def sync_tenant_modules(
     user=None,
     disable_missing: bool = False,
     validate_dependencies: bool = True,
+    persist_snapshot: bool | None = None,
 ) -> list[TenantModule]:
     """Ensure TenantModule rows exist. Optionally set enabled from a code list."""
     ensure_default_modules()
+    explicit = enabled_codes is not None
     if enabled_codes is None:
         enabled_codes = default_module_codes_for_tenant(tenant)
     wanted_raw = {str(c).strip().lower() for c in enabled_codes if c}
@@ -301,6 +338,10 @@ def sync_tenant_modules(
     for link in rows:
         if link.enabled:
             ModuleFeatureService.seed_defaults(link)
+
+    should_persist = persist_snapshot if persist_snapshot is not None else explicit
+    if should_persist:
+        persist_provisioned_modules(tenant=tenant, codes=wanted, user=user)
     return rows
 
 
@@ -445,6 +486,7 @@ __all__ = [
     "ModuleDependencyError",
     "ensure_default_modules",
     "default_module_codes_for_tenant",
+    "persist_provisioned_modules",
     "sync_tenant_modules",
     "enabled_module_codes",
     "usable_module_codes",

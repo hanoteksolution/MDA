@@ -3,12 +3,15 @@ import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, Package, FileOutput, Download, Loader2, Tag, ImageIcon, Boxes, Sparkles } from "lucide-react";
 import { useProductListPrint } from "../hooks/useProductListPrint";
+import { useScopedPath } from "@/hooks/useScopedPath";
+import { productModuleCode } from "@/utils/productModuleScope";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { FormField, FormGrid, FormPanel, FormPanelSection } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
 import { CreatableSelect } from "@/components/forms/CreatableSelect";
 import { ProductThumbnail } from "@/components/catalog/ProductImage";
+import { ProductModuleBadge } from "@/components/catalog/ProductModuleBadge";
 import { ProductImageUpload } from "@/components/catalog/ProductImageUpload";
 import { ProductPreviewCard } from "../components/ProductPreviewCard";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { productsApi, inventoryApi } from "@/services/api/catalog";
+import { pharmacyApi } from "@/services/api/pharmacy";
 import { settingsApi } from "@/services/api/admin";
 import { formatCurrency } from "@/utils/cn";
 import type { AttributeDefinition, Product, ProductFormData } from "@/types/models/catalog";
 import { appDialog } from "@/components/feedback/AppDialog";
+
+const PHARMACY_ATTR_CODES = new Set(["strength", "dosage_form"]);
 
 function attrValueToInput(value: unknown): string {
   if (value == null) return "";
@@ -28,8 +34,15 @@ function attrValueToInput(value: unknown): string {
   return String(value);
 }
 
-export function ProductsPage() {
+export type ProductPageProfile = "default" | "pharmacy";
+
+export function ProductsPage({ profile = "default" }: { profile?: ProductPageProfile }) {
   const navigate = useNavigate();
+  const { scoped, scope } = useScopedPath();
+  const isPharmacy = profile === "pharmacy";
+  const moduleCode = productModuleCode(scope, { pharmacyProfile: isPharmacy });
+  const listPath = isPharmacy ? "/medicines" : "/products";
+  const newPath = isPharmacy ? "/medicines/new" : "/products/new";
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [categories, setCategories] = useState<{ label: string; value: string }[]>([]);
@@ -43,11 +56,16 @@ export function ProductsPage() {
     setPageSize,
     total,
     reload,
-  } = usePaginatedList(productsApi.list, { search, category: categoryFilter });
+  } = usePaginatedList(productsApi.list, {
+    search,
+    category: categoryFilter,
+    ...(moduleCode ? { module_code: moduleCode } : {}),
+  });
 
   const { printing, printProductList, downloadProductList } = useProductListPrint({
     search,
     category: categoryFilter,
+    module_code: moduleCode,
   });
 
   useEffect(() => {
@@ -71,12 +89,22 @@ export function ProductsPage() {
         <div className="flex items-center gap-3 min-w-0">
           <ProductThumbnail product={r} size="md" />
           <div className="min-w-0">
-            <p className="font-medium truncate">{r.name}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="font-medium truncate">{r.name}</p>
+              <ProductModuleBadge moduleCode={r.module_code} size="sm" />
+            </div>
             <p className="text-xs text-muted-foreground truncate">{r.category_name}</p>
           </div>
         </div>
       ),
       exportValue: (r) => r.name,
+    },
+    {
+      key: "module",
+      header: "Module",
+      cell: (r) => <ProductModuleBadge moduleCode={r.module_code} />,
+      className: "hidden md:table-cell",
+      exportValue: (r) => r.module_code || "shared",
     },
     { key: "category", header: "Category", cell: (r) => r.category_name, className: "hidden lg:table-cell", exportValue: (r) => r.category_name },
     { key: "cost", header: "Cost", cell: (r) => formatCurrency(r.cost_price), exportValue: (r) => formatCurrency(r.cost_price) },
@@ -106,7 +134,7 @@ export function ProductsPage() {
       header: "",
       cell: (r) => (
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/products/${r.id}/edit`)}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(scoped(`${listPath}/${r.id}/edit`))}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)}>
@@ -119,13 +147,17 @@ export function ProductsPage() {
 
   return (
     <PageLayout
-      title="Products"
-      description="Manage your product catalog, pricing, and stock levels."
-      breadcrumbs={["Home", "Products"]}
+      title={isPharmacy ? "Medicines" : "Products"}
+      description={
+        isPharmacy
+          ? "Pharmacy catalog with strength, dosage form, and prescription flags."
+          : "Manage your product catalog, pricing, and stock levels."
+      }
+      breadcrumbs={["Home", isPharmacy ? "Medicines" : "Products"]}
       actions={
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" asChild>
-            <Link to="/categories">
+            <Link to={scoped("/categories")}>
               <Tag className="h-4 w-4" />
               Categories
             </Link>
@@ -139,9 +171,9 @@ export function ProductsPage() {
             Export PDF
           </Button>
           <Button asChild className="shadow-[0_8px_20px_hsl(var(--primary)/0.22)]">
-            <Link to="/products/new">
+            <Link to={scoped(newPath)}>
               <Plus className="h-4 w-4" />
-              Add Product
+              {isPharmacy ? "Add Medicine" : "Add Product"}
             </Link>
           </Button>
         </div>
@@ -195,15 +227,29 @@ export function ProductsPage() {
               }]
             : undefined
         }
-        emptyMessage="No products found. Add your first product to get started."
+        emptyMessage={
+          isPharmacy
+            ? "No medicines found. Add your first medicine to get started."
+            : "No products found. Add your first product to get started."
+        }
       />
       </div>
     </PageLayout>
   );
 }
 
-export function ProductFormPage({ editId }: { editId?: string }) {
+export function ProductFormPage({
+  editId,
+  profile = "default",
+}: {
+  editId?: string;
+  profile?: ProductPageProfile;
+}) {
   const navigate = useNavigate();
+  const { scoped, scope } = useScopedPath();
+  const isPharmacy = profile === "pharmacy";
+  const moduleCode = productModuleCode(scope, { pharmacyProfile: isPharmacy });
+  const listPath = isPharmacy ? "/medicines" : "/products";
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -216,6 +262,12 @@ export function ProductFormPage({ editId }: { editId?: string }) {
     unit_id: "", cost_price: "", selling_price: "", minimum_stock: "5",
     description: "", image: "", is_active: true, requires_prescription: false,
     initial_stock: "0", warehouse_id: "",
+  });
+  const [batch, setBatch] = useState({
+    enabled: true,
+    batch_number: "",
+    expiry_date: "",
+    quantity: "0",
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [applicableAttrs, setApplicableAttrs] = useState<AttributeDefinition[]>([]);
@@ -346,6 +398,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         image: form.image || undefined,
         is_active: form.is_active,
         requires_prescription: form.requires_prescription,
+        module_code: moduleCode || undefined,
         warehouse_id: form.warehouse_id || undefined,
         initial_stock: parseFloat(form.initial_stock) || 0,
         attributes,
@@ -354,9 +407,26 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         payload.stock = parseFloat(form.initial_stock) || 0;
         await productsApi.update(editId, payload);
       } else {
-        await productsApi.create(payload);
+        const created = await productsApi.create(payload);
+        const productId = created.data?.id;
+        if (
+          isPharmacy &&
+          batch.enabled &&
+          productId &&
+          form.warehouse_id &&
+          (batch.batch_number.trim() || batch.expiry_date || Number(batch.quantity) > 0)
+        ) {
+          await pharmacyApi.createBatch({
+            product_id: productId,
+            warehouse_id: form.warehouse_id,
+            quantity: parseFloat(batch.quantity) || 0,
+            batch_number: batch.batch_number.trim() || undefined,
+            expiry_date: batch.expiry_date || undefined,
+            cost_price: parseFloat(form.cost_price) || undefined,
+          });
+        }
       }
-      navigate("/products");
+      navigate(scoped(listPath));
     } catch (err) {
       await appDialog.alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -366,7 +436,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
 
   if (loading) {
     return (
-      <PageLayout title="Loading..." breadcrumbs={["Home", "Products"]}>
+      <PageLayout title="Loading..." breadcrumbs={["Home", isPharmacy ? "Medicines" : "Products"]}>
         <div className="h-64 animate-pulse rounded-2xl bg-muted" />
       </PageLayout>
     );
@@ -375,14 +445,85 @@ export function ProductFormPage({ editId }: { editId?: string }) {
   const cost = parseFloat(form.cost_price) || 0;
   const price = parseFloat(form.selling_price) || 0;
   const margin = price > 0 ? ((price - cost) / price) * 100 : 0;
+  const pharmacyAttrs = applicableAttrs.filter((a) => PHARMACY_ATTR_CODES.has(a.code));
+  const otherAttrs = applicableAttrs.filter((a) => !PHARMACY_ATTR_CODES.has(a.code));
+
+  const renderAttrField = (def: AttributeDefinition) => (
+    <FormField
+      key={def.id}
+      label={def.name}
+      required={def.is_required}
+      hint={def.description || undefined}
+    >
+      {def.data_type === "bool" ? (
+        <select
+          value={attrValues[def.id] ?? ""}
+          onChange={(e) => setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))}
+          className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
+          required={def.is_required}
+        >
+          <option value="">—</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      ) : def.data_type === "select" ? (
+        <select
+          value={attrValues[def.id] ?? ""}
+          onChange={(e) => setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))}
+          className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
+          required={def.is_required}
+        >
+          <option value="">Select…</option>
+          {def.options.map((o) => (
+            <option key={o.id} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : def.data_type === "multi_select" ? (
+        <Input
+          value={attrValues[def.id] ?? ""}
+          onChange={(e) => setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))}
+          placeholder="Comma-separated values"
+          className="h-11 rounded-xl"
+          required={def.is_required}
+        />
+      ) : (
+        <Input
+          type={
+            def.data_type === "int" || def.data_type === "decimal"
+              ? "number"
+              : def.data_type === "date"
+                ? "date"
+                : def.data_type === "datetime"
+                  ? "datetime-local"
+                  : "text"
+          }
+          step={def.data_type === "decimal" ? "0.0001" : undefined}
+          value={attrValues[def.id] ?? ""}
+          onChange={(e) => setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))}
+          className="h-11 rounded-xl"
+          required={def.is_required}
+        />
+      )}
+    </FormField>
+  );
 
   return (
     <PageLayout
-      title={editId ? "Edit Product" : "Add Product"}
-      description={editId ? "Update product details, pricing, stock, and visibility." : "Create a polished catalog entry for POS, sales, and inventory."}
-      breadcrumbs={["Home", "Products", editId ? "Edit" : "New"]}
-      backTo="/products"
-      backLabel="Back to products"
+      title={editId ? (isPharmacy ? "Edit Medicine" : "Edit Product") : isPharmacy ? "Add Medicine" : "Add Product"}
+      description={
+        isPharmacy
+          ? editId
+            ? "Update medicine details, Rx flag, and catalog attributes."
+            : "Register a medicine with strength, form, and optional first FEFO batch."
+          : editId
+            ? "Update product details, pricing, stock, and visibility."
+            : "Create a polished catalog entry for POS, sales, and inventory."
+      }
+      breadcrumbs={["Home", isPharmacy ? "Medicines" : "Products", editId ? "Edit" : "New"]}
+      backTo={scoped(listPath)}
+      backLabel={isPharmacy ? "Back to medicines" : "Back to products"}
     >
       {optionsError && (
         <div className="rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -393,8 +534,12 @@ export function ProductFormPage({ editId }: { editId?: string }) {
         <FormPageLayout
           main={
             <FormPanel
-              title={editId ? "Edit product" : "Product registration"}
-              description="Complete each section below. SKU and unit are optional — we assign defaults when left blank."
+              title={editId ? (isPharmacy ? "Edit medicine" : "Edit product") : isPharmacy ? "Medicine registration" : "Product registration"}
+              description={
+                isPharmacy
+                  ? "Capture clinical catalog fields first. SKU and unit are optional."
+                  : "Complete each section below. SKU and unit are optional — we assign defaults when left blank."
+              }
             >
               <FormPanelSection
                 icon={<Tag className="h-4 w-4" />}
@@ -508,81 +653,35 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                 />
               </FormPanelSection>
 
-              {applicableAttrs.length > 0 && (
+              {isPharmacy && (
                 <FormPanelSection
                   icon={<Sparkles className="h-4 w-4" />}
-                  title="Additional attributes"
+                  title="Pharmacy profile"
+                  description="Strength, dosage form, and prescription requirement."
+                >
+                  <FormGrid>
+                    {pharmacyAttrs.map(renderAttrField)}
+                    <FormField label="Requires prescription" className="md:col-span-2 xl:col-span-3">
+                      <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-border/50 bg-background/60 px-4 py-3">
+                        <Checkbox
+                          checked={form.requires_prescription}
+                          onCheckedChange={(v) => setForm({ ...form, requires_prescription: !!v })}
+                        />
+                        <span className="text-sm">POS checkout requires an active Rx covering this medicine</span>
+                      </label>
+                    </FormField>
+                  </FormGrid>
+                </FormPanelSection>
+              )}
+
+              {otherAttrs.length > 0 && (
+                <FormPanelSection
+                  icon={<Sparkles className="h-4 w-4" />}
+                  title={isPharmacy ? "Other attributes" : "Additional attributes"}
                   description="Fields from your business type and category."
                 >
                   <FormGrid>
-                    {applicableAttrs.map((def) => (
-                      <FormField
-                        key={def.id}
-                        label={def.name}
-                        required={def.is_required}
-                        hint={def.description || undefined}
-                      >
-                        {def.data_type === "bool" ? (
-                          <select
-                            value={attrValues[def.id] ?? ""}
-                            onChange={(e) =>
-                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
-                            }
-                            className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
-                            required={def.is_required}
-                          >
-                            <option value="">—</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                          </select>
-                        ) : def.data_type === "select" ? (
-                          <select
-                            value={attrValues[def.id] ?? ""}
-                            onChange={(e) =>
-                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
-                            }
-                            className="flex h-11 w-full rounded-xl border border-input bg-background/80 px-3 text-sm"
-                            required={def.is_required}
-                          >
-                            <option value="">Select…</option>
-                            {def.options.map((o) => (
-                              <option key={o.id} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : def.data_type === "multi_select" ? (
-                          <Input
-                            value={attrValues[def.id] ?? ""}
-                            onChange={(e) =>
-                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
-                            }
-                            placeholder="Comma-separated values"
-                            className="h-11 rounded-xl"
-                            required={def.is_required}
-                          />
-                        ) : (
-                          <Input
-                            type={
-                              def.data_type === "int" || def.data_type === "decimal"
-                                ? "number"
-                                : def.data_type === "date"
-                                  ? "date"
-                                  : def.data_type === "datetime"
-                                    ? "datetime-local"
-                                    : "text"
-                            }
-                            step={def.data_type === "decimal" ? "0.0001" : undefined}
-                            value={attrValues[def.id] ?? ""}
-                            onChange={(e) =>
-                              setAttrValues((v) => ({ ...v, [def.id]: e.target.value }))
-                            }
-                            className="h-11 rounded-xl"
-                            required={def.is_required}
-                          />
-                        )}
-                      </FormField>
-                    ))}
+                    {otherAttrs.map(renderAttrField)}
                   </FormGrid>
                 </FormPanelSection>
               )}
@@ -628,16 +727,18 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                   </FormField>
                   {!editId ? (
                     <>
-                      <FormField label="Initial Stock" hint="Creates inventory at this quantity (0 is allowed)">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={form.initial_stock}
-                          onChange={(e) => setForm({ ...form, initial_stock: e.target.value })}
-                          className="h-11 rounded-xl tabular-nums"
-                        />
-                      </FormField>
+                      {!isPharmacy && (
+                        <FormField label="Initial Stock" hint="Creates inventory at this quantity (0 is allowed)">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={form.initial_stock}
+                            onChange={(e) => setForm({ ...form, initial_stock: e.target.value })}
+                            className="h-11 rounded-xl tabular-nums"
+                          />
+                        </FormField>
+                      )}
                       <FormField label="Warehouse" hint="Where this stock is held">
                         <CreatableSelect
                           value={form.warehouse_id}
@@ -701,6 +802,52 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                   )}
                 </FormGrid>
               </FormPanelSection>
+
+              {isPharmacy && !editId && (
+                <FormPanelSection
+                  icon={<Package className="h-4 w-4" />}
+                  title="First batch (optional)"
+                  description="Create the opening FEFO lot with expiry when registering this medicine."
+                >
+                  <label className="mb-4 flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={batch.enabled}
+                      onCheckedChange={(v) => setBatch((b) => ({ ...b, enabled: !!v }))}
+                    />
+                    <span className="text-sm font-medium">Create opening batch after save</span>
+                  </label>
+                  {batch.enabled && (
+                    <FormGrid>
+                      <FormField label="Batch number">
+                        <Input
+                          value={batch.batch_number}
+                          onChange={(e) => setBatch((b) => ({ ...b, batch_number: e.target.value }))}
+                          placeholder="LOT-001"
+                          className="h-11 rounded-xl"
+                        />
+                      </FormField>
+                      <FormField label="Expiry date">
+                        <Input
+                          type="date"
+                          value={batch.expiry_date}
+                          onChange={(e) => setBatch((b) => ({ ...b, expiry_date: e.target.value }))}
+                          className="h-11 rounded-xl"
+                        />
+                      </FormField>
+                      <FormField label="Quantity">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={batch.quantity}
+                          onChange={(e) => setBatch((b) => ({ ...b, quantity: e.target.value }))}
+                          className="h-11 rounded-xl tabular-nums"
+                        />
+                      </FormField>
+                    </FormGrid>
+                  )}
+                </FormPanelSection>
+              )}
             </FormPanel>
           }
           aside={
@@ -735,6 +882,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       </p>
                     </div>
                   </label>
+                  {!isPharmacy && (
                   <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/60 p-4 transition-colors hover:bg-muted/20">
                     <Checkbox
                       checked={form.requires_prescription}
@@ -748,6 +896,7 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                       </p>
                     </div>
                   </label>
+                  )}
                 </div>
               </div>
 
@@ -755,7 +904,9 @@ export function ProductFormPage({ editId }: { editId?: string }) {
                 <div className="flex gap-3">
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Set minimum stock to receive low-inventory alerts on your dashboard and inventory pages.
+                    {isPharmacy
+                      ? "Use batches for expiry control. Strength and dosage form appear when pharmacy attributes are seeded for this tenant."
+                      : "Set minimum stock to receive low-inventory alerts on your dashboard and inventory pages."}
                   </p>
                 </div>
               </div>
@@ -765,14 +916,18 @@ export function ProductFormPage({ editId }: { editId?: string }) {
             <FormActions>
               <div className="flex flex-wrap gap-3">
                 <Button type="submit" loading={saving} className="min-w-[140px] shadow-[0_8px_20px_hsl(var(--primary)/0.2)]">
-                  {editId ? "Save Changes" : "Create Product"}
+                  {editId ? "Save Changes" : isPharmacy ? "Create Medicine" : "Create Product"}
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => navigate("/products")}>
+                <Button type="button" variant="secondary" onClick={() => navigate(scoped(listPath))}>
                   Cancel
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {editId ? "Updates apply immediately across POS and reports." : "Product will be available in POS after creation."}
+                {editId
+                  ? "Updates apply immediately across POS and reports."
+                  : isPharmacy
+                    ? "Medicine will be available in pharmacy POS after creation."
+                    : "Product will be available in POS after creation."}
               </p>
             </FormActions>
           }

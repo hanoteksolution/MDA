@@ -22,7 +22,32 @@ import {
   ProjectManagementPage,
   TravelAgencyPage,
 } from "@/app/routes/modules";
-import { ProductsPage, InventoryDashboardPage } from "@/app/routes/phase2";
+import {
+  MedicineEditPage,
+  MedicineFormPage,
+  MedicineProductsPage,
+} from "@/modules/pharmacy/pages/MedicineProductPages";
+import {
+  ProductsPage,
+  ProductFormPage,
+  ProductEditPage,
+  CategoriesPage,
+  InventoryDashboardPage,
+  StockPage,
+  AdjustmentsPage,
+  WarehousesPage,
+} from "@/app/routes/phase2";
+import { CustomerEditPage, PurchaseEditPage, SupplierEditPage, BranchEditPage, BranchFormPage } from "@/app/routes/forms";
+import { CustomerFormPage } from "@/modules/customers/pages/CustomersPage";
+import { PurchaseFormPage } from "@/modules/purchases/pages/PurchasesPage";
+import { SupplierFormPage } from "@/modules/suppliers/pages/SuppliersPage";
+import { SettingsPage } from "@/modules/settings/pages/SettingsPage";
+import {
+  InvoiceEditPage,
+  InvoiceFormPage,
+  QuotationEditPage,
+  QuotationFormPage,
+} from "@/app/routes/sales";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import {
   GymMemberDetailPage,
@@ -215,9 +240,49 @@ export function industryCapabilityRoutes() {
         element={gated(ws, "sales.view", "sales", <SalesPage />)}
       />,
       <Route
+        key={`${ws}-sales-new`}
+        path={`/${ws}/sales/new`}
+        element={gated(ws, "sales.create", "sales", <InvoiceFormPage />)}
+      />,
+      <Route
+        key={`${ws}-sales-invoices-new`}
+        path={`/${ws}/sales/invoices/new`}
+        element={gated(ws, "sales.create", "sales", <InvoiceFormPage />)}
+      />,
+      <Route
+        key={`${ws}-sales-invoices-edit`}
+        path={`/${ws}/sales/invoices/:id/edit`}
+        element={gated(ws, "sales.update", "sales", <InvoiceEditPage />)}
+      />,
+      <Route
+        key={`${ws}-sales-quotations-new`}
+        path={`/${ws}/sales/quotations/new`}
+        element={gated(ws, "sales.create", "sales", <QuotationFormPage />)}
+      />,
+      <Route
+        key={`${ws}-sales-quotations-edit`}
+        path={`/${ws}/sales/quotations/:id/edit`}
+        element={gated(ws, "sales.update", "sales", <QuotationEditPage />)}
+      />,
+      <Route
         key={`${ws}-products`}
         path={`/${ws}/products`}
         element={gated(ws, "products.view", "inventory", <ProductsPage />)}
+      />,
+      <Route
+        key={`${ws}-products-new`}
+        path={`/${ws}/products/new`}
+        element={gated(ws, "products.create", "inventory", <ProductFormPage />)}
+      />,
+      <Route
+        key={`${ws}-products-edit`}
+        path={`/${ws}/products/:id/edit`}
+        element={gated(ws, "products.update", "inventory", <ProductEditPage />)}
+      />,
+      <Route
+        key={`${ws}-categories`}
+        path={`/${ws}/categories`}
+        element={gated(ws, "products.view", "inventory", <CategoriesPage />)}
       />,
       <Route
         key={`${ws}-inventory`}
@@ -225,9 +290,39 @@ export function industryCapabilityRoutes() {
         element={gated(ws, "inventory.view", "inventory", <InventoryDashboardPage />)}
       />,
       <Route
+        key={`${ws}-inventory-stock`}
+        path={`/${ws}/inventory/stock`}
+        element={gated(ws, "inventory.view", "inventory", <StockPage />)}
+      />,
+      <Route
+        key={`${ws}-inventory-adjustments`}
+        path={`/${ws}/inventory/adjustments`}
+        element={gated(ws, "inventory.adjust", "inventory", <AdjustmentsPage />)}
+      />,
+      <Route
+        key={`${ws}-inventory-warehouses`}
+        path={`/${ws}/inventory/warehouses`}
+        element={gated(ws, "inventory.view", "inventory", <WarehousesPage />)}
+      />,
+      <Route
         key={`${ws}-purchasing`}
         path={`/${ws}/purchasing`}
         element={gated(ws, "purchases.view", "purchases", <PurchasesPage />)}
+      />,
+      <Route
+        key={`${ws}-purchases`}
+        path={`/${ws}/purchases`}
+        element={gated(ws, "purchases.view", "purchases", <PurchasesPage />)}
+      />,
+      <Route
+        key={`${ws}-purchases-new`}
+        path={`/${ws}/purchases/new`}
+        element={gated(ws, "purchases.create", "purchases", <PurchaseFormPage />)}
+      />,
+      <Route
+        key={`${ws}-purchases-edit`}
+        path={`/${ws}/purchases/:id/edit`}
+        element={gated(ws, "purchases.update", "purchases", <PurchaseEditPage />)}
       />,
       <Route
         key={`${ws}-customers`}
@@ -235,9 +330,29 @@ export function industryCapabilityRoutes() {
         element={gated(ws, "customers.view", "sales", <CustomersPage />)}
       />,
       <Route
+        key={`${ws}-customers-new`}
+        path={`/${ws}/customers/new`}
+        element={gated(ws, "customers.create", "sales", <CustomerFormPage />)}
+      />,
+      <Route
+        key={`${ws}-customers-edit`}
+        path={`/${ws}/customers/:id/edit`}
+        element={gated(ws, "customers.update", "sales", <CustomerEditPage />)}
+      />,
+      <Route
         key={`${ws}-suppliers`}
         path={`/${ws}/suppliers`}
         element={gated(ws, "suppliers.view", "purchases", <SuppliersPage />)}
+      />,
+      <Route
+        key={`${ws}-suppliers-new`}
+        path={`/${ws}/suppliers/new`}
+        element={gated(ws, "suppliers.create", "purchases", <SupplierFormPage />)}
+      />,
+      <Route
+        key={`${ws}-suppliers-edit`}
+        path={`/${ws}/suppliers/:id/edit`}
+        element={gated(ws, "suppliers.update", "purchases", <SupplierEditPage />)}
       />,
       <Route
         key={`${ws}-finance`}
@@ -248,6 +363,21 @@ export function industryCapabilityRoutes() {
         key={`${ws}-reports`}
         path={`/${ws}/reports`}
         element={gated(ws, "reports.view", undefined, <ReportsPage />)}
+      />,
+      <Route
+        key={`${ws}-settings`}
+        path={`/${ws}/settings`}
+        element={gated(ws, "settings.view", undefined, <SettingsPage />)}
+      />,
+      <Route
+        key={`${ws}-settings-branches-new`}
+        path={`/${ws}/settings/branches/new`}
+        element={gated(ws, "branches.create", undefined, <BranchFormPage />)}
+      />,
+      <Route
+        key={`${ws}-settings-branches-edit`}
+        path={`/${ws}/settings/branches/:id/edit`}
+        element={gated(ws, "branches.update", undefined, <BranchEditPage />)}
       />,
     ];
   });
@@ -544,7 +674,17 @@ export function industryFeatureRoutes() {
     <Route
       key="pharmacy-medicines"
       path="/pharmacy/medicines"
-      element={gated("pharmacy", "products.view", ["pharmacy", "inventory"], <ProductsPage />)}
+      element={gated("pharmacy", "products.view", ["pharmacy", "inventory"], <MedicineProductsPage />)}
+    />,
+    <Route
+      key="pharmacy-medicines-new"
+      path="/pharmacy/medicines/new"
+      element={gated("pharmacy", "products.create", ["pharmacy", "inventory"], <MedicineFormPage />)}
+    />,
+    <Route
+      key="pharmacy-medicines-edit"
+      path="/pharmacy/medicines/:id/edit"
+      element={gated("pharmacy", "products.update", ["pharmacy", "inventory"], <MedicineEditPage />)}
     />,
     <Route
       key="pharmacy-batches"

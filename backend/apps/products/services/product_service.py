@@ -134,14 +134,67 @@ class ProductService:
         prepared.pop("unit", None)
         if "requires_prescription" in prepared:
             prepared["requires_prescription"] = bool(prepared.get("requires_prescription"))
+        if "module_code" in prepared or for_create:
+            code = str(prepared.get("module_code") or "").strip().lower()
+            # Normalize path aliases to catalog module codes
+            aliases = {
+                "cafeteria": "restaurant",
+                "property": "property_management",
+                "project": "project_management",
+                "travel": "travel_agency",
+            }
+            prepared["module_code"] = aliases.get(code, code)[:40]
         if for_create:
             prepared = stamp_tenant_id(prepared, user=user, request=request)
         return prepared
 
     @staticmethod
-    def list(*, search=None, category_id=None, brand_id=None, is_active=None, user=None, request=None):
+    def _apply_module_scope(qs, *, module_code=None):
+        """Restrict catalog to one industry/module when requested.
+
+        Industry scopes (gym, restaurant, …) are exclusive.
+        ``retail`` is the shared shop-floor catalog: blank/retail products plus
+        front-of-house catalogs (gym, restaurant, pharmacy, …) so POS staff on
+        multi-vertical shops still see sellable items.
+        """
+        raw = (module_code or "").strip().lower()
+        if not raw:
+            return qs
+        aliases = {
+            "cafeteria": "restaurant",
+            "property": "property_management",
+            "project": "project_management",
+            "travel": "travel_agency",
+        }
+        code = aliases.get(raw, raw)
+        if code in {"retail", "shared"}:
+            retail_codes = {
+                "",
+                "retail",
+                "shared",
+                "gym",
+                "restaurant",
+                "pharmacy",
+                "hotel",
+                "futsal",
+            }
+            return qs.filter(module_code__in=retail_codes)
+        return qs.filter(module_code=code)
+
+    @staticmethod
+    def list(
+        *,
+        search=None,
+        category_id=None,
+        brand_id=None,
+        is_active=None,
+        module_code=None,
+        user=None,
+        request=None,
+    ):
         qs = Product.active_objects().select_related("category", "brand", "unit")
         qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = ProductService._apply_module_scope(qs, module_code=module_code)
         if search:
             qs = qs.filter(
                 Q(name__icontains=search)
@@ -161,6 +214,7 @@ class ProductService:
         *,
         search=None,
         category_id=None,
+        module_code=None,
         limit=20,
         user=None,
         request=None,
@@ -169,6 +223,7 @@ class ProductService:
         qs = Product.active_objects().select_related("category", "brand", "unit")
         qs = apply_tenant_scope(qs, user=user, request=request)
         qs = qs.filter(is_active=True)
+        qs = ProductService._apply_module_scope(qs, module_code=module_code)
         if category_id:
             qs = qs.filter(category_id=category_id)
         term = (search or "").strip()

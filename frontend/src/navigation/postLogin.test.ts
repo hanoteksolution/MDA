@@ -49,8 +49,43 @@ describe("postLoginPath", () => {
 
   it("sends engine-only users to the retail workspace", () => {
     expect(postLoginPath(user({ enabled_modules: ["sales"], permissions: ["sales.view"] }))).toBe(
-      "/retail"
+      "/retail/sales"
     );
+  });
+
+  it("sends cashiers on multi-venue shops to retail POS", () => {
+    expect(
+      postLoginPath(
+        user({
+          enabled_modules: ["gym", "restaurant", "pos", "sales", "inventory"],
+          permissions: ["pos.access", "sales.view", "products.view"],
+          first_name: "POS",
+          last_name: "Only",
+        })
+      )
+    ).toBe("/retail/pos");
+  });
+
+  it("sends inventory staff on multi-venue shops to retail inventory", () => {
+    expect(
+      postLoginPath(
+        user({
+          enabled_modules: ["gym", "restaurant", "pos", "sales", "inventory"],
+          permissions: ["dashboard.view", "inventory.view", "products.view", "reports.view"],
+        })
+      )
+    ).toBe("/retail/inventory");
+  });
+
+  it("does not prefer reports over inventory for inventory staff", () => {
+    expect(
+      postLoginPath(
+        user({
+          enabled_modules: ["gym", "inventory", "pos"],
+          permissions: ["inventory.view", "products.view", "reports.view", "dashboard.view"],
+        })
+      )
+    ).toBe("/retail/inventory");
   });
 
   it("falls back to dashboard when no workspaces are visible", () => {

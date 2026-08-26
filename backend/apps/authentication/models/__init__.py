@@ -1,5 +1,12 @@
 from apps.authentication.models.login_attempt import LoginAttempt
-from apps.authentication.models.user import Permission, Role, RolePermission, User, UserPermission
+from apps.authentication.models.user import (
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserPermission,
+    UserPermissionRevoke,
+)
 from apps.authentication.models.staff_evaluation import StaffEvaluation
 
 __all__ = [
@@ -8,6 +15,7 @@ __all__ = [
     "RolePermission",
     "User",
     "UserPermission",
+    "UserPermissionRevoke",
     "StaffEvaluation",
     "LoginAttempt",
 ]

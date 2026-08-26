@@ -52,6 +52,7 @@ class InventoryListView(APIView):
             search=request.query_params.get("search"),
             low_stock=request.query_params.get("low_stock") == "true",
             branch_id=branch_id,
+            module_code=request.query_params.get("module_code"),
             user=request.user,
         )
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
@@ -62,7 +63,13 @@ class InventorySummaryView(APIView):
 
     def get(self, request):
         branch_id = getattr(request.user.branch, "id", None)
-        return success_response(data=InventoryService.get_summary(branch_id=branch_id, user=request.user))
+        return success_response(
+            data=InventoryService.get_summary(
+                branch_id=branch_id,
+                module_code=request.query_params.get("module_code"),
+                user=request.user,
+            )
+        )
 
 
 class LowStockView(APIView):
@@ -70,7 +77,11 @@ class LowStockView(APIView):
 
     def get(self, request):
         branch_id = getattr(request.user.branch, "id", None)
-        qs = InventoryService.get_low_stock(branch_id=branch_id, user=request.user)
+        qs = InventoryService.get_low_stock(
+            branch_id=branch_id,
+            module_code=request.query_params.get("module_code"),
+            user=request.user,
+        )
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
 
 
@@ -79,7 +90,11 @@ class OutOfStockView(APIView):
 
     def get(self, request):
         branch_id = getattr(request.user.branch, "id", None)
-        qs = InventoryService.get_out_of_stock(branch_id=branch_id, user=request.user)
+        qs = InventoryService.get_out_of_stock(
+            branch_id=branch_id,
+            module_code=request.query_params.get("module_code"),
+            user=request.user,
+        )
         return paginate_queryset(request, qs, lambda items: [serialize_inventory(i) for i in items])
 
 

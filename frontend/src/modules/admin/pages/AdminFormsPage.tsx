@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { FormPageLayout, FormActions } from "@/components/forms/FormPageLayout";
@@ -11,53 +11,122 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { adminApi, settingsApi } from "@/services/api/admin";
+import { platformApi } from "@/services/api/platform";
+import { useAuthStore } from "@/store/authStore";
+import { usePermissions } from "@/hooks/usePermissions";
 import { appDialog } from "@/components/feedback/AppDialog";
 
 const FULL_ACCESS_ROLE_SLUGS = new Set(["super_admin", "platform_admin"]);
 
+function canPickShop(user: ReturnType<typeof useAuthStore.getState>["user"]) {
+  if (!user) return false;
+  return Boolean(
+    user.is_super_admin ||
+      user.is_platform_admin ||
+      user.is_superuser ||
+      user.role?.slug === "super_admin" ||
+      user.role?.slug === "platform_admin" ||
+      user.managed_shop_group ||
+      user.permissions?.includes("platform.manage") ||
+      user.permissions?.includes("platform.view")
+  );
+}
+
 export function UserFormPage({ editId }: { editId?: string }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryTenant = searchParams.get("tenant") || "";
+  const authUser = useAuthStore((s) => s.user);
+  const { hasPermission } = usePermissions();
+  const shopPicker = canPickShop(authUser);
+
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
-  const [roles, setRoles] = useState<{ id: string; name: string; slug?: string }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string; slug?: string; permissions?: { id: string }[] }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [shops, setShops] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [allPermissions, setAllPermissions] = useState<Record<string, PermissionItem[]>>({});
   const [selectedPermIds, setSelectedPermIds] = useState<string[]>([]);
+  const [rolePermIds, setRolePermIds] = useState<string[]>([]);
+  const [tenantLocked, setTenantLocked] = useState(Boolean(queryTenant));
   const [form, setForm] = useState({
-    username: "", email: "", password: "", first_name: "", last_name: "",
-    phone: "", role_id: "", branch_id: "", is_active: true,
+    username: "",
+    email: "",
+    password: "",
+    first_name: "",
+    last_name: "",
+    phone: "",
+    role_id: "",
+    branch_id: "",
+    tenant_id: queryTenant,
+    is_active: true,
   });
 
   useEffect(() => {
-    Promise.all([
-      adminApi.roles(),
-      settingsApi.branches(),
-      adminApi.permissions(),
-    ]).then(([r, b, p]) => {
+    Promise.all([adminApi.roles(), settingsApi.branches()]).then(([r, b]) => {
       setRoles(r.data);
       setBranches(b.data);
-      setAllPermissions(p.data);
     });
   }, []);
+
+  useEffect(() => {
+    adminApi
+      .permissions({ tenant: form.tenant_id || undefined })
+      .then((p) => setAllPermissions(p.data))
+      .catch(() => setAllPermissions({}));
+  }, [form.tenant_id]);
+
+  useEffect(() => {
+    if (!shopPicker) return;
+    platformApi
+      .tenants()
+      .then((res) => {
+        const rows = (res.data || []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+        }));
+        setShops(rows);
+      })
+      .catch(() => setShops([]));
+  }, [shopPicker]);
 
   useEffect(() => {
     if (!editId) return;
     adminApi.getUser(editId).then((res) => {
       const u = res.data;
       setForm({
-        username: u.username, email: u.email, password: "",
-        first_name: u.first_name, last_name: u.last_name, phone: u.phone || "",
-        role_id: u.role?.id || "", branch_id: u.branch?.id || "", is_active: u.is_active,
+        username: u.username,
+        email: u.email,
+        password: "",
+        first_name: u.first_name,
+        last_name: u.last_name,
+        phone: u.phone || "",
+        role_id: u.role?.id || "",
+        branch_id: u.branch?.id || "",
+        tenant_id: u.tenant_id || queryTenant || "",
+        is_active: u.is_active,
       });
       setSelectedPermIds(
         (u.permission_ids || u.direct_permissions?.map((p) => p.id) || []).map(String)
       );
+      setRolePermIds((u.role_permission_ids || []).map(String));
+      if (u.tenant_id && !shopPicker) setTenantLocked(true);
       setLoading(false);
     });
-  }, [editId]);
+  }, [editId, queryTenant, shopPicker]);
+
+  const lockedShopName = useMemo(() => {
+    if (!form.tenant_id) return "";
+    return shops.find((s) => s.id === form.tenant_id)?.name || "";
+  }, [form.tenant_id, shops]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (shopPicker && !form.tenant_id && !editId) {
+      await appDialog.alert("Select the shop this user belongs to.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -70,6 +139,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
         branch_id: form.branch_id || null,
         is_active: form.is_active,
       };
+      if (form.tenant_id) payload.tenant_id = form.tenant_id;
       const selectedRole = roles.find((r) => r.id === form.role_id);
       const fullAccess = FULL_ACCESS_ROLE_SLUGS.has(selectedRole?.slug || "");
       if (!fullAccess) payload.permission_ids = selectedPermIds;
@@ -99,7 +169,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
     <PermissionGuard permission={editId ? "users.update" : "users.create"}>
       <PageLayout
         title={editId ? "Edit User" : "Add User"}
-        description="Assign a role. Super Admin and Platform Admin already have every feature — extra permission ticks are only for normal roles."
+        description="Assign a role and optional direct permissions. Shop binding is automatic for shop admins; platform managers can pick a shop."
         breadcrumbs={["Home", "Administration", editId ? "Edit User" : "New User"]}
       >
         <form onSubmit={handleSubmit}>
@@ -126,8 +196,51 @@ export function UserFormPage({ editId }: { editId?: string }) {
                     <FormField label="Phone">
                       <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                     </FormField>
+                    {shopPicker && (
+                      <FormField
+                        label="Shop"
+                        required={!editId}
+                        hint={tenantLocked ? "Bound from shop page" : "User will belong to this shop"}
+                      >
+                        {tenantLocked && form.tenant_id ? (
+                          <Input
+                            readOnly
+                            value={lockedShopName || form.tenant_id}
+                            className="bg-muted/40"
+                          />
+                        ) : (
+                          <Select
+                            value={form.tenant_id || "none"}
+                            onValueChange={(v) => setForm({ ...form, tenant_id: v === "none" ? "" : v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select shop" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Select shop…</SelectItem>
+                              {shops.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} ({s.slug})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </FormField>
+                    )}
                     <FormField label="Role" hint="Super Admin / Platform Admin unlock all features automatically">
-                      <Select value={form.role_id || "none"} onValueChange={(v) => setForm({ ...form, role_id: v === "none" ? "" : v })}>
+                      <Select
+                        value={form.role_id || "none"}
+                        onValueChange={(v) => {
+                          const roleId = v === "none" ? "" : v;
+                          setForm({ ...form, role_id: roleId });
+                          const role = roles.find((r) => r.id === roleId);
+                          const fromRole = (role?.permissions || []).map((p) => String(p.id));
+                          setRolePermIds(fromRole);
+                          // Reset effective selection to the new role baseline.
+                          setSelectedPermIds(fromRole);
+                        }}
+                      >
                         <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
@@ -139,7 +252,7 @@ export function UserFormPage({ editId }: { editId?: string }) {
                       <Select value={form.branch_id || "none"} onValueChange={(v) => setForm({ ...form, branch_id: v === "none" ? "" : v })}>
                         <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="none">None (shop default)</SelectItem>
                           {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -163,12 +276,13 @@ export function UserFormPage({ editId }: { editId?: string }) {
                   </FormSection>
                 ) : (
                   <FormSection
-                    title="Direct permissions"
-                    description="Extra permissions for this user only, on top of their role. Not required for Super Admin."
+                    title="Permissions"
+                    description="Shows what this user can do now. Uncheck Users / Administration items to revoke them from a Shop Admin without changing their role."
                   >
                     <PermissionMatrix
                       permissions={allPermissions}
                       selected={selectedPermIds}
+                      rolePermissionIds={rolePermIds}
                       onChange={setSelectedPermIds}
                     />
                   </FormSection>
@@ -179,8 +293,13 @@ export function UserFormPage({ editId }: { editId?: string }) {
               <div className="ds-card p-4 space-y-3">
                 <p className="text-sm font-semibold">Access control</p>
                 <p className="text-xs text-muted-foreground">
-                  Super Admin has every feature automatically. Other roles use role permissions plus any extra grants.
+                  Role sets the baseline. Direct grants add or tailor access (e.g. gym-only, POS-only, or user management).
                 </p>
+                {form.tenant_id && (
+                  <Badge variant="secondary">
+                    Shop: {lockedShopName || form.tenant_id.slice(0, 8)}
+                  </Badge>
+                )}
                 {form.role_id && (
                   <Badge variant="secondary">
                     Role: {roles.find((r) => r.id === form.role_id)?.name ?? "Selected"}
@@ -191,6 +310,11 @@ export function UserFormPage({ editId }: { editId?: string }) {
                     <span className="text-muted-foreground">Direct grants</span>
                     <span className="font-semibold">{selectedPermIds.length}</span>
                   </div>
+                )}
+                {hasPermission("users.create") && (
+                  <p className="text-xs text-muted-foreground">
+                    You can create users. To revoke that for someone else, remove users.create from their direct permissions or role.
+                  </p>
                 )}
               </div>
             }
@@ -272,86 +396,45 @@ export function RoleFormPage({ editId }: { editId?: string }) {
               <>
                 <FormSection title="Role Details">
                   <FormGrid>
-                    <FormField label="Role Name" required>
-                      <Input
-                        required
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        disabled={isSystem}
-                      />
+                    <FormField label="Name" required>
+                      <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} disabled={isSystem} />
                     </FormField>
-                    <FormField label="Slug" required hint="Lowercase identifier, e.g. store_manager">
-                      <Input
-                        required
-                        value={form.slug}
-                        onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                        className="font-mono"
-                        disabled={isSystem}
-                      />
+                    <FormField label="Slug" required hint="Unique code, e.g. warehouse_clerk">
+                      <Input required value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} disabled={isSystem} />
                     </FormField>
-                    <FormField label="Description" className="md:col-span-2 xl:col-span-3">
-                      <Input
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      />
+                    <FormField label="Description">
+                      <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                     </FormField>
                   </FormGrid>
                   {isSystem && (
-                    <p className="mt-4 text-xs text-muted-foreground">
-                      {FULL_ACCESS_ROLE_SLUGS.has(form.slug)
-                        ? "Super Admin / Platform Admin always have full access. Permission ticks cannot restrict them."
-                        : "System role name and slug cannot be changed. You can still update permissions."}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      System role name/slug are locked. You can still adjust permissions.
                     </p>
                   )}
                 </FormSection>
-
-                {FULL_ACCESS_ROLE_SLUGS.has(form.slug) ? (
-                  <FormSection
-                    title="Permissions"
-                    description="Full access is built into this role."
-                  >
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-                      Users with this role see every ERP feature without extra permission grants.
-                    </div>
-                  </FormSection>
-                ) : (
-                  <FormSection
-                    title="Permissions"
-                    description={`${selectedPermIds.length} permission(s) selected`}
-                  >
-                    <PermissionMatrix
-                      permissions={allPermissions}
-                      selected={selectedPermIds}
-                      onChange={setSelectedPermIds}
-                    />
-                  </FormSection>
-                )}
+                <FormSection title="Permissions" description="Modules and actions this role can access.">
+                  <PermissionMatrix
+                    permissions={allPermissions}
+                    selected={selectedPermIds}
+                    onChange={setSelectedPermIds}
+                  />
+                </FormSection>
               </>
             }
             aside={
               <div className="ds-card p-4 space-y-3">
-                <p className="text-sm font-semibold">Summary</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Permissions</span>
-                    <span className="font-semibold">
-                      {FULL_ACCESS_ROLE_SLUGS.has(form.slug) ? "All" : selectedPermIds.length}
-                    </span>
-                  </div>
-                  {isSystem && (
-                    <Badge variant="outline">System Role</Badge>
-                  )}
+                <p className="text-sm font-semibold">Role summary</p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Permissions</span>
+                  <span className="font-semibold">{selectedPermIds.length}</span>
                 </div>
+                {isSystem && <Badge variant="secondary">System role</Badge>}
               </div>
             }
             actions={
               <FormActions>
-                <Button type="submit" loading={saving}>
-                  {editId ? "Save Role" : "Create Role"}
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => navigate("/admin")}>
-                  Cancel
-                </Button>
+                <Button type="submit" loading={saving}>{editId ? "Save Changes" : "Create Role"}</Button>
+                <Button type="button" variant="secondary" onClick={() => navigate("/admin")}>Cancel</Button>
               </FormActions>
             }
           />

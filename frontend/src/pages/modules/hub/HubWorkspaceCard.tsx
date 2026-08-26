@@ -31,25 +31,25 @@ const BAR: Record<WorkspaceTone, string> = {
 };
 
 const ICON_SOFT: Record<WorkspaceTone, string> = {
-  sky: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  orange: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  blue: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  teal: "bg-teal-500/10 text-teal-700 dark:text-teal-300",
-  indigo: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
-  violet: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-  emerald: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  green: "bg-green-500/10 text-green-700 dark:text-green-300",
-  amber: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  cyan: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-  stone: "bg-stone-500/10 text-stone-700 dark:text-stone-300",
-  lime: "bg-lime-500/10 text-lime-700 dark:text-lime-300",
-  slate: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
-  fuchsia: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
-  rose: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  zinc: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300",
-  neutral: "bg-neutral-500/10 text-neutral-700 dark:text-neutral-300",
-  purple: "bg-purple-500/10 text-purple-700 dark:text-purple-300",
-  pink: "bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  sky: "bg-sky-500/12 text-sky-700 ring-1 ring-sky-500/15 dark:text-sky-300",
+  orange: "bg-orange-500/12 text-orange-700 ring-1 ring-orange-500/15 dark:text-orange-300",
+  blue: "bg-blue-500/12 text-blue-700 ring-1 ring-blue-500/15 dark:text-blue-300",
+  teal: "bg-teal-500/12 text-teal-700 ring-1 ring-teal-500/15 dark:text-teal-300",
+  indigo: "bg-indigo-500/12 text-indigo-700 ring-1 ring-indigo-500/15 dark:text-indigo-300",
+  violet: "bg-violet-500/12 text-violet-700 ring-1 ring-violet-500/15 dark:text-violet-300",
+  emerald: "bg-emerald-500/12 text-emerald-700 ring-1 ring-emerald-500/15 dark:text-emerald-300",
+  green: "bg-green-500/12 text-green-700 ring-1 ring-green-500/15 dark:text-green-300",
+  amber: "bg-amber-500/12 text-amber-700 ring-1 ring-amber-500/15 dark:text-amber-300",
+  cyan: "bg-cyan-500/12 text-cyan-700 ring-1 ring-cyan-500/15 dark:text-cyan-300",
+  stone: "bg-stone-500/12 text-stone-700 ring-1 ring-stone-500/15 dark:text-stone-300",
+  lime: "bg-lime-500/12 text-lime-700 ring-1 ring-lime-500/15 dark:text-lime-300",
+  slate: "bg-slate-500/12 text-slate-700 ring-1 ring-slate-500/15 dark:text-slate-300",
+  fuchsia: "bg-fuchsia-500/12 text-fuchsia-700 ring-1 ring-fuchsia-500/15 dark:text-fuchsia-300",
+  rose: "bg-rose-500/12 text-rose-700 ring-1 ring-rose-500/15 dark:text-rose-300",
+  zinc: "bg-zinc-500/12 text-zinc-700 ring-1 ring-zinc-500/15 dark:text-zinc-300",
+  neutral: "bg-neutral-500/12 text-neutral-700 ring-1 ring-neutral-500/15 dark:text-neutral-300",
+  purple: "bg-purple-500/12 text-purple-700 ring-1 ring-purple-500/15 dark:text-purple-300",
+  pink: "bg-pink-500/12 text-pink-700 ring-1 ring-pink-500/15 dark:text-pink-300",
 };
 
 interface HubWorkspaceCardProps {
@@ -77,6 +77,7 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
   const metrics = live?.metrics?.slice(0, 3) ?? [];
   const attention = live?.status === "attention";
   const hasSpark = Boolean(live?.sparkline?.length);
+  const toneHex = TONE_HEX[workspace.tone];
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -93,31 +94,38 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
       animate="show"
       exit="exit"
       transition={{ delay: Math.min(index, 8) * 0.04 }}
-      whileHover={{ y: -3 }}
-      className="hub-card group flex h-full cursor-pointer flex-col overflow-hidden rounded-[1.125rem]"
+      whileHover={{ y: -4 }}
+      className="hub-card group flex h-full cursor-pointer flex-col overflow-hidden"
       onClick={onOpen}
       onKeyDown={onKeyDown}
       role="button"
       tabIndex={0}
       aria-label={`Open ${workspace.label} workspace`}
     >
-      <span className={cn("absolute inset-y-5 left-0 w-[2px] rounded-full", BAR[workspace.tone])} />
+      <span
+        className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-80 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background: `linear-gradient(180deg, ${toneHex}14 0%, transparent 100%)`,
+        }}
+        aria-hidden
+      />
+      <span className={cn("absolute inset-y-6 left-0 w-[3px] rounded-full", BAR[workspace.tone])} />
 
-      <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-5">
+      <div className="relative flex items-start justify-between gap-3 px-5 pb-1 pt-5">
         <div className="flex min-w-0 items-center gap-3">
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-[1.04]",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-[1.05]",
               ICON_SOFT[workspace.tone]
             )}
           >
-            <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            <Icon className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
             <h3 className="truncate text-[15px] font-semibold tracking-tight text-foreground">
               {workspace.label}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <p className="hub-status-pill mt-1.5">
               <span
                 className={cn(
                   "hub-live-dot h-1.5 w-1.5 rounded-full",
@@ -136,40 +144,53 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
           }}
           aria-label={favorite ? `Unpin ${workspace.label}` : `Pin ${workspace.label}`}
           className={cn(
-            "rounded-lg p-1.5 transition-colors hover:bg-muted",
-            favorite ? "text-amber-500" : "text-muted-foreground/60 hover:text-muted-foreground"
+            "rounded-xl p-2 transition-all hover:bg-background/80",
+            favorite
+              ? "text-amber-500"
+              : "text-muted-foreground/50 hover:text-muted-foreground"
           )}
         >
           <Star className={cn("h-4 w-4", favorite && "fill-current")} />
         </button>
       </div>
 
-      <p className="mt-2 line-clamp-2 px-5 text-[13px] leading-relaxed text-muted-foreground">
+      <p className="relative mt-3 line-clamp-2 px-5 text-[13px] leading-relaxed text-muted-foreground">
         {workspace.description}
       </p>
 
-      {hasSpark ? (
-        <div className="mt-3 px-3">
+      <div className="relative mt-3 px-2">
+        {hasSpark ? (
           <HubSparkline
             data={live?.sparkline}
-            color={TONE_HEX[workspace.tone]}
-            className="h-10 w-full opacity-80"
-            height={40}
+            color={toneHex}
+            className="h-11 w-full opacity-90"
+            height={44}
           />
-        </div>
-      ) : null}
+        ) : (
+          <div
+            className="mx-3 h-11 rounded-xl opacity-60"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${toneHex}18, transparent)`,
+            }}
+            aria-hidden
+          />
+        )}
+      </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-px border-y border-border/70 bg-border/40">
+      <div className="relative mx-4 mt-2 grid grid-cols-3 gap-2">
         {loading
           ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-card px-3 py-3">
-                <div className="hub-shimmer h-2.5 w-10 rounded" />
-                <div className="hub-shimmer mt-2 h-4 w-14 rounded" />
+              <div key={i} className="rounded-xl bg-muted/50 px-2.5 py-2.5">
+                <div className="hub-shimmer h-2 w-10 rounded" />
+                <div className="hub-shimmer mt-2 h-3.5 w-12 rounded" />
               </div>
             ))
           : metrics.length
             ? metrics.map((m) => (
-                <div key={m.label} className="bg-card px-3 py-3">
+                <div
+                  key={m.label}
+                  className="rounded-xl border border-border/50 bg-background/70 px-2.5 py-2.5 backdrop-blur-sm"
+                >
                   <p className="truncate text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     {m.label}
                   </p>
@@ -184,19 +205,19 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
                 </div>
               ))
             : (
-              <div className="col-span-3 bg-card px-4 py-3 text-xs text-muted-foreground">
+              <div className="col-span-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-3 py-3 text-center text-xs text-muted-foreground">
                 No activity yet
               </div>
             )}
       </div>
 
-      <div className="mt-auto px-5 py-4">
+      <div className="relative mt-auto px-5 pb-4 pt-4">
         {workspace.pages.length ? (
-          <p className="mb-3 line-clamp-1 text-[11px] text-muted-foreground">
+          <p className="mb-3 line-clamp-1 text-[11px] text-muted-foreground/90">
             {workspace.pages.slice(0, 5).join(" · ")}
           </p>
         ) : null}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
           <div className="flex items-center gap-0.5">
             {workspace.quickActions.slice(0, 3).map((action) => {
               const AIcon = action.icon;
@@ -219,11 +240,12 @@ export const HubWorkspaceCard = memo(function HubWorkspaceCard({
           </div>
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors",
-              TONE_STYLES[workspace.tone].text
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold transition-all group-hover:gap-2",
+              TONE_STYLES[workspace.tone].text,
+              "bg-foreground/[0.03] group-hover:bg-foreground/[0.06]"
             )}
           >
-            Open Workspace
+            Open
             <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
           </span>
         </div>

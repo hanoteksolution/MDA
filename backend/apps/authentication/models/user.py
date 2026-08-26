@@ -98,6 +98,28 @@ class UserPermission(BaseModel):
         return f"{self.user_id} -> {self.permission.codename}"
 
 
+class UserPermissionRevoke(BaseModel):
+    """Role permissions explicitly revoked for this user (effective access subtracts these)."""
+
+    user = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.CASCADE,
+        related_name="revoked_permissions",
+    )
+    permission = models.ForeignKey(
+        Permission,
+        on_delete=models.CASCADE,
+        related_name="user_revokes",
+    )
+
+    class Meta:
+        db_table = "user_permissions_revoke"
+        unique_together = ["user", "permission"]
+
+    def __str__(self):
+        return f"{self.user_id} x {self.permission.codename}"
+
+
 from apps.authentication.models.managers import UserManager
 
 
@@ -211,8 +233,15 @@ class User(AbstractUser):
             .values_list("permission__codename", flat=True)
         )
 
+    def get_revoked_permissions(self):
+        return list(
+            self.revoked_permissions.filter(deleted_at__isnull=True)
+            .select_related("permission")
+            .values_list("permission__codename", flat=True)
+        )
+
     def get_permissions(self):
-        """Effective permissions = role permissions ∪ direct user grants.
+        """Effective permissions = (role ∪ direct grants) − revokes.
 
         Elevated admins receive the full catalog so clients do not have to
         special-case an empty/partial list.
@@ -225,6 +254,7 @@ class User(AbstractUser):
             )
         codes = set(self.get_role_permissions())
         codes.update(self.get_direct_permissions())
+        codes.difference_update(self.get_revoked_permissions())
         return sorted(codes)
 
     def has_permission(self, codename):

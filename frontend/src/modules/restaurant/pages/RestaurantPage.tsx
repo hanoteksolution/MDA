@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useScopedPath } from "@/hooks/useScopedPath";
 import { Armchair, CookingPot, Plus, UtensilsCrossed } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { KpiCard, KpiGrid } from "@/components/data/KpiCard";
@@ -34,6 +35,7 @@ const RESTAURANT_TAB_PATHS: Record<string, Tab> = {
 
 export function RestaurantPage() {
   const navigate = useNavigate();
+  const { scoped } = useScopedPath();
   const branchId = useAuthStore((s) => s.user?.branch?.id);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission("restaurant.manage");
@@ -286,7 +288,7 @@ export function RestaurantPage() {
       breadcrumbs={["Home", "Restaurant"]}
       actions={
         <Button variant="outline" size="sm" asChild>
-          <Link to="/pos">Open POS</Link>
+          <Link to={scoped("/pos")}>Open POS</Link>
         </Button>
       }
     >
