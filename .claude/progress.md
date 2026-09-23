@@ -6,15 +6,15 @@
 
 Task: Production deployment — Platform Admin separation + SMS Reseller + Subscription Auto-Payment + School frontend restructure
 Status: PASS
-Last completed step: Gate 7 — all 7 gates passed; release live and smoke-tested on 20260923T163830Z
-Exact next step: None. Release is live. NOT committed/tagged (user has not authorized). Keep rollback assets until the release is accepted. Optional: commit/tag the deployed tree (it is currently only reproducible from the dirty working tree).
+Last completed step: Release snapshotted to git — commit `d38aeaa`, annotated tag `production-2026-09-23`; deployment observations recorded in PRODUCTION_RELEASE_PLAN.md §12
+Exact next step: None. Release is live, committed and tagged locally. Pushing to remote is NOT authorized — requires a separate instruction. Keep rollback assets (DB dump, env copy, rollback images) until the release is formally accepted.
 Last command/result: `migrate --check` exit 0, 0 unapplied; smoke — superadmin platform 200, ordinary tenant platform 403, School sis/summary 200, inventory/branches 200, sms-billing 200, waafi-callback 410, subscription checkout "not available yet", 0 tracebacks/5xx in 10m
 Production changes made: Applied `integrations.0003_sms_billing` + `platform.0019_subscription_checkout`; ran `bootstrap_system` (additive); appended `SMS_CREDITS_ENFORCED=True` to `backend/.env.cloud`; rebuilt and recreated api/celery/celery-beat/web from the working tree
 Services restarted: api, celery, celery-beat, web (recreated). PostgreSQL and Redis NOT touched. Nginx NOT touched. TLS/DNS NOT touched.
 Migrations applied: integrations.0003_sms_billing, platform.0019_subscription_checkout (exactly the 2 planned)
 Blocker: None
 
-Deployed images: mda-api:latest `8156dd21a027`, mda-web:latest `e3c08480d09f` (built from dirty tree at git SHA 3a90c8e, 283 dirty paths — NOT reproducible from git alone).
+Release commit: `d38aeaa` — tag `production-2026-09-23` (annotated, LOCAL ONLY, not pushed). Deployed images: mda-api:latest `8156dd21a027`, mda-web:latest `e3c08480d09f`, both built from the tree captured by that commit — the release IS now reproducible from git. Intentionally uncommitted: `frontend/tsconfig.tsbuildinfo` (generated build cache) and `docs/school/verification/` (1.5 MB test evidence); neither affects the images. `backend/.env.cloud` and `backups/` are gitignored and were never staged.
 ROLLBACK ASSETS — DO NOT DELETE: DB dump `backups/mda_erp_pre_release_20260923T163830Z.dump` (3.0M, 5889 TOC entries, pg_restore --list verified); env `backups/env.cloud.20260923T163830Z` (mode 600); images `mda-api:rollback-20260923T163830Z` (c31be14d7211), `mda-web:rollback-20260923T163830Z` (e654b3d08a79). Rollback procedure: PRODUCTION_RELEASE_PLAN.md §9.
 Production billing state: 0 payment providers; PAYMENT_ALLOW_MOCK_PROVIDERS=False live; MOCK selection blocked and MOCK runtime resolution -> None; subscription checkout and SMS purchase fail safely. SMS_CREDITS_ENFORCED=True. 0 SMS packages configured.
 
