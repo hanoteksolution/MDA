@@ -32,6 +32,32 @@ from api.v1.restaurant.views import (
     TableListCreateView,
     TableStatusView,
 )
+from api.v1.restaurant.cafeteria_views import (
+    BaristaListCreateView,
+    BaristaQueueView,
+    BaristaTicketActionView,
+    CafeteriaProfileView,
+    ItemCustomizeByProductView,
+    ItemVariantListCreateView,
+    RecipeActivateView,
+    RecipeCostingView,
+    WasteApproveView,
+    WasteListCreateView,
+)
+from api.v1.restaurant.commerce_views import (
+    ComboDetailView,
+    ComboListCreateView,
+    ItemModifierGroupLinkView,
+    LoyaltyEnrollView,
+    LoyaltyProgramView,
+    PromotionDetailView,
+    PromotionListCreateView,
+    PromotionResolveView,
+    ReservationListCreateView,
+    ReservationStatusView,
+    ShiftActionView,
+    ShiftListCreateView,
+)
 
 urlpatterns = [
     path("summary/", RestaurantSummaryView.as_view(), name="restaurant-summary"),
@@ -64,4 +90,67 @@ urlpatterns = [
     path("orders/<uuid:pk>/void/", OrderVoidView.as_view(), name="restaurant-order-void"),
     path("orders/<uuid:pk>/refund/", OrderRefundView.as_view(), name="restaurant-order-refund"),
     path("orders/<uuid:pk>/lines/", OrderAddLineView.as_view(), name="restaurant-order-lines"),
+    # Cafeteria / barista extensions
+    path("cafeteria-profile/", CafeteriaProfileView.as_view(), name="cafeteria-profile"),
+    path("barista/queue/", BaristaQueueView.as_view(), name="barista-queue"),
+    path(
+        "barista/tickets/<uuid:pk>/<str:action>/",
+        BaristaTicketActionView.as_view(),
+        name="barista-ticket-action",
+    ),
+    path("waste/", WasteListCreateView.as_view(), name="restaurant-waste"),
+    path("waste/<uuid:pk>/approve/", WasteApproveView.as_view(), name="restaurant-waste-approve"),
+    path("baristas/", BaristaListCreateView.as_view(), name="restaurant-baristas"),
+    path(
+        "items/by-product/<uuid:product_id>/customize/",
+        ItemCustomizeByProductView.as_view(),
+        name="restaurant-item-customize-by-product",
+    ),
+    path(
+        "items/<uuid:pk>/variants/",
+        ItemVariantListCreateView.as_view(),
+        name="restaurant-item-variants",
+    ),
+    path(
+        "recipes/<uuid:pk>/activate/",
+        RecipeActivateView.as_view(),
+        name="restaurant-recipe-activate",
+    ),
+    path(
+        "recipes/<uuid:pk>/costing/",
+        RecipeCostingView.as_view(),
+        name="restaurant-recipe-costing",
+    ),
+    path(
+        "items/<uuid:pk>/modifier-groups/",
+        ItemModifierGroupLinkView.as_view(),
+        name="restaurant-item-modifier-groups",
+    ),
+    path("combos/", ComboListCreateView.as_view(), name="restaurant-combos"),
+    path("combos/<uuid:pk>/", ComboDetailView.as_view(), name="restaurant-combo-detail"),
+    path("promotions/", PromotionListCreateView.as_view(), name="restaurant-promotions"),
+    path(
+        "promotions/resolve/",
+        PromotionResolveView.as_view(),
+        name="restaurant-promotion-resolve",
+    ),
+    path(
+        "promotions/<uuid:pk>/",
+        PromotionDetailView.as_view(),
+        name="restaurant-promotion-detail",
+    ),
+    path("loyalty/program/", LoyaltyProgramView.as_view(), name="restaurant-loyalty-program"),
+    path("loyalty/enroll/", LoyaltyEnrollView.as_view(), name="restaurant-loyalty-enroll"),
+    path("reservations/", ReservationListCreateView.as_view(), name="restaurant-reservations"),
+    path(
+        "reservations/<uuid:pk>/status/",
+        ReservationStatusView.as_view(),
+        name="restaurant-reservation-status",
+    ),
+    path("shifts/", ShiftListCreateView.as_view(), name="restaurant-shifts"),
+    path(
+        "shifts/<uuid:pk>/<str:action>/",
+        ShiftActionView.as_view(),
+        name="restaurant-shift-action",
+    ),
 ]

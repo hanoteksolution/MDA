@@ -16,7 +16,7 @@ class ChartError(ValueError):
     pass
 
 
-CONTROL_ACCOUNT_CODES = frozenset({"1100", "1200", "2000"})
+CONTROL_ACCOUNT_CODES = frozenset({"1100", "1200", "1210", "2000"})
 
 
 DEFAULT_ACCOUNTS = [
@@ -25,6 +25,7 @@ DEFAULT_ACCOUNTS = [
     ("1020", "Mobile Money", Account.TYPE_ASSET, True),
     ("1100", "Accounts Receivable", Account.TYPE_ASSET, True),
     ("1200", "Inventory", Account.TYPE_ASSET, True),
+    ("1210", "Inventory in Transit", Account.TYPE_ASSET, True),
     ("2000", "Accounts Payable", Account.TYPE_LIABILITY, True),
     ("2100", "Tax Payable", Account.TYPE_LIABILITY, True),
     ("2200", "Security Deposits Liability", Account.TYPE_LIABILITY, True),
@@ -43,6 +44,10 @@ DEFAULT_ACCOUNTS = [
     ("6070", "Maintenance Expense", Account.TYPE_EXPENSE, True),
     ("6080", "Futsal Operating Expense", Account.TYPE_EXPENSE, True),
     ("6090", "Other Operating Expense", Account.TYPE_EXPENSE, True),
+    ("2110", "Employee Tip Payable", Account.TYPE_LIABILITY, True),
+    ("4300", "Cafeteria Sales Revenue", Account.TYPE_REVENUE, True),
+    ("4310", "Service Charge Revenue", Account.TYPE_REVENUE, True),
+    ("6100", "Waste / Spoilage Expense", Account.TYPE_EXPENSE, True),
 ]
 
 EXPENSE_CATEGORY_ACCOUNT = {

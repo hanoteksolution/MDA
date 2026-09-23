@@ -31,6 +31,8 @@ import {
   HardHat,
   Store,
   ShoppingBag,
+  GraduationCap,
+  Coffee,
   type LucideIcon,
 } from "lucide-react";
 
@@ -65,6 +67,7 @@ export type WorkspaceCategoryId =
   | "property"
   | "construction"
   | "travel"
+  | "education"
   | "admin"
   | "reports"
   | "crm"
@@ -250,6 +253,7 @@ export const WORKSPACE_CATEGORIES: WorkspaceCategory[] = [
   { id: "property", label: "Property", icon: Building2, tone: "teal" },
   { id: "construction", label: "Construction", icon: HardHat, tone: "blue" },
   { id: "travel", label: "Travel", icon: Plane, tone: "cyan" },
+  { id: "education", label: "Education", icon: GraduationCap, tone: "indigo" },
   { id: "operations", label: "Business Operations", icon: Briefcase, tone: "blue" },
   { id: "finance", label: "Finance", icon: Wallet, tone: "emerald" },
   { id: "reports", label: "Reports & Analytics", icon: BarChart3, tone: "slate" },
@@ -264,7 +268,7 @@ export const HUB_CATEGORY_GROUPS: { id: "business" | "core"; label: string; cate
   {
     id: "business",
     label: "Business",
-    categories: ["retail", "hospitality", "healthcare", "fitness", "property", "construction", "travel", "operations"],
+    categories: ["retail", "hospitality", "healthcare", "fitness", "property", "construction", "travel", "education", "operations"],
   },
   {
     id: "core",
@@ -493,16 +497,17 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
   ws({
     code: "cafeteria",
     label: "Cafeteria",
-    description: "Counter POS, menu, inventory, and purchasing.",
+    description: "Barista queue, counter POS, menu, recipes, and waste.",
     route: "/cafeteria",
-    icon: UtensilsCrossed,
+    icon: Coffee,
     tone: "amber",
     category: "hospitality",
     modules: ["restaurant"],
-    permission: "restaurant.view",
-    pages: ["POS", "Orders", "Menu", "Inventory", "Finance"],
+    permission: ["restaurant.view", "cafeteria.dashboard.view", "cafeteria.pos.use"],
+    pages: ["Dashboard", "POS", "Barista", "Menu", "Waste", "Finance"],
     quickActions: [
       { label: "Open POS", route: "/cafeteria/pos", icon: Store },
+      { label: "Barista Queue", route: "/cafeteria/barista", icon: Coffee },
       { label: "Menu", route: "/cafeteria/products", icon: PackagePlus },
     ],
     group: "venue",
@@ -594,6 +599,25 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     quickActions: [
       { label: "Bookings", route: "/travel", icon: Plane },
       { label: "Reports", route: "/travel/reports", icon: BarChart3 },
+    ],
+    group: "venue",
+    kind: "industry",
+  }),
+  ws({
+    code: "school",
+    label: "School",
+    description: "Admissions, students, academics, teaching, assessments and fee billing.",
+    route: "/school",
+    icon: GraduationCap,
+    tone: "indigo",
+    category: "education",
+    modules: ["school"],
+    permission: "school.view",
+    pages: ["Dashboard", "Admissions", "Students", "Academics", "Teaching", "Assessments", "Finance"],
+    quickActions: [
+      { label: "Students", route: "/school/sis/students", icon: Users },
+      { label: "Academic years", route: "/school/academics/academic-years", icon: CalendarPlus },
+      { label: "School profile", route: "/school/settings", icon: Settings },
     ],
     group: "venue",
     kind: "industry",
@@ -841,6 +865,7 @@ export const VENUE_MODULE_CODES = [
   "office_rental",
   "project_management",
   "travel_agency",
+  "school",
 ] as const;
 
 export const ENGINE_MODULE_CODES = ["pos", "sales", "inventory", "purchases"] as const;
@@ -856,6 +881,7 @@ const VENUE_VIEW_PERMISSIONS = [
   "office_rental.view",
   "projects.view",
   "travel.bookings.view",
+  "school.view",
 ] as const;
 
 /**
@@ -900,6 +926,28 @@ function permOk(
   return codes.some((c) => hasPermission(c));
 }
 
+/**
+ * Restaurant engine powers both Restaurant and Cafeteria workspace shells.
+ * Prefer one hospitality card based on business type so tenants don't see duplicates.
+ */
+export function resolveHospitalityProfile(
+  businessTypeCode?: string | null,
+  opts?: { elevated?: boolean; includeCafeteria?: boolean; hospitalityProfile?: "cafeteria" | "restaurant" | "both" | "auto" }
+): "cafeteria" | "restaurant" | "both" {
+  if (opts?.hospitalityProfile && opts.hospitalityProfile !== "auto") {
+    return opts.hospitalityProfile;
+  }
+  if (opts?.includeCafeteria) return "cafeteria";
+  const bt = (businessTypeCode || "").toLowerCase().trim();
+  if (bt === "cafeteria" || bt.endsWith("_cafeteria") || bt.includes("cafeteria")) {
+    return "cafeteria";
+  }
+  if (bt === "restaurant") return "restaurant";
+  // Platform / elevated operators should see both shells for demos & support.
+  if (opts?.elevated) return "both";
+  return "restaurant";
+}
+
 /** Hub + switcher: industry verticals + platform. Engine peers (POS/Sales/…) stay off the top level. */
 export function filterVisibleWorkspaces(
   enabled: string[] | undefined,
@@ -908,16 +956,25 @@ export function filterVisibleWorkspaces(
     hasPermission?: (code: string) => boolean;
     includeOverview?: boolean;
     includeFinance?: boolean;
+    /** @deprecated Prefer businessTypeCode — kept for explicit opt-in. */
     includeCafeteria?: boolean;
+    businessTypeCode?: string | null;
+    hospitalityProfile?: "cafeteria" | "restaurant" | "both" | "auto";
   }
 ): ModuleWorkspace[] {
   const mods = enabled ?? [];
   const elevated = Boolean(opts?.elevated || enabled == null);
   const hasPermission = opts?.hasPermission;
+  const hospitality = resolveHospitalityProfile(opts?.businessTypeCode, {
+    elevated,
+    includeCafeteria: opts?.includeCafeteria,
+    hospitalityProfile: opts?.hospitalityProfile,
+  });
 
   return MODULE_WORKSPACES.filter((w) => {
     if (w.kind === "capability") return false;
-    if (w.code === "cafeteria" && !opts?.includeCafeteria) return false;
+    if (w.code === "cafeteria" && hospitality === "restaurant") return false;
+    if (w.code === "restaurant" && hospitality === "cafeteria") return false;
     if (w.code === "overview") return opts?.includeOverview !== false;
     if (w.code === "finance") return opts?.includeFinance !== false && permOk(w.permission, hasPermission, elevated);
     if (!permOk(w.permission, hasPermission, elevated)) return false;
@@ -936,6 +993,7 @@ export function workspacesForModules(
     isSuperAdmin?: boolean;
     hasPermission?: (code: string) => boolean;
     includeOverview?: boolean;
+    businessTypeCode?: string | null;
   }
 ): ModuleWorkspace[] {
   return filterVisibleWorkspaces(enabled, {
@@ -943,6 +1001,7 @@ export function workspacesForModules(
     hasPermission: opts?.hasPermission,
     includeFinance: opts?.includeFinance,
     includeOverview: opts?.includeOverview,
+    businessTypeCode: opts?.businessTypeCode,
   });
 }
 

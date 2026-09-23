@@ -18,10 +18,12 @@ import type { BranchDetail, Company } from "@/types/models/admin";
 import { appDialog } from "@/components/feedback/AppDialog";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { useScopedPath } from "@/hooks/useScopedPath";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const { scoped } = useScopedPath();
+  const { hasAnyPermission } = usePermissions();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState("company");
   const [company, setCompany] = useState<Partial<Company>>({});
@@ -200,6 +202,20 @@ export function SettingsPage() {
       title="Settings"
       description="Company profile, branches, and system configuration."
       breadcrumbs={["Home", "Settings"]}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          {hasAnyPermission("billing.subscription.view") && (
+            <Button asChild variant="outline">
+              <Link to="/billing">Billing & Subscription</Link>
+            </Button>
+          )}
+          {hasAnyPermission("integrations.view", "integrations.payments.view", "integrations.sms.billing.view") && (
+            <Button asChild variant="outline">
+              <Link to={scoped("/settings/integrations")}>Integrations</Link>
+            </Button>
+          )}
+        </div>
+      }
     >
       <TabNav
         tabs={[

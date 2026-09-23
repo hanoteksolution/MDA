@@ -358,7 +358,12 @@ export function GymPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this member?")) return;
+    const ok = await appDialog.confirm("Delete this member?", {
+      title: "Delete member",
+      tone: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     await gymApi.deleteMember(id);
     reload();
   };
@@ -617,7 +622,12 @@ export function GymPage() {
                 variant="ghost"
                 size="sm"
                 onClick={async () => {
-                  if (!confirm("Cancel this subscription?")) return;
+                  const ok = await appDialog.confirm("Cancel this subscription?", {
+                    title: "Cancel subscription",
+                    tone: "danger",
+                    confirmLabel: "Cancel subscription",
+                  });
+                  if (!ok) return;
                   await gymApi.cancelSubscription(r.id);
                   reloadSubs();
                   reloadSummary();

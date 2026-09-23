@@ -4,6 +4,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { ContentSection } from "@/components/layout/ContentSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { appDialog } from "@/components/feedback/AppDialog";
 import { travelApi, type TravelRecord } from "@/services/api/travel";
 import { cn } from "@/utils/cn";
 
@@ -65,6 +66,6 @@ export function Detail({ kind }: { kind: Kind }) {
   const convertQuote = async () => { if (id) { const booking = await travelApi.convertQuotation(id); nav(`/travel/bookings/${booking.data.id}`); } };
   const postBooking = async () => { if (id) { await travelApi.postBookingAccounting(id); setRow((await spec.get(id)).data); } };
   const postTransaction = async () => { if (id) { if (kind === "payments") await travelApi.postPaymentAccounting(id); if (kind === "refunds") await travelApi.postRefundAccounting(id); setRow((await spec.get(id)).data); } };
-  const previewBooking = async () => { if (id) { const result = await travelApi.bookingAccountingPreview(id); window.alert(JSON.stringify(result.data.lines, null, 2)); } };
+  const previewBooking = async () => { if (id) { const result = await travelApi.bookingAccountingPreview(id); await appDialog.alert(JSON.stringify(result.data.lines, null, 2), { title: "Ledger preview" }); } };
   return <PageLayout title={row ? label(row) : "Loading"} breadcrumbs={["Travel", spec.title]} actions={row ? <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => nav(`/travel/${kind}/${row.id}/edit`)}>Edit</Button>{kind === "quotations" && <><Button onClick={() => void setQuoteStatus("sent")}>Send</Button><Button onClick={() => void setQuoteStatus("accepted")}>Accept</Button><Button variant="outline" onClick={() => void setQuoteStatus("rejected")}>Reject</Button><Button variant="outline" onClick={() => void setQuoteStatus("expired")}>Expire</Button><Button onClick={() => void convertQuote()}>Convert</Button></>}{kind === "bookings" && <><Button asChild variant="outline"><Link to="/travel/payments">Payments</Link></Button><Button asChild variant="outline"><Link to="/travel/refunds">Refunds</Link></Button><Button variant="outline" onClick={() => void previewBooking()}>Ledger preview</Button><Button onClick={() => void postBooking()}>Post to ledger</Button></>}{(kind === "payments" || kind === "refunds") && <Button onClick={() => void postTransaction()}>Post to ledger</Button>}</div> : undefined}><ContentSection>{row && <dl className="grid gap-3 md:grid-cols-2">{Object.entries(row).map(([key, value]) => <div key={key}><dt className="text-xs text-muted-foreground">{key.replace(/_/g, " ")}</dt><dd>{String(value ?? "—")}</dd></div>)}</dl>}</ContentSection></PageLayout>;
 }

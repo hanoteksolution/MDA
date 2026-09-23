@@ -242,7 +242,7 @@ class InvoiceService:
 
     @staticmethod
     def _apply_stock_for_create(*, invoice, items, user=None):
-        warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        warehouse = sale_warehouse(invoice)
         if not warehouse:
             return
         sold = _aggregate_item_quantities(items)
@@ -262,6 +262,7 @@ class InvoiceService:
             reference_id=invoice.id,
             user=user,
             notes=f"Sale {invoice.invoice_number}",
+            location_id=sale_location_id(invoice),
         )
 
     @staticmethod
@@ -273,6 +274,7 @@ class InvoiceService:
         new_items,
         user=None,
         old_status=None,
+        old_warehouse=None,
     ):
         """
         Diff line quantities and move stock.
@@ -281,8 +283,9 @@ class InvoiceService:
         deducted on-hand keep the sale-ledger path (Option A).
         """
         new_qty = _aggregate_item_quantities(new_items)
-        old_wh = InventoryService.resolve_warehouse_for_branch(branch=old_branch)
-        new_wh = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        old_wh = old_warehouse or InventoryService.resolve_warehouse_for_branch(branch=old_branch)
+        new_wh = sale_warehouse(invoice)
+        new_loc = sale_location_id(invoice)
         was_hold = old_status == Invoice.STATUS_ON_HOLD
         is_hold = invoice.status == Invoice.STATUS_ON_HOLD
         reserve_tracked = InventoryService.invoice_reserve_tracked(invoice_id=invoice.id)
@@ -358,6 +361,7 @@ class InvoiceService:
                 reference_id=invoice.id,
                 user=user,
                 notes=f"Sale edit {invoice.invoice_number}",
+                location_id=new_loc,
             )
             return
 
@@ -378,11 +382,12 @@ class InvoiceService:
                 reference_id=invoice.id,
                 user=user,
                 notes=f"Sale move apply {invoice.invoice_number}",
+                location_id=new_loc,
             )
 
     @staticmethod
     def _apply_stock_for_delete(*, invoice, user=None):
-        warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        warehouse = sale_warehouse(invoice)
         if not warehouse:
             return
         sold = _aggregate_item_quantities(list(invoice.items.all()))
@@ -408,15 +413,19 @@ class InvoiceService:
             reference_id=invoice.id,
             user=user,
             notes=f"Sale deleted {invoice.invoice_number}",
+            location_id=sale_location_id(invoice),
         )
 
     @staticmethod
     @transaction.atomic
     def update(*, instance, data, items=None, user=None):
+        if hasattr(instance, "service_billing"):
+            raise ValueError("Use the shared billing allocation/credit workflow for service invoices.")
         if instance.status == Invoice.STATUS_CANCELLED:
             raise ValueError("Cancelled invoices/receipts cannot be edited.")
         old_branch = instance.branch
         old_status = instance.status
+        old_warehouse = sale_warehouse(instance)
         old_items_qty = _aggregate_item_quantities(list(instance.items.all()))
         customer_id = data.pop("customer_id", None)
         branch_id = data.pop("branch_id", None)
@@ -448,6 +457,7 @@ class InvoiceService:
                 new_items=items,
                 user=user,
                 old_status=old_status,
+                old_warehouse=old_warehouse,
             )
         elif old_status == Invoice.STATUS_ON_HOLD and instance.status != Invoice.STATUS_ON_HOLD:
             # Status-only convert (items unchanged) — still release reserve → sale
@@ -465,12 +475,15 @@ class InvoiceService:
                 ],
                 user=user,
                 old_status=old_status,
+                old_warehouse=old_warehouse,
             )
         return InvoiceService.list(user=user).get(pk=instance.pk)
 
     @staticmethod
     @transaction.atomic
     def delete(*, instance, user=None):
+        if hasattr(instance, "service_billing"):
+            raise ValueError("Use the shared billing allocation/credit workflow for service invoices.")
         if instance.status == Invoice.STATUS_CANCELLED:
             raise ValueError("Invoice/receipt is already cancelled.")
         InvoiceService._apply_stock_for_delete(invoice=instance, user=user)
@@ -498,6 +511,8 @@ class InvoiceService:
     @staticmethod
     @transaction.atomic
     def mark_paid(*, instance, user=None, payment_method: str = "cash"):
+        if hasattr(instance, "service_billing"):
+            raise ValueError("Use the shared billing allocation/credit workflow for service invoices.")
         if instance.status == Invoice.STATUS_PAID:
             raise ValueError("Invoice is already paid.")
         if instance.status == Invoice.STATUS_CANCELLED:
@@ -513,6 +528,8 @@ class InvoiceService:
     @staticmethod
     @transaction.atomic
     def mark_unpaid(*, instance, user=None):
+        if hasattr(instance, "service_billing"):
+            raise ValueError("Use the shared billing allocation/credit workflow for service invoices.")
         if instance.status == Invoice.STATUS_CANCELLED:
             raise ValueError("Cancelled invoices cannot be marked as unpaid.")
         if instance.status == Invoice.STATUS_SENT and instance.amount_paid == 0:
@@ -557,6 +574,27 @@ class InvoiceService:
                 Quotation.active_objects(), user=user, request=request
             ).count(),
         }
+
+
+
+def sale_warehouse(invoice):
+    """Warehouse this sale's stock was drawn from.
+
+    A POS sale on a terminal records its warehouse on the invoice, and every later
+    reversal (edit, delete, refund, restore) must hit that same warehouse. Invoices
+    without one keep the legacy resolution: the branch's default warehouse.
+    """
+    if invoice.warehouse_id:
+        return invoice.warehouse
+    return InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+
+
+def sale_location_id(invoice):
+    """Stock location for ledger rows — the terminal's, only while it matches the warehouse."""
+    terminal = invoice.terminal if invoice.terminal_id else None
+    if terminal is not None and terminal.default_warehouse_id == invoice.warehouse_id:
+        return terminal.default_location_id
+    return None
 
 
 def _resolve_branch(branch_id, user=None):

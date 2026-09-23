@@ -101,6 +101,14 @@ class RestaurantService:
             RestaurantOrder.STATUS_READY,
             RestaurantOrder.STATUS_SERVED,
         ]
+        today = timezone.localdate()
+        today_qs = orders.filter(opened_at__date=today).exclude(
+            status=RestaurantOrder.STATUS_CANCELLED
+        )
+        paid_today = today_qs.filter(status=RestaurantOrder.STATUS_PAID)
+        sales_agg = paid_today.aggregate(total=Sum("subtotal"), n=Count("id"))
+        gross = float(sales_agg["total"] or 0)
+        order_count = sales_agg["n"] or 0
         return {
             "categories": cats.count(),
             "menu_items": items.filter(is_available=True).count(),
@@ -109,9 +117,24 @@ class RestaurantService:
                 is_active=True, status=DiningTable.STATUS_OCCUPIED
             ).count(),
             "orders_open": orders.filter(status__in=open_statuses).count(),
-            "orders_today": orders.filter(opened_at__date=timezone.localdate())
-            .exclude(status=RestaurantOrder.STATUS_CANCELLED)
-            .count(),
+            "orders_today": today_qs.count(),
+            "orders_preparing": orders.filter(
+                status=RestaurantOrder.STATUS_PREPARING
+            ).count(),
+            "orders_ready": orders.filter(status=RestaurantOrder.STATUS_READY).count(),
+            "orders_completed_today": today_qs.filter(
+                status__in=[
+                    RestaurantOrder.STATUS_COMPLETED,
+                    RestaurantOrder.STATUS_PAID,
+                    RestaurantOrder.STATUS_SERVED,
+                ]
+            ).count(),
+            "orders_cancelled_today": orders.filter(
+                opened_at__date=today, status=RestaurantOrder.STATUS_CANCELLED
+            ).count(),
+            "todays_sales": gross,
+            "todays_orders_paid": order_count,
+            "average_order_value": round(gross / order_count, 2) if order_count else 0,
         }
 
     # --- Categories ---
@@ -872,20 +895,76 @@ class RestaurantService:
         qty = Decimal(str(data.get("quantity") or 1))
         if qty <= 0:
             raise RestaurantError("quantity must be positive.")
-        price = Decimal(str(data.get("unit_price") if data.get("unit_price") is not None else item.unit_price))
+
+        from apps.restaurant.models import MenuItemVariant, Modifier, OrderLineModifier
+
+        variant = None
+        variant_id = data.get("variant_id")
+        price_adj = Decimal("0")
+        line_name = item.name
+        if variant_id:
+            variant = (
+                MenuItemVariant.active_objects()
+                .filter(pk=variant_id, menu_item_id=item.id, deleted_at__isnull=True)
+                .first()
+            )
+            if not variant or not variant.is_available:
+                raise RestaurantError("Variant not available.")
+            price_adj = Decimal(str(variant.price_adjustment or 0))
+            line_name = f"{item.name} ({variant.name})"
+
+        base_price = Decimal(
+            str(
+                data.get("unit_price")
+                if data.get("unit_price") is not None
+                else item.unit_price
+            )
+        )
+        mod_delta = Decimal("0")
+        raw_mods = data.get("modifiers") or data.get("modifier_ids") or []
+        resolved_mods = []
+        for raw in raw_mods:
+            if isinstance(raw, dict):
+                mid = raw.get("modifier_id") or raw.get("id")
+                mqty = Decimal(str(raw.get("quantity") or 1))
+            else:
+                mid = raw
+                mqty = Decimal("1")
+            if not mid:
+                continue
+            mod = Modifier.active_objects().filter(pk=mid, deleted_at__isnull=True).first()
+            if not mod or not mod.is_active:
+                raise RestaurantError("Modifier not available.")
+            mod_delta += Decimal(str(mod.price_delta or 0)) * mqty
+            resolved_mods.append((mod, mqty))
+
+        unit_price = (base_price + price_adj + mod_delta).quantize(Decimal("0.01"))
+        station_id = data.get("kitchen_station_id") or getattr(item, "kitchen_station_id", None)
         line = OrderLine.objects.create(
             tenant_id=order.tenant_id,
             order=order,
             menu_item=item,
+            variant=variant,
+            kitchen_station_id=station_id,
             product_id=item.product_id,
-            name=item.name,
+            name=line_name,
             quantity=qty,
-            unit_price=price,
-            line_total=(qty * price).quantize(Decimal("0.01")),
+            unit_price=unit_price,
+            line_total=(qty * unit_price).quantize(Decimal("0.01")),
             status=OrderLine.STATUS_QUEUED,
             notes=(data.get("notes") or "").strip(),
             created_by=user,
         )
+        for mod, mqty in resolved_mods:
+            OrderLineModifier.objects.create(
+                tenant_id=order.tenant_id,
+                order_line=line,
+                modifier=mod,
+                name=mod.name,
+                price_delta=mod.price_delta,
+                quantity=mqty,
+                created_by=user,
+            )
         if recalc:
             order.recalc_subtotal()
         return line
@@ -977,7 +1056,7 @@ class RestaurantService:
         items = []
         for line in order.lines.filter(deleted_at__isnull=True).exclude(
             status=OrderLine.STATUS_CANCELLED
-        ):
+        ).prefetch_related("modifiers"):
             menu_item = line.menu_item
             if not line.product_id:
                 menu_item = RestaurantService.ensure_menu_item_product(
@@ -985,12 +1064,19 @@ class RestaurantService:
                 )
                 line.product_id = menu_item.product_id
                 line.save(update_fields=["product_id", "updated_at"])
+            mod_names = [
+                m.name
+                for m in line.modifiers.filter(deleted_at__isnull=True)
+            ]
+            display = line.name
+            if mod_names:
+                display = f"{line.name} [{', '.join(mod_names)}]"
             items.append(
                 {
                     "product_id": str(line.product_id),
                     "quantity": float(line.quantity),
                     "unit_price": float(line.unit_price),
-                    "name": line.name,
+                    "name": display,
                     "sku": getattr(menu_item, "sku", "") or "",
                 }
             )
@@ -1001,6 +1087,8 @@ class RestaurantService:
     @staticmethod
     def serialize_order_for_pos(*, order: RestaurantOrder, user=None) -> dict:
         items = RestaurantService.to_pos_items(order=order, user=user)
+        tip = float(getattr(order, "tip_amount", 0) or 0)
+        service = float(getattr(order, "service_charge_amount", 0) or 0)
         return {
             "order": {
                 "id": str(order.id),
@@ -1009,12 +1097,17 @@ class RestaurantService:
                 "table_code": order.table.code if order.table_id else None,
                 "waiter_name": order.waiter_name or "",
                 "subtotal": float(order.subtotal or 0),
+                "tip_amount": tip,
+                "service_charge_amount": service,
                 "status": order.status,
             },
             "items": items,
+            "tip_amount": tip,
+            "service_charge_amount": service,
             "notes": (
                 f"RestaurantOrder: {order.order_number}"
-                + (f" | Table: {order.table.code}" if order.table_id else "")
+                + (f" / {order.table.code}" if order.table_id else "")
+                + (f" / tip {tip}" if tip else "")
             ),
         }
 
@@ -1102,6 +1195,36 @@ class RestaurantService:
                         table=order.table, status=DiningTable.STATUS_FREE, user=user
                     )
         order.save()
+        if status == RestaurantOrder.STATUS_PAID and current != RestaurantOrder.STATUS_PAID:
+            from apps.restaurant.services.recipe_consumption_service import (
+                RecipeConsumptionError,
+                RecipeConsumptionService,
+            )
+
+            try:
+                RecipeConsumptionService.consume_order_recipes(
+                    order=order, user=user, request=None
+                )
+            except RecipeConsumptionError as exc:
+                raise RestaurantError(str(exc)) from exc
+            tip = Decimal(str(getattr(order, "tip_amount", 0) or 0))
+            service = Decimal(str(getattr(order, "service_charge_amount", 0) or 0))
+            if tip > 0 or service > 0:
+                try:
+                    from apps.finance.services.posting_service import AccountingPostingService
+
+                    if tip > 0:
+                        AccountingPostingService.post_cafeteria_tip(
+                            order=order, amount=tip, user=user
+                        )
+                    if service > 0:
+                        AccountingPostingService.post_cafeteria_service_charge(
+                            order=order, amount=service, user=user
+                        )
+                except Exception:
+                    # Do not block sale settlement if GL mapping/cutover is incomplete.
+                    pass
+            RestaurantService._apply_loyalty_on_paid(order=order, user=user)
         write_audit(
             action="status",
             module="restaurant",
@@ -1110,3 +1233,138 @@ class RestaurantService:
             new_values={"from": current, "to": status},
         )
         return order
+
+    @staticmethod
+    def update_order_charges(
+        *,
+        order: RestaurantOrder,
+        tip_amount=None,
+        service_charge_amount=None,
+        user=None,
+    ) -> RestaurantOrder:
+        """Persist tip / service charge before POS checkout marks the order paid."""
+        if order.status not in RestaurantService.ORDER_OPEN_STATES and order.status not in (
+            RestaurantOrder.STATUS_READY,
+            RestaurantOrder.STATUS_SERVED,
+            RestaurantOrder.STATUS_COMPLETED,
+            RestaurantOrder.STATUS_SENT,
+        ):
+            if order.status == RestaurantOrder.STATUS_PAID:
+                raise RestaurantError("Cannot change charges on a paid order.")
+        fields = []
+        if tip_amount is not None:
+            tip = Decimal(str(tip_amount or 0))
+            if tip < 0:
+                raise RestaurantError("tip_amount cannot be negative.")
+            order.tip_amount = tip.quantize(Decimal("0.01"))
+            fields.append("tip_amount")
+        if service_charge_amount is not None:
+            svc = Decimal(str(service_charge_amount or 0))
+            if svc < 0:
+                raise RestaurantError("service_charge_amount cannot be negative.")
+            order.service_charge_amount = svc.quantize(Decimal("0.01"))
+            fields.append("service_charge_amount")
+        if fields:
+            order.updated_by = user
+            fields.extend(["updated_at"])
+            order.save(update_fields=fields)
+            write_audit(
+                action="update",
+                module="restaurant",
+                entity=order,
+                user=user,
+                new_values={
+                    "tip_amount": float(order.tip_amount or 0),
+                    "service_charge_amount": float(order.service_charge_amount or 0),
+                },
+            )
+        return order
+
+    @staticmethod
+    def get_item_customize_payload(*, product_id, user=None, request=None) -> dict:
+        """Resolve menu item + variants + linked modifier groups for a POS product."""
+        item = (
+            apply_tenant_scope(MenuItem.active_objects(), user=user, request=request)
+            .filter(product_id=product_id, deleted_at__isnull=True)
+            .select_related("category", "kitchen_station")
+            .first()
+        )
+        if item is None:
+            return {"menu_item": None, "variants": [], "modifier_groups": []}
+        from apps.restaurant.models import MenuItemVariant, MenuItemModifierGroup
+        from apps.restaurant.serializers.restaurant_serializers import (
+            serialize_item,
+            serialize_variant,
+        )
+
+        variants = list(
+            MenuItemVariant.active_objects()
+            .filter(menu_item_id=item.id, deleted_at__isnull=True, is_available=True)
+            .order_by("sort_order", "name")
+        )
+        links = (
+            MenuItemModifierGroup.active_objects()
+            .filter(menu_item_id=item.id, deleted_at__isnull=True)
+            .select_related("modifier_group")
+            .order_by("sort_order")
+        )
+        groups = []
+        for link in links:
+            group = link.modifier_group
+            if not group or getattr(group, "deleted_at", None):
+                continue
+            mods = list(
+                Modifier.active_objects()
+                .filter(group_id=group.id, deleted_at__isnull=True, is_active=True)
+                .order_by("sort_order", "name")
+            )
+            groups.append(
+                {
+                    "id": str(group.id),
+                    "name": group.name,
+                    "min_select": getattr(group, "min_select", 0) or 0,
+                    "max_select": getattr(group, "max_select", 0) or 0,
+                    "is_required": bool(getattr(group, "is_required", False)),
+                    "modifiers": [
+                        {
+                            "id": str(m.id),
+                            "name": m.name,
+                            "price_delta": float(m.price_delta or 0),
+                        }
+                        for m in mods
+                    ],
+                }
+            )
+        return {
+            "menu_item": serialize_item(item),
+            "variants": [serialize_variant(v) for v in variants],
+            "modifier_groups": groups,
+        }
+
+    @staticmethod
+    def _apply_loyalty_on_paid(*, order: RestaurantOrder, user=None) -> None:
+        """Best-effort loyalty earn when a member exists for notes/customer hint."""
+        try:
+            from apps.restaurant.models import LoyaltyMember
+            from apps.restaurant.services.commerce_service import CommerceService
+
+            note = (order.notes or "").lower()
+            member = None
+            # Prefer explicit loyalty_member:<uuid> token in notes
+            for part in note.split():
+                if part.startswith("loyalty_member:"):
+                    mid = part.split(":", 1)[1].strip()
+                    member = (
+                        LoyaltyMember.active_objects()
+                        .filter(pk=mid, deleted_at__isnull=True)
+                        .first()
+                    )
+                    break
+            if member is None:
+                return
+            spend = Decimal(str(order.subtotal or 0)) + Decimal(
+                str(getattr(order, "service_charge_amount", 0) or 0)
+            )
+            CommerceService.earn_points(member=member, spend_amount=spend, user=user)
+        except Exception:
+            return

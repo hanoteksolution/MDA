@@ -158,7 +158,11 @@ export function DailyOpsPage() {
   }, [tab, loadMonthly]);
 
   const handleMarkPaid = async (invoiceId: string, number: string, amount: number) => {
-    if (!window.confirm(`Mark ${number} as paid for ${formatCurrency(amount)}?`)) return;
+    const ok = await appDialog.confirm(
+      `Mark ${number} as paid for ${formatCurrency(amount)}?`,
+      { title: "Mark as paid", confirmLabel: "Mark paid" }
+    );
+    if (!ok) return;
     setMarkingId(invoiceId);
     try {
       await salesApi.markInvoicePaid(invoiceId);
@@ -197,7 +201,12 @@ export function DailyOpsPage() {
   };
 
   const handleDeleteExpense = async (id: string) => {
-    if (!window.confirm("Delete this expense?")) return;
+    const ok = await appDialog.confirm("Delete this expense?", {
+      title: "Delete expense",
+      tone: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     try {
       await salesApi.deleteExpense(id);
       await loadOps();

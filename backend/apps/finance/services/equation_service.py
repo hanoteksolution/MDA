@@ -22,7 +22,8 @@ TOLERANCE = Decimal("0.01")
 
 class AccountingEquationService:
     @staticmethod
-    def evaluate(*, as_of=None, user=None, request=None, tenant_id=None) -> dict:
+    def evaluate(*, as_of=None, user=None, request=None, tenant_id=None, branch_id=None) -> dict:
+        """``branch_id``: None = consolidated, ``"unassigned"`` = lines with no branch."""
         if tenant_id is None:
             payload = stamp_tenant_id({}, user=user, request=request)
             tenant_id = payload.get("tenant_id")
@@ -72,6 +73,10 @@ class AccountingEquationService:
                 entry__tenant_id=tenant_id,
                 entry__entry_date__lte=as_of,
             )
+            if branch_id == "unassigned":
+                line_qs = line_qs.filter(branch__isnull=True)
+            elif branch_id:
+                line_qs = line_qs.filter(branch_id=branch_id)
             agg = line_qs.aggregate(d=Sum("debit"), c=Sum("credit"))
             bal = signed_balance(
                 account_class=account.account_type,

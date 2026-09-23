@@ -35,7 +35,12 @@ export function SuppliersPage() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this supplier?")) return;
+    const ok = await appDialog.confirm("Delete this supplier?", {
+      title: "Delete supplier",
+      tone: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     await suppliersApi.delete(id);
     reload();
   };

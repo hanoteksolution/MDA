@@ -32,6 +32,7 @@ import {
 } from "@/services/api/pos";
 import { useModules } from "@/hooks/useModules";
 import { pharmacyApi, type Prescription } from "@/services/api/pharmacy";
+import { restaurantApi } from "@/services/api/restaurant";
 import { PosReceiptView } from "./PosReceiptView";
 import { printOrderSlip } from "../receipt/printCartSlip";
 import type { CartLine } from "../hooks/usePosCart";
@@ -106,6 +107,8 @@ interface PosCheckoutPanelProps {
   /** Hotel folio — charge sale to guest room. */
   hotelFolioId?: string;
   hotelLabel?: string;
+  /** Show tip / service charge fields (cafeteria / restaurant). */
+  tipsEnabled?: boolean;
   onClose: () => void;
   onSaveDraft?: () => void;
   onComplete: (receipt: PosReceipt) => void;
@@ -134,6 +137,7 @@ export function PosCheckoutPanel({
   restaurantLabel,
   hotelFolioId,
   hotelLabel,
+  tipsEnabled = false,
   onClose,
   onSaveDraft,
   onComplete,
@@ -153,6 +157,20 @@ export function PosCheckoutPanel({
   const [receipt, setReceipt] = useState<PosReceipt | null>(null);
   const [prescriptionId, setPrescriptionId] = useState("");
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [tipAmount, setTipAmount] = useState("");
+  const [serviceCharge, setServiceCharge] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [promoLabel, setPromoLabel] = useState("");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+
+  const tipNum = Math.max(0, Number(tipAmount || 0));
+  const serviceNum = Math.max(0, Number(serviceCharge || 0));
+  const effectiveDiscount = Math.max(discount, promoDiscount);
+  const promoExtra = Math.max(0, promoDiscount - discount);
+  const payableTotal =
+    Math.round((grandTotal - promoExtra + tipNum + serviceNum) * 100) / 100;
 
   const rxEnabled = hasFeature("pharmacy", "prescriptions");
   const needsPrescription = useMemo(
@@ -169,6 +187,12 @@ export function PosCheckoutPanel({
     setSplitCash((grandTotal / 2).toFixed(2));
     setPaymentReference("");
     setPrescriptionId("");
+    setTipAmount("");
+    setServiceCharge("");
+    setPromoCode("");
+    setPromoDiscount(0);
+    setPromoLabel("");
+    setPromoError(null);
     setLoadingProfile(true);
     posApi
       .profile()
@@ -191,6 +215,11 @@ export function PosCheckoutPanel({
   }, [open, grandTotal, hotelFolioId]);
 
   useEffect(() => {
+    if (!open) return;
+    setAmountTendered(payableTotal.toFixed(2));
+  }, [open, payableTotal]);
+
+  useEffect(() => {
     if (!open || !needsPrescription) {
       setPrescriptions([]);
       return;
@@ -211,10 +240,10 @@ export function PosCheckoutPanel({
 
   const chargingToRoom = Boolean(hotelFolioId);
   const tenderedNum = parseFloat(amountTendered) || 0;
-  const change = paymentMethod === "cash" && !chargingToRoom ? Math.max(0, tenderedNum - grandTotal) : 0;
+  const change = paymentMethod === "cash" && !chargingToRoom ? Math.max(0, tenderedNum - payableTotal) : 0;
   const isOnAccount = paymentMethod === "on_account" && !chargingToRoom;
   const needsCustomer = isOnAccount && customerId === "walkin";
-  const canPayCash = chargingToRoom || paymentMethod !== "cash" || tenderedNum >= grandTotal;
+  const canPayCash = chargingToRoom || paymentMethod !== "cash" || tenderedNum >= payableTotal;
   const splitCashNum = Number(splitCash || 0);
   const canPaySplit =
     chargingToRoom ||
@@ -275,12 +304,12 @@ export function PosCheckoutPanel({
         customer_id: customerId === "walkin" ? undefined : customerId,
         branch_id: branchId,
         items: cart.map((i) => ({
-          product_id: i.id,
+          product_id: i.product_id || i.id,
           quantity: i.qty,
           unit_price: i.price,
         })),
         discount_pct: discountPct,
-        discount_amount: discount > 0 ? discount : undefined,
+        discount_amount: effectiveDiscount > 0 ? effectiveDiscount : undefined,
         tax_rate: taxRate,
         payment_method: chargingToRoom ? "charge_to_room" : paymentMethod,
         payments,
@@ -295,6 +324,9 @@ export function PosCheckoutPanel({
         notes: buildNotes(),
         hold_invoice_id: holdInvoiceId,
         restaurant_order_id: restaurantOrderId,
+        tip_amount: tipNum > 0 ? tipNum : undefined,
+        service_charge_amount: serviceNum > 0 ? serviceNum : undefined,
+        promotion_code: promoCode.trim() || undefined,
         hotel_folio_id: hotelFolioId,
         prescription_id: needsPrescription ? prescriptionId || undefined : undefined,
         idempotency_key:
@@ -348,11 +380,12 @@ export function PosCheckoutPanel({
         <div className="relative border-b border-border/50 px-6 py-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">Your order</p>
           <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-foreground">
-            {formatCurrency(grandTotal)}
+            {formatCurrency(payableTotal)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {itemCount} {itemCount === 1 ? "item" : "items"}
             {discount > 0 && ` · ${formatCurrency(discount)} off`}
+            {tipNum > 0 && ` · tip ${formatCurrency(tipNum)}`}
           </p>
         </div>
 
@@ -388,6 +421,8 @@ export function PosCheckoutPanel({
           <Row label="Subtotal" value={formatCurrency(subtotal)} />
           {discount > 0 && <Row label="Discount" value={`−${formatCurrency(discount)}`} accent />}
           <Row label={`VAT (${Math.round(taxRate * 100)}%)`} value={formatCurrency(tax)} />
+          {tipNum > 0 && <Row label="Tip" value={formatCurrency(tipNum)} />}
+          {serviceNum > 0 && <Row label="Service" value={formatCurrency(serviceNum)} />}
         </div>
       </aside>
 
@@ -433,7 +468,7 @@ export function PosCheckoutPanel({
               {/* Mobile total */}
               <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5 lg:hidden">
                 <p className="text-xs font-medium text-muted-foreground">{itemCount} items · {customerName}</p>
-                <p className="mt-1 text-3xl font-bold tabular-nums text-primary">{formatCurrency(grandTotal)}</p>
+                <p className="mt-1 text-3xl font-bold tabular-nums text-primary">{formatCurrency(payableTotal)}</p>
               </div>
 
               {/* Context chips */}
@@ -448,6 +483,97 @@ export function PosCheckoutPanel({
                 {hotelLabel ? <Chip label={hotelLabel} /> : null}
                 <Chip label={branchName} muted />
               </div>
+
+              {tipsEnabled ? (
+                <div className="grid grid-cols-1 gap-3 rounded-[1.25rem] border border-border/60 bg-card p-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Tip
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={tipAmount}
+                      onChange={(e) => setTipAmount(e.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Service charge
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={serviceCharge}
+                      onChange={(e) => setServiceCharge(e.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Promo code
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={promoCode}
+                        onChange={(e) => {
+                          setPromoCode(e.target.value);
+                          setPromoDiscount(0);
+                          setPromoLabel("");
+                          setPromoError(null);
+                        }}
+                        className="h-11 rounded-xl"
+                        placeholder="Optional"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-11 shrink-0 rounded-xl"
+                        disabled={!promoCode.trim() || promoChecking}
+                        onClick={() => {
+                          setPromoChecking(true);
+                          setPromoError(null);
+                          restaurantApi
+                            .resolvePromotion({
+                              code: promoCode.trim(),
+                              branch_id: branchId,
+                              amount: subtotal,
+                            })
+                            .then((res) => {
+                              setPromoDiscount(Number(res.data.discount_amount || 0));
+                              setPromoLabel(
+                                (res.data.promotion as { name?: string } | null)?.name || "Applied"
+                              );
+                            })
+                            .catch((err) => {
+                              setPromoDiscount(0);
+                              setPromoLabel("");
+                              setPromoError(
+                                err instanceof Error ? err.message : "Invalid promo code"
+                              );
+                            })
+                            .finally(() => setPromoChecking(false));
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                    {promoLabel ? (
+                      <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                        {promoLabel}: −{formatCurrency(promoDiscount)}
+                      </p>
+                    ) : null}
+                    {promoError ? (
+                      <p className="mt-1 text-xs text-destructive">{promoError}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               {needsWaiter && (
                 <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/20">
@@ -551,7 +677,7 @@ export function PosCheckoutPanel({
                             autoFocus
                           />
                         </div>
-                        {tenderedNum >= grandTotal && tenderedNum > 0 && (
+                        {tenderedNum >= payableTotal && tenderedNum > 0 && (
                           <div className="flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3 ring-1 ring-primary/10">
                             <span className="text-sm text-muted-foreground">Change</span>
                             <span className="text-lg font-bold tabular-nums text-primary">
@@ -560,7 +686,7 @@ export function PosCheckoutPanel({
                           </div>
                         )}
                         <div className="flex flex-wrap gap-2">
-                          {[grandTotal, Math.ceil(grandTotal / 5) * 5, Math.ceil(grandTotal / 10) * 10].map(
+                          {[payableTotal, Math.ceil(payableTotal / 5) * 5, Math.ceil(payableTotal / 10) * 10].map(
                             (amt, i) => (
                               <button
                                 key={i}
@@ -594,7 +720,7 @@ export function PosCheckoutPanel({
                         <div className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
                           <span className="text-sm text-muted-foreground">Mobile portion</span>
                           <span className="text-lg font-bold tabular-nums">
-                            {formatCurrency(Math.max(0, Number((grandTotal - Number(splitCash || 0)).toFixed(2))))}
+                            {formatCurrency(Math.max(0, Number((payableTotal - Number(splitCash || 0)).toFixed(2))))}
                           </span>
                         </div>
                         <Input
@@ -678,7 +804,7 @@ export function PosCheckoutPanel({
               {/* Desktop total reminder */}
               <div className="hidden items-center justify-between rounded-2xl border border-border/50 bg-muted/30 px-5 py-4 lg:flex">
                 <span className="text-sm text-muted-foreground">Amount due</span>
-                <span className="text-2xl font-bold tabular-nums">{formatCurrency(grandTotal)}</span>
+                <span className="text-2xl font-bold tabular-nums">{formatCurrency(payableTotal)}</span>
               </div>
 
               {error && (
@@ -752,7 +878,7 @@ export function PosCheckoutPanel({
                   <>
                     <Lock className="h-4 w-4" />
                     {isOnAccount ? "Record sale" : "Pay"}
-                    <span className="tabular-nums">{formatCurrency(grandTotal)}</span>
+                    <span className="tabular-nums">{formatCurrency(payableTotal)}</span>
                   </>
                 )}
               </Button>

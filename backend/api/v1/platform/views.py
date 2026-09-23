@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.audit.services.audit_write import write_audit
+
 from apps.platform.models import (
     Module,
     SubscriptionPayment,
@@ -15,10 +17,10 @@ from apps.platform.models import (
 )
 from apps.platform.services.domain_utils import (
     RESERVED_TENANT_SLUGS,
+    check_subdomain_availability,
     get_tenant_base_domain,
-    validate_tenant_slug,
 )
-from apps.platform.services.platform_service import PlatformService
+from apps.platform.services.platform_service import PlatformService, SubdomainTakenError
 from apps.platform.services.module_feature_service import (
     ModuleFeatureError,
     ModuleFeatureService,
@@ -65,14 +67,8 @@ class PlatformTenantListCreateView(APIView):
         if not _platform_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         tenants = PlatformService.list_tenants_for_user(request.user)
-        data = []
-        for tenant in tenants:
-            overview = PlatformService.tenant_overview(tenant, period=request.query_params.get("period", "month"))
-            data.append({
-                **overview["tenant"],
-                "subscription": overview["subscription"],
-                "kpis": overview["kpis"],
-            })
+        period = request.query_params.get("period", "month")
+        data = [PlatformService.tenant_list_row(tenant, period=period) for tenant in tenants]
         return success_response(data=data)
 
     def post(self, request):
@@ -89,6 +85,13 @@ class PlatformTenantListCreateView(APIView):
             )
         try:
             tenant, owner_user = PlatformService.create_shop(data=request.data, user=request.user)
+        except SubdomainTakenError as exc:
+            return error_response(
+                message=str(exc),
+                code=SubdomainTakenError.code,
+                status=status.HTTP_409_CONFLICT,
+                details={"suggestions": exc.suggestions},
+            )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         overview = PlatformService.tenant_overview(tenant)
@@ -497,26 +500,7 @@ class PlatformSlugCheckView(APIView):
         if not _platform_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         raw = (request.query_params.get("slug") or request.query_params.get("subdomain") or "").strip()
-        try:
-            slug = validate_tenant_slug(raw)
-        except ValueError as exc:
-            return success_response(
-                data={
-                    "slug": raw,
-                    "available": False,
-                    "reason": str(exc),
-                    "hostname": None,
-                }
-            )
-        taken = Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists()
-        return success_response(
-            data={
-                "slug": slug,
-                "available": not taken,
-                "reason": "already taken" if taken else "",
-                "hostname": f"{slug}.{get_tenant_base_domain()}",
-            }
-        )
+        return success_response(data=check_subdomain_availability(raw))
 
 
 class PlatformDnsWildcardCheckView(APIView):
@@ -698,11 +682,16 @@ class PlatformSubscriptionRenewView(APIView):
         if not _subscriptions_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
         sub = TenantSubscription.objects.get(pk=pk)
+        before = {"status": sub.status, "expires_at": sub.expires_at.isoformat() if sub.expires_at else None}
         PlatformService.renew_subscription(
             subscription=sub,
             user=request.user,
             notes=request.data.get("notes", ""),
         )
+        # Manual renewal is an exceptional platform recovery (normal checkout is verified payment).
+        write_audit(action="update", module="platform", entity=sub, user=request.user, request=request, old_values=before,
+                    new_values={"event": "subscription_manual_renewal", "reason": (request.data.get("notes") or "")[:300],
+                                "expires_at": sub.expires_at.isoformat() if sub.expires_at else None})
         return success_response(
             data=PlatformService.subscription_payload(sub),
             message="Subscription renewed.",
@@ -836,7 +825,27 @@ class PlatformSubscriptionPaymentConfigView(APIView):
     def put(self, request):
         if not _subscriptions_user(request.user):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        cfg = PlatformService.save_subscription_payment_config(data=request.data, user=request.user)
+        data = request.data
+        if ("payment_provider_id" in data or "currency" in data) and not _platform_global(request.user):
+            # Choosing the collecting provider is payment infrastructure: Super Admin only.
+            return error_response(message="Only a platform administrator can change the billing provider.", status=status.HTTP_403_FORBIDDEN)
+        if data.get("payment_provider_id"):
+            from apps.integrations.models import PaymentProviderConfig
+            from api.v1.integrations.platform_access import parse_uuid
+
+            from apps.integrations.billing_guard import billing_provider_problem
+
+            pk = parse_uuid(data["payment_provider_id"])
+            provider = PaymentProviderConfig.active_objects().filter(pk=pk, is_active=True).first() if pk else None
+            if provider is None:
+                return error_response(message="Active payment provider not found.", status=status.HTTP_400_BAD_REQUEST)
+            problem = billing_provider_problem(provider)
+            if problem:
+                return error_response(message=problem, status=status.HTTP_400_BAD_REQUEST)
+        cfg = PlatformService.save_subscription_payment_config(data=data, user=request.user)
+        write_audit(action="update", module="platform", entity_type="SubscriptionPaymentConfig", entity_id=None,
+                    user=request.user, request=request,
+                    new_values={k: data[k] for k in ("payment_provider_id", "currency", "auto_renew_enabled") if k in data})
         return success_response(data=cfg, message="Subscription payment settings saved.")
 
 
@@ -946,13 +955,23 @@ class PlatformSubscriptionConfirmPaymentView(APIView):
         ).first()
         if not payment:
             return error_response(message="Payment not found.", status=status.HTTP_404_NOT_FOUND)
-        payment = PlatformService.confirm_subscription_payment(
-            payment=payment,
-            external_transaction_id=request.data.get("external_transaction_id", ""),
-            payer_phone=request.data.get("payer_phone", ""),
-            notes=request.data.get("notes", "Manually confirmed by admin"),
-            user=request.user,
+        from apps.platform.services.subscription_billing_service import (
+            SubscriptionBillingError,
+            SubscriptionBillingService,
         )
+
+        # Exceptional recovery for legacy (non-checkout) requests only; reason required, audited.
+        try:
+            payment = SubscriptionBillingService.manual_confirm(
+                payment=payment,
+                reason=request.data.get("reason") or request.data.get("notes") or "",
+                user=request.user,
+                request=request,
+                external_transaction_id=request.data.get("external_transaction_id", ""),
+                payer_phone=request.data.get("payer_phone", ""),
+            )
+        except SubscriptionBillingError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data={
                 "payment": PlatformService.serialize_payment(payment),
@@ -978,11 +997,10 @@ class PlatformWaafiPaymentCallbackView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        try:
-            payment = PlatformService.process_waafi_callback(data=request.data)
-        except ValueError as exc:
-            return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
-        return success_response(
-            data=PlatformService.serialize_payment(payment),
-            message="Payment confirmed.",
+        # Retired: this endpoint was unauthenticated and unsigned, so anyone could renew any
+        # subscription. Subscription payments are now confirmed only by the verified payment
+        # framework webhook (/api/v1/integrations/payments/webhooks/<provider_id>/).
+        return error_response(
+            message="This callback is retired. Payments are confirmed only through the verified provider webhook.",
+            status=status.HTTP_410_GONE,
         )

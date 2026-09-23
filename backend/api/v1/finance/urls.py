@@ -33,6 +33,7 @@ from api.v1.finance.views import (
     ReconciliationUnmatchView,
     SupplierPaymentView,
     TaxReportView,
+    BranchTrialBalanceView,
     TrialBalanceReportView,
 )
 
@@ -111,6 +112,11 @@ urlpatterns = [
         name="finance-reconciliation-complete",
     ),
     path("reports/trial-balance/", TrialBalanceReportView.as_view(), name="finance-trial-balance"),
+    path(
+        "reports/trial-balance/by-branch/",
+        BranchTrialBalanceView.as_view(),
+        name="finance-trial-balance-by-branch",
+    ),
     path("reports/profit-loss/", ProfitLossReportView.as_view(), name="finance-profit-loss"),
     path("reports/balance-sheet/", BalanceSheetReportView.as_view(), name="finance-balance-sheet"),
     path("reports/cash-flow/", CashFlowReportView.as_view(), name="finance-cash-flow"),

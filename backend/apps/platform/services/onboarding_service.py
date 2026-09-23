@@ -11,19 +11,27 @@ from django.db import transaction
 from apps.authentication.bootstrap import bootstrap_roles_and_permissions
 from apps.platform.models import SubscriptionPlan, Tenant
 from apps.platform.services.domain_utils import (
+    check_subdomain_availability,
     get_tenant_base_domain,
     validate_tenant_slug,
 )
 from apps.platform.services.entitlement_service import EntitlementService
-from apps.platform.services.platform_service import PlatformService
+from apps.platform.services.platform_service import PlatformService, SubdomainTakenError
 from apps.settings_app.models import Branch
 
 
 class OnboardingError(Exception):
-    def __init__(self, message: str, *, code: str = "ONBOARDING_ERROR"):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "ONBOARDING_ERROR",
+        suggestions: list | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.code = code
+        self.suggestions = suggestions or []
 
 
 class OnboardingService:
@@ -66,22 +74,7 @@ class OnboardingService:
 
     @staticmethod
     def check_slug(raw: str) -> dict:
-        try:
-            slug = validate_tenant_slug(raw)
-        except ValueError as exc:
-            return {
-                "slug": (raw or "").strip().lower(),
-                "available": False,
-                "reason": str(exc),
-                "hostname": None,
-            }
-        taken = Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists()
-        return {
-            "slug": slug,
-            "available": not taken,
-            "reason": "already taken" if taken else "",
-            "hostname": f"{slug}.{get_tenant_base_domain()}",
-        }
+        return check_subdomain_availability(raw)
 
     @staticmethod
     def _validate_payload(data: dict) -> dict:
@@ -106,7 +99,9 @@ class OnboardingService:
         try:
             slug = validate_tenant_slug(slug_raw)
         except ValueError as exc:
-            raise OnboardingError(str(exc), code="SLUG_RESERVED") from exc
+            reason = getattr(exc, "reason", "invalid")
+            code = "SUBDOMAIN_RESERVED" if reason == "reserved" else "SUBDOMAIN_INVALID"
+            raise OnboardingError(str(exc), code=code) from exc
 
         plan_code = (data.get("plan_code") or "starter").strip().lower()
         PlatformService.ensure_default_plans()
@@ -217,8 +212,8 @@ class OnboardingService:
     def provision(*, data: dict) -> dict:
         """Create tenant + first branch + owner. Idempotent on slug + matching owner password."""
         payload = OnboardingService._validate_payload(data)
-        existing = Tenant.objects.filter(slug=payload["slug"], deleted_at__isnull=True).first()
-        if existing:
+        existing = Tenant.objects.filter(slug=payload["slug"]).first()
+        if existing and existing.deleted_at is None:
             replay = OnboardingService._replay_existing(
                 tenant=existing,
                 username=payload["owner"]["username"],
@@ -227,12 +222,20 @@ class OnboardingService:
             if replay:
                 return replay
             raise OnboardingError(
-                f"Subdomain '{payload['slug']}' is already taken.",
-                code="SLUG_TAKEN",
+                "This workspace URL was just taken. Please choose another.",
+                code="SUBDOMAIN_TAKEN",
+                suggestions=OnboardingService.check_slug(payload["slug"]).get("suggestions") or [],
             )
 
         bootstrap_roles_and_permissions()
-        tenant, owner = PlatformService.create_shop(data=payload, user=None)
+        try:
+            tenant, owner = PlatformService.create_shop(data=payload, user=None)
+        except SubdomainTakenError as exc:
+            raise OnboardingError(
+                str(exc),
+                code=SubdomainTakenError.code,
+                suggestions=exc.suggestions,
+            ) from exc
         if owner is None:
             raise OnboardingError("Owner account was not created.", code="PROVISION_FAILED")
         return OnboardingService._result_payload(tenant=tenant, owner=owner, idempotent_replay=False)

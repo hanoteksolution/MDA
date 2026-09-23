@@ -3,13 +3,16 @@ import type {
   ApiListResponse,
   AttributeDefinition,
   Brand,
+  BranchStockDashboard,
   Category,
   InventoryAdjustment,
   InventoryItem,
   InventorySummary,
   PaginatedResponse,
   Product,
+  ProductAvailability,
   ProductFormData,
+  StockMovementRecord,
   Unit,
   Warehouse,
 } from "@/types/models/catalog";
@@ -154,6 +157,18 @@ export const inventoryApi = {
     apiRequest<ApiResponse<Record<string, unknown>>>(`/inventory/transfers/${id}/cancel/`, {
       method: "POST",
     }),
+
+  // Branch Phase 3: branch-scoped dashboard, cross-branch availability, ledger history.
+  branchDashboard: () =>
+    apiRequest<ApiResponse<BranchStockDashboard>>("/inventory/branch-dashboard/"),
+
+  productAvailability: (productId: string) =>
+    apiRequest<ApiResponse<ProductAvailability>>(`/inventory/products/${productId}/availability/`),
+
+  productMovements: (productId: string, params: Record<string, string | number | undefined> = {}) =>
+    apiRequest<ApiListResponse<StockMovementRecord>>(
+      `/inventory/products/${productId}/movements/${qs(params)}`
+    ),
 };
 
 export type { PaginatedResponse };

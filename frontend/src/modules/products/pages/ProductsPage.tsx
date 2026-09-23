@@ -75,7 +75,12 @@ export function ProductsPage({ profile = "default" }: { profile?: ProductPagePro
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this product?")) return;
+    const ok = await appDialog.confirm("Delete this product?", {
+      title: "Delete product",
+      tone: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     await productsApi.delete(id);
     reload();
   };

@@ -67,6 +67,7 @@ class JournalService:
                 "cost_center_code": (
                     line.cost_center.code if getattr(line, "cost_center_id", None) and line.cost_center_id else ""
                 ),
+                "branch_id": str(line.branch_id) if line.branch_id else None,
                 "business_unit_id": str(line.business_unit_id) if line.business_unit_id else None,
                 "business_unit_code": (
                     line.business_unit.code
@@ -113,6 +114,53 @@ class JournalService:
             raise JournalError(str(exc), code=exc.code, details=exc.details) from exc
 
     @staticmethod
+    def _line_branch_id(row, data):
+        """A line's branch dimension: its own, else the entry's, else Unassigned (None)."""
+        return row.get("branch_id") or data.get("branch_id") or None
+
+    @staticmethod
+    def _validate_branch_dimension(*, lines_data, data, tenant_id) -> None:
+        """Branch is a dimension: every id must be a real branch of this tenant, and when
+        an entry spans several branches (or a branch and Unassigned) each must balance on
+        its own — otherwise per-branch trial balances could not be balanced."""
+        from apps.settings_app.models import Branch
+
+        buckets: dict = {}
+        for row in lines_data:
+            key = JournalService._line_branch_id(row, data)
+            key = str(key) if key else None
+            debit, credit = buckets.get(key, (Decimal("0"), Decimal("0")))
+            buckets[key] = (
+                debit + Decimal(str(row.get("debit") or 0)),
+                credit + Decimal(str(row.get("credit") or 0)),
+            )
+        ids = {k for k in buckets if k}
+        if data.get("branch_id"):
+            ids.add(str(data["branch_id"]))
+        if ids:
+            found = set(
+                str(pk)
+                for pk in Branch.objects.filter(pk__in=ids, tenant_id=tenant_id).values_list(
+                    "pk", flat=True
+                )
+            )
+            missing = ids - found
+            if missing:
+                raise JournalError(
+                    "Journal references a branch that does not belong to this tenant.",
+                    code="JOURNAL_BRANCH_INVALID",
+                    details={"branch_ids": sorted(missing)},
+                )
+        if len(buckets) > 1:
+            bad = {k or "unassigned": str(d - c) for k, (d, c) in buckets.items() if d != c}
+            if bad:
+                raise JournalError(
+                    "Each branch on a multi-branch journal must balance on its own.",
+                    code="JOURNAL_BRANCH_IMBALANCE",
+                    details={"differences": bad},
+                )
+
+    @staticmethod
     @transaction.atomic
     def create_entry(*, data, user=None, request=None) -> JournalEntry:
         lines_data = data.get("lines") or []
@@ -125,6 +173,9 @@ class JournalService:
         if not tenant_id:
             raise JournalError("Tenant could not be resolved.", code="JOURNAL_NO_TENANT")
 
+        JournalService._validate_branch_dimension(
+            lines_data=lines_data, data=data, tenant_id=tenant_id
+        )
         ChartService.ensure_default_chart(tenant_id=tenant_id, user=user, request=request)
 
         entry_date = data.get("entry_date") or timezone.localdate()
@@ -250,6 +301,7 @@ class JournalService:
                     memo=row.get("memo") or "",
                     cost_center=cost_center,
                     business_unit=business_unit,
+                    branch_id=JournalService._line_branch_id(row, data),
                     created_by=user,
                 )
 

@@ -154,13 +154,11 @@ export function WaiterPerformancePage() {
 
   const handleMarkPaid = async (sale: PosWaiterSale) => {
     if (sale.status === "paid") return;
-    if (
-      !window.confirm(
-        `Mark ${sale.invoice_number} as paid for ${formatCurrency(sale.total_amount)}?`
-      )
-    ) {
-      return;
-    }
+    const ok = await appDialog.confirm(
+      `Mark ${sale.invoice_number} as paid for ${formatCurrency(sale.total_amount)}?`,
+      { title: "Mark as paid", confirmLabel: "Mark paid" }
+    );
+    if (!ok) return;
     setMarkingId(sale.invoice_id);
     try {
       await salesApi.markInvoicePaid(sale.invoice_id);

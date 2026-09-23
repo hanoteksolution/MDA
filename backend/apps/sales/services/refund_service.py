@@ -11,6 +11,7 @@ from apps.inventory.services.inventory_service import InventoryService
 from apps.products.models import Product
 from apps.sales.models import Invoice, InvoiceItem, SaleRefund, SaleRefundItem
 from apps.sales.services.cashier_session_service import CashierSessionService
+from apps.sales.services.sales_service import sale_location_id, sale_warehouse
 from apps.sales.services.sequence_service import DocumentSequenceService
 from apps.sales.models import DocumentSequence
 from core.tenancy import apply_tenant_scope, stamp_tenant_id
@@ -73,6 +74,8 @@ class RefundService:
             .prefetch_related("items__product")
             .get(pk=invoice_id)
         )
+        if hasattr(invoice, "service_billing"):
+            raise RefundError("Use the shared billing refund workflow for service invoices.")
         if invoice.status != Invoice.STATUS_PAID:
             raise RefundError("Only paid invoices can be refunded.")
         if not items:
@@ -152,7 +155,7 @@ class RefundService:
                 created_by=user,
             )
 
-        warehouse = InventoryService.resolve_warehouse_for_branch(branch=invoice.branch)
+        warehouse = sale_warehouse(invoice)
         if warehouse:
             restore = {line["product_id"]: line["quantity"] for line in parsed_lines}
             InventoryService.apply_invoice_quantity_deltas(
@@ -161,6 +164,7 @@ class RefundService:
                 reference_id=refund.id,
                 user=user,
                 notes=f"Refund {refund.refund_number} for {invoice.invoice_number}",
+                location_id=sale_location_id(invoice),
             )
 
         invoice.amount_refunded = _money(invoice.amount_refunded + total)

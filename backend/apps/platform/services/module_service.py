@@ -157,6 +157,16 @@ MODULE_SEEDS = [
         "/travel",
         {"supports_mobile": True},
     ),
+    (
+        "school",
+        "School Management",
+        "industry",
+        "Students, academics, attendance, exams, and school fees",
+        170,
+        ["sales"],
+        "/school",
+        {"supports_mobile": True},
+    ),
 ]
 
 # API path prefix → required module code (first match wins).
@@ -169,6 +179,7 @@ MODULE_PATH_PREFIXES: list[tuple[str, str]] = [
     ("/api/v1/property/", "property_management"),
     ("/api/v1/projects/", "project_management"),
     ("/api/v1/travel/", "travel_agency"),
+    ("/api/v1/school/", "school"),
     ("/api/v1/housing/", "housing_rental"),
     ("/api/v1/office/", "office_rental"),
     ("/api/v1/pos/", "pos"),

@@ -21,6 +21,11 @@ export interface User {
   permissions: string[];
   enabled_modules?: string[];
   module_features?: Record<string, Record<string, boolean>>;
+  tenant_id?: string | null;
+  tenant_name?: string | null;
+  shop_slug?: string | null;
+  business_type_code?: string | null;
+  business_type_name?: string | null;
   is_platform_admin?: boolean;
   is_superuser?: boolean;
   is_super_admin?: boolean;

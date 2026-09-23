@@ -33,6 +33,8 @@ class UserSerializer(serializers.ModelSerializer):
     enabled_modules = serializers.SerializerMethodField()
     module_features = serializers.SerializerMethodField()
     is_super_admin = serializers.SerializerMethodField()
+    business_type_code = serializers.SerializerMethodField()
+    business_type_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -45,6 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
             "permission_ids", "role_permission_ids", "revoke_ids",
             "shop_slug", "managed_shop_group", "enabled_modules",
             "module_features",
+            "business_type_code", "business_type_name",
             "last_login", "date_joined",
         ]
         read_only_fields = ["id", "last_login", "date_joined", "is_superuser", "is_super_admin"]
@@ -127,6 +130,27 @@ class UserSerializer(serializers.ModelSerializer):
         from apps.platform.services.module_feature_service import ModuleFeatureService
 
         return ModuleFeatureService.features_by_module(user=obj)
+
+    def _tenant(self, obj):
+        if getattr(obj, "tenant_id", None) and getattr(obj, "tenant", None):
+            return obj.tenant
+        if obj.branch_id and getattr(obj.branch, "company", None) and obj.branch.company.tenant_id:
+            return obj.branch.company.tenant
+        return None
+
+    def get_business_type_code(self, obj):
+        tenant = self._tenant(obj)
+        if not tenant:
+            return None
+        bt = getattr(tenant, "business_type", None)
+        return getattr(bt, "code", None) if bt else None
+
+    def get_business_type_name(self, obj):
+        tenant = self._tenant(obj)
+        if not tenant:
+            return None
+        bt = getattr(tenant, "business_type", None)
+        return getattr(bt, "name", None) if bt else None
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

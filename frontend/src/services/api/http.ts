@@ -1,4 +1,5 @@
 import { getApiBase } from "@/config/api";
+import { branchHeaders } from "@/services/api/branchContext";
 import { isTauri } from "@/utils/platform";
 
 function apiUrl(endpoint: string): string {
@@ -13,14 +14,66 @@ const PUBLIC_ENDPOINTS = [
   "/auth/desktop-provision/",
   "/setup/",
   "/onboarding/",
+  "/public/",
   "/sync/config/",
   "/platform/resolve-host/",
   "/health/",
 ];
-const AUTH_ROUTES = ["/login", "/forgot-password", "/setup", "/connection", "/onboard"];
+const AUTH_ROUTES = ["/login", "/forgot-password", "/setup", "/connection", "/onboard", "/register"];
 
 let logoutInProgress = false;
 let refreshPromise: Promise<string | null> | null = null;
+
+export class ApiClientError extends Error {
+  status: number;
+  code?: string;
+  fieldErrors: Record<string, string[]>;
+  details: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    opts?: {
+      status?: number;
+      code?: string;
+      fieldErrors?: Record<string, string[]>;
+      details?: Record<string, unknown>;
+    }
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+    this.status = opts?.status ?? 400;
+    this.code = opts?.code;
+    this.fieldErrors = opts?.fieldErrors || {};
+    this.details = opts?.details || {};
+  }
+}
+
+function extractFieldErrors(data: Record<string, unknown>): Record<string, string[]> {
+  const fromErrors = data.errors;
+  const fromDetails =
+    data.details && typeof data.details === "object"
+      ? (data.details as Record<string, unknown>).field_errors
+      : undefined;
+  const raw =
+    (fromDetails && typeof fromDetails === "object" ? fromDetails : null) ||
+    (fromErrors && typeof fromErrors === "object" ? fromErrors : null);
+  if (!raw || Array.isArray(raw)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (Array.isArray(value)) out[key] = value.map(String);
+    else if (typeof value === "string") out[key] = [value];
+  }
+  return out;
+}
+
+function formatApiErrorMessage(
+  data: { message?: string; code?: string },
+  fieldErrors: Record<string, string[]>
+): string {
+  const firstField = Object.values(fieldErrors)[0]?.[0];
+  if (firstField) return firstField;
+  return data.message || "Request failed";
+}
 
 /** Decode JWT exp claim; returns true if missing or expired. */
 export function isJwtExpired(token: string, bufferSeconds = 30): boolean {
@@ -146,6 +199,8 @@ export async function apiRequest<T>(
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Branch hint only — the backend re-checks it against the caller's access.
+        ...(isPublic ? {} : branchHeaders()),
         ...options.headers,
       },
     });
@@ -155,7 +210,12 @@ export async function apiRequest<T>(
     );
   }
 
-  let data: { message?: string; code?: string } & T;
+  let data: {
+    message?: string;
+    code?: string;
+    errors?: Record<string, unknown>;
+    details?: { field_errors?: Record<string, unknown> };
+  } & T;
   try {
     data = await response.json();
   } catch {
@@ -194,7 +254,17 @@ export async function apiRequest<T>(
         data.message || "Account temporarily locked due to too many failed login attempts."
       );
     }
-    throw new Error(data.message || "Request failed");
+    const fieldErrors = extractFieldErrors(data as Record<string, unknown>);
+    const details =
+      data.details && typeof data.details === "object" && !Array.isArray(data.details)
+        ? (data.details as Record<string, unknown>)
+        : {};
+    throw new ApiClientError(formatApiErrorMessage(data, fieldErrors), {
+      status: response.status,
+      code: data.code,
+      fieldErrors,
+      details,
+    });
   }
 
   return data;

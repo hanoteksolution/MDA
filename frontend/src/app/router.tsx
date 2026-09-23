@@ -7,8 +7,11 @@ import { useAuthStore } from "@/store/authStore";
 import { postLoginPath } from "@/navigation/postLogin";
 import { ModuleHubPage } from "@/pages/modules/ModuleHubPage";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { IntegrationsPage } from "@/modules/settings/integrations/IntegrationsPage";
+import { BillingPage } from "@/modules/billing/BillingPage";
 import { SetupPage } from "@/pages/auth/SetupPage";
 import { OnboardingPage } from "@/pages/auth/OnboardingPage";
+import { LandingPage } from "@/pages/public/LandingPage";
 import { ConnectionPage } from "@/pages/auth/ConnectionPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
@@ -41,6 +44,7 @@ import {
   StaffPerformancePage,
   PlatformShopsPage,
   PlatformSubscriptionsPage,
+  PlatformIntegrationsPage,
   PlatformTenantsPage,
   PlatformTenantDetailPage,
   PlatformShopDetailPage,
@@ -89,7 +93,12 @@ function HomeRedirect() {
       </div>
     );
   }
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    const host = window.location.hostname.toLowerCase();
+    const base = (import.meta.env.VITE_TENANT_BASE_DOMAIN || "erp.safaritechno.com").toLowerCase();
+    const isPlatformHost = host === base || host === "localhost" || host === "127.0.0.1";
+    return isPlatformHost ? <LandingPage /> : <Navigate to="/login" replace />;
+  }
   return <Navigate to={postLoginPath(user)} replace />;
 }
 
@@ -100,6 +109,7 @@ export function AppRouter() {
         <Route element={<AuthLayout />}>
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/onboard" element={<OnboardingPage />} />
+          <Route path="/register" element={<OnboardingPage />} />
           <Route path="/connection" element={<ConnectionPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -477,6 +487,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/platform/integrations"
+            element={
+              <PermissionGuard permission="platform.view" elevatedOnly>
+                <PlatformIntegrationsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
             path="/platform/subscriptions"
             element={
               <PermissionGuard permission="subscriptions.manage">
@@ -531,6 +549,22 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="settings.view">
                 <SettingsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <PermissionGuard permission="billing.subscription.view">
+                <BillingPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/settings/integrations"
+            element={
+              <PermissionGuard permission={["integrations.view", "integrations.payments.view", "integrations.sms.billing.view"]}>
+                <IntegrationsPage />
               </PermissionGuard>
             }
           />

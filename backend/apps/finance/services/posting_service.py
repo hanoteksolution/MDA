@@ -183,6 +183,7 @@ class AccountingPostingService:
             "travel_refund": JournalEntry.SOURCE_REFUND,
             "purchase_receive": JournalEntry.SOURCE_PURCHASE,
             "futsal_ledger": JournalEntry.SOURCE_FUTSAL,
+            "branch_transfer": JournalEntry.SOURCE_TRANSFER,
         }
         return mapping.get(source_type, JournalEntry.SOURCE_MANUAL)
 
@@ -192,6 +193,10 @@ class AccountingPostingService:
             PostingRuleError,
             PostingRuleService,
         )
+
+        if event_type in event_types.SCHOOL_BILLING_EVENTS:
+            # Only the shared billing adapter constructs these account/dimension lines.
+            return payload['lines'], payload['description'], payload['entry_date']
 
         # Prefer configurable PostingRule when seeded for this event type
         try:
@@ -230,6 +235,10 @@ class AccountingPostingService:
         if event_type == event_types.PURCHASE_RECEIVED:
             return AccountingPostingService._lines_for_purchase_received(
                 tenant_id=tenant_id, payload=payload, user=user
+            )
+        if event_type in (event_types.TRANSFER_DISPATCHED, event_types.TRANSFER_RECEIVED):
+            return AccountingPostingService._lines_for_branch_transfer(
+                event_type=event_type, tenant_id=tenant_id, payload=payload, user=user
             )
         if event_type == event_types.GYM_MEMBERSHIP_SOLD:
             gym_payload = {
@@ -640,6 +649,79 @@ class AccountingPostingService:
         return lines, f"Purchase received: {order_number}", entry_date
 
     @staticmethod
+    def _lines_for_branch_transfer(*, event_type, tenant_id, payload, user):
+        """Internal transfer — balance-sheet only (D8): no revenue, no COGS, no P&L.
+
+        Dispatch  : Dr Inventory in Transit / Cr Inventory        (both on the source branch)
+        Receipt   : Dr Inventory / Cr Inventory in Transit        (both on the destination)
+        Every entry balances inside its own branch, and the in-transit account nets to
+        zero company-wide once everything dispatched has been received.
+        """
+        total = _money(payload.get("total") or 0)
+        if total <= 0:
+            raise PostingError("Transfer value must be positive.")
+        inventory = MappingService.resolve(
+            key="DEFAULT_INVENTORY", tenant_id=tenant_id, user=user
+        )
+        transit = MappingService.resolve(
+            key="DEFAULT_INVENTORY_IN_TRANSIT", tenant_id=tenant_id, user=user
+        )
+        branch_id = payload.get("branch_id")
+        dispatched = event_type == event_types.TRANSFER_DISPATCHED
+        first, second = (transit, inventory) if dispatched else (inventory, transit)
+        lines = [
+            {
+                "account_id": str(first.id),
+                "debit": total,
+                "credit": Decimal("0"),
+                "memo": "Transfer out to transit" if dispatched else "Transfer received",
+                "branch_id": branch_id,
+            },
+            {
+                "account_id": str(second.id),
+                "debit": Decimal("0"),
+                "credit": total,
+                "memo": "Transfer out to transit" if dispatched else "Transfer received",
+                "branch_id": branch_id,
+            },
+        ]
+        entry_date = payload.get("entry_date") or timezone.localdate()
+        verb = "dispatched" if dispatched else "received"
+        return lines, f"Branch transfer {verb}: {payload.get('reference') or ''}".strip(), entry_date
+
+    @staticmethod
+    def post_branch_transfer(
+        *, transfer, event_type, total, branch, stage_key, user=None
+    ) -> JournalEntry | None:
+        """Post the balance-sheet entry for one stage of an inter-branch transfer."""
+        from apps.finance.services.cutover_service import AccountingCutoverService
+
+        tenant_id = transfer.tenant_id or getattr(branch, "tenant_id", None)
+        if not tenant_id or not AccountingCutoverService.is_posting_enabled(tenant_id=tenant_id):
+            return None
+        total = _money(total)
+        if total <= 0:
+            return None
+        return AccountingPostingService.post(
+            event_type=event_type,
+            tenant_id=tenant_id,
+            source_module="inventory",
+            source_type="branch_transfer",
+            source_id=transfer.id,
+            source_reference=transfer.request_number,
+            payload={
+                "total": str(total),
+                "branch_id": str(branch.pk),
+                "reference": transfer.request_number,
+                "entry_date": timezone.localdate().isoformat(),
+            },
+            idempotency_key=f"{event_type}:inventory:{transfer.id}:{stage_key}",
+            occurred_at=timezone.now(),
+            user=user,
+            branch_id=branch.pk,
+        )
+
+    @staticmethod
     def _lines_for_futsal(*, event_type, tenant_id, payload, user):
         amount = _money(payload.get("amount") or 0)
         if amount <= 0:
@@ -932,6 +1014,8 @@ class AccountingPostingService:
         from apps.finance.services.cutover_service import AccountingCutoverService
         from apps.sales.models import Invoice
 
+        if hasattr(invoice, "service_billing"):
+            return invoice.service_billing.journal
         if invoice.status not in (Invoice.STATUS_PAID, Invoice.STATUS_SENT):
             return None
 
@@ -1334,4 +1418,106 @@ class AccountingPostingService:
             occurred_at=timezone.now(),
             user=user,
             branch_id=entry.branch_id,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def post_cafeteria_waste(*, waste, user=None) -> JournalEntry | None:
+        """DR Waste expense / CR Inventory for approved cafeteria waste."""
+        from apps.finance.services.cutover_service import AccountingCutoverService
+
+        tenant_id = waste.tenant_id
+        if not tenant_id or not AccountingCutoverService.is_posting_enabled(tenant_id=tenant_id):
+            return None
+        amount = _money(waste.total_cost)
+        if amount <= 0:
+            return None
+        event_type = event_types.CAFETERIA_WASTE_POSTED
+        return AccountingPostingService.post(
+            event_type=event_type,
+            tenant_id=tenant_id,
+            source_module="restaurant",
+            source_type="waste_record",
+            source_id=waste.id,
+            source_reference=(waste.reason or waste.waste_type or "")[:100],
+            payload={
+                "total_cost": str(amount),
+                "amount": str(amount),
+                "waste_type": waste.waste_type,
+                "reason": waste.reason or waste.notes or "",
+                "payment_method": "cash",
+                "entry_date": waste.waste_date.isoformat()
+                if hasattr(waste.waste_date, "isoformat")
+                else str(waste.waste_date),
+            },
+            idempotency_key=f"{event_type}:restaurant:waste:{waste.id}",
+            occurred_at=timezone.now(),
+            user=user,
+            branch_id=waste.branch_id,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def post_cafeteria_tip(
+        *, order, amount, payment_method="cash", user=None
+    ) -> JournalEntry | None:
+        """DR Cash/clearing / CR Tip payable for tip liability mode."""
+        from apps.finance.services.cutover_service import AccountingCutoverService
+
+        tenant_id = order.tenant_id
+        if not tenant_id or not AccountingCutoverService.is_posting_enabled(tenant_id=tenant_id):
+            return None
+        tip = _money(amount)
+        if tip <= 0:
+            return None
+        event_type = event_types.CAFETERIA_TIP_RECORDED
+        return AccountingPostingService.post(
+            event_type=event_type,
+            tenant_id=tenant_id,
+            source_module="restaurant",
+            source_type="order_tip",
+            source_id=order.id,
+            source_reference=order.order_number,
+            payload={
+                "amount": str(tip),
+                "order_number": order.order_number,
+                "payment_method": payment_method or "cash",
+            },
+            idempotency_key=f"{event_type}:restaurant:order_tip:{order.id}",
+            occurred_at=timezone.now(),
+            user=user,
+            branch_id=order.branch_id,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def post_cafeteria_service_charge(
+        *, order, amount, payment_method="cash", user=None
+    ) -> JournalEntry | None:
+        """DR Cash/clearing / CR Service charge revenue."""
+        from apps.finance.services.cutover_service import AccountingCutoverService
+
+        tenant_id = order.tenant_id
+        if not tenant_id or not AccountingCutoverService.is_posting_enabled(tenant_id=tenant_id):
+            return None
+        charge = _money(amount)
+        if charge <= 0:
+            return None
+        event_type = event_types.CAFETERIA_SERVICE_CHARGE
+        return AccountingPostingService.post(
+            event_type=event_type,
+            tenant_id=tenant_id,
+            source_module="restaurant",
+            source_type="order_service_charge",
+            source_id=order.id,
+            source_reference=order.order_number,
+            payload={
+                "amount": str(charge),
+                "order_number": order.order_number,
+                "payment_method": payment_method or "cash",
+            },
+            idempotency_key=f"{event_type}:restaurant:order_service_charge:{order.id}",
+            occurred_at=timezone.now(),
+            user=user,
+            branch_id=order.branch_id,
         )

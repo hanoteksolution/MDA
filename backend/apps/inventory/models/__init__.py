@@ -8,6 +8,11 @@ from apps.inventory.models.stock import (
     StockTransferLine,
     Warehouse,
 )
+from apps.inventory.models.transfer import (
+    BranchTransferLine,
+    BranchTransferRequest,
+    ReplenishmentRule,
+)
 
 __all__ = [
     "Warehouse",
@@ -18,4 +23,7 @@ __all__ = [
     "InventoryAdjustmentItem",
     "StockTransfer",
     "StockTransferLine",
+    "BranchTransferRequest",
+    "BranchTransferLine",
+    "ReplenishmentRule",
 ]

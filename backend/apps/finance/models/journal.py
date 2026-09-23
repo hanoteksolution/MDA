@@ -33,6 +33,7 @@ class JournalEntry(TenantScopedModel, BaseModel):
     SOURCE_REFUND = "refund"
     SOURCE_PURCHASE = "purchase"
     SOURCE_FUTSAL = "futsal"
+    SOURCE_TRANSFER = "transfer"
     SOURCE_CHOICES = [
         (SOURCE_MANUAL, "Manual"),
         (SOURCE_EXPENSE, "Expense"),
@@ -41,6 +42,7 @@ class JournalEntry(TenantScopedModel, BaseModel):
         (SOURCE_REFUND, "Refund"),
         (SOURCE_PURCHASE, "Purchase"),
         (SOURCE_FUTSAL, "Futsal"),
+        (SOURCE_TRANSFER, "Inter-branch transfer"),
     ]
 
     entry_number = models.CharField(max_length=50, db_index=True)
@@ -162,6 +164,15 @@ class JournalLine(BaseModel):
     )
     business_unit = models.ForeignKey(
         "finance.BusinessUnit",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_lines",
+    )
+    # Branch is a finance *dimension* (never a second engine). Defaults from the entry's
+    # branch when a line is created; NULL = "Unassigned" in branch reports.
+    branch = models.ForeignKey(
+        "settings_app.Branch",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

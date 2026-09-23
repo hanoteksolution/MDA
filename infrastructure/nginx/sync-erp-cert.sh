@@ -4,6 +4,9 @@ set -euo pipefail
 # Keep erp.safaritechno.com TLS SANs aligned with TenantDomain hostnames.
 # Usage:
 #   sync-erp-cert.sh [--dry-run]
+#
+# Prefer a DNS-01 wildcard (*.erp.safaritechno.com) long-term; this script is the
+# HTTP-01 expand fallback so newly registered shops become HTTPS quickly.
 
 PROJECT_DIR="/home/ubuntu/projects/mda"
 COMPOSE_FILES=(
@@ -16,13 +19,14 @@ CERT_NAME="erp.safaritechno.com"
 BASE_DOMAIN="erp.safaritechno.com"
 LOCK_FILE="/var/lock/sync-erp-cert.lock"
 WEBROOT="/var/www/html"
+TRIGGER_FILE="/var/lib/mda/tls-sync/request"
 
 DRY_RUN=0
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=1
 fi
 
-mkdir -p "$(dirname "${LOCK_FILE}")"
+mkdir -p "$(dirname "${LOCK_FILE}")" "$(dirname "${TRIGGER_FILE}")"
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
   echo "[sync-erp-cert] another run is in progress; exiting."
@@ -38,28 +42,32 @@ if ! command -v certbot >/dev/null 2>&1; then
   exit 1
 fi
 
+domain_pattern="^[a-z0-9]([a-z0-9-]*[a-z0-9])?\\.${BASE_DOMAIN//./\\.}$"
+
 domains_raw="$(
-  docker compose "${COMPOSE_FILES[@]}" exec -T api python manage.py shell -c "
+  docker compose "${COMPOSE_FILES[@]}" exec -T api \
+    python manage.py shell -c "
 from apps.platform.models import TenantDomain
 domains = sorted({
-    d.domain.strip().lower()
+    (d.domain or '').strip().lower()
     for d in TenantDomain.objects.filter(deleted_at__isnull=True)
-    if d.domain and d.domain.strip().lower().endswith('.${BASE_DOMAIN}')
+    if (d.domain or '').strip().lower().endswith('.${BASE_DOMAIN}')
 })
-print(' '.join(domains))
+print('\\n'.join(domains))
 " 2>/dev/null || true
 )"
 
 mapfile -t domain_list < <(
-  echo "${domains_raw}" \
-    | tr ' ' '\n' \
+  printf '%s\n' "${domains_raw}" \
     | tr '[:upper:]' '[:lower:]' \
-    | rg "^[a-z0-9]([a-z0-9-]*[a-z0-9])?\.${BASE_DOMAIN//./\\.}$" \
+    | sed 's/\r$//' \
+    | grep -E "${domain_pattern}" \
     | sort -u
 )
 
 if (( ${#domain_list[@]} == 0 )); then
   echo "[sync-erp-cert] no tenant domains returned; keeping current cert."
+  rm -f "${TRIGGER_FILE}"
   exit 0
 fi
 
@@ -92,6 +100,7 @@ fi
 
 if (( have_all == 1 )); then
   echo "[sync-erp-cert] certificate already covers all ${#wanted[@]} domains."
+  rm -f "${TRIGGER_FILE}"
   exit 0
 fi
 
@@ -101,7 +110,9 @@ for d in "${wanted[@]}"; do
   args+=("-d" "${d}")
 done
 
-echo "[sync-erp-cert] updating certificate for ${#wanted[@]} domains."
+echo "[sync-erp-cert] updating certificate for ${#wanted[@]} domains:"
+printf '  - %s\n' "${wanted[@]}"
+
 if (( DRY_RUN == 1 )); then
   certbot certonly \
     --dry-run \
@@ -120,5 +131,6 @@ else
     --agree-tos \
     "${args[@]}"
   systemctl reload nginx
+  rm -f "${TRIGGER_FILE}"
   echo "[sync-erp-cert] certificate updated and nginx reloaded."
 fi

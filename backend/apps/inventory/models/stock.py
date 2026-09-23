@@ -47,13 +47,27 @@ class Inventory(TenantScopedModel, BaseModel):
 
 
 class StockMovement(TenantScopedModel, BaseModel):
+    """The single canonical, append-only stock ledger (decision D3).
+
+    Every authoritative balance mutation on ``Inventory`` writes exactly one row here
+    (see ``BRANCH_INVENTORY.md`` §5). Rows are never edited after creation; a wrong
+    movement is corrected with a new movement that references the original via
+    ``reference_type="movement_reversal"`` / ``reference_id=<original pk>``, never an
+    in-place edit (§5.3).
+    """
+
     MOVEMENT_TYPES = [
         ("adjustment", "Adjustment"),
         ("purchase", "Purchase"),
+        ("purchase_return", "Purchase Return"),
         ("sale", "Sale"),
         ("transfer_in", "Transfer In"),
         ("transfer_out", "Transfer Out"),
+        ("warehouse_move", "Warehouse Move"),
         ("return", "Return"),
+        ("damage", "Damage"),
+        ("write_off", "Write Off"),
+        ("opening_balance", "Opening Balance"),
     ]
 
     product = models.ForeignKey("products.Product", on_delete=models.CASCADE, related_name="stock_movements")
@@ -64,12 +78,71 @@ class StockMovement(TenantScopedModel, BaseModel):
     reference_id = models.UUIDField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
+    # --- Branch Phase 3 additions (BRANCH_INVENTORY.md §5.1). All nullable: historical
+    # rows are backfilled only where derivable (branch, via warehouse) and left NULL
+    # otherwise (never guessed). ---
+    branch = models.ForeignKey(
+        "settings_app.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        db_index=True,
+    )
+    location = models.ForeignKey(
+        "organization.StockLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+    )
+    destination_warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incoming_stock_movements",
+        help_text="Only meaningful for warehouse_move / branch_transfer_* movements.",
+    )
+    destination_location = models.ForeignKey(
+        "organization.StockLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incoming_stock_movements",
+    )
+    unit_cost = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True)
+    performed_by = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="performed_stock_movements",
+        help_text="The acting user, independent of BaseModel.created_by bookkeeping.",
+    )
+    approved_by = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_stock_movements",
+        help_text="Unused in Phase 3; reserved for Phase 4's transfer approval step.",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+
     class Meta:
         db_table = "stock_movements"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "branch", "product", "created_at"]),
+            models.Index(fields=["tenant", "branch", "movement_type"]),
+        ]
 
 
 class InventoryTransaction(TenantScopedModel, BaseModel):
+    """Before/after balance audit trail for one ``Inventory`` row. Kept exactly as-is
+    per D3 — ``StockMovement`` is the ledger; this stays the narrower balance audit."""
+
     TRANSACTION_TYPES = [
         ("in", "In"),
         ("out", "Out"),
@@ -77,6 +150,7 @@ class InventoryTransaction(TenantScopedModel, BaseModel):
         ("unreserve", "Unreserve"),
         ("damage", "Damage"),
         ("return", "Return"),
+        ("write_off", "Write Off"),
     ]
 
     inventory = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name="transactions")
@@ -86,6 +160,24 @@ class InventoryTransaction(TenantScopedModel, BaseModel):
     quantity_change = models.DecimalField(max_digits=18, decimal_places=4)
     reference_type = models.CharField(max_length=50, blank=True)
     reference_id = models.UUIDField(null=True, blank=True)
+
+    # Branch Phase 3 additions (BRANCH_INVENTORY.md §5.1) — nullable, backfilled only
+    # via the unambiguous inventory.warehouse.branch dereference.
+    branch = models.ForeignKey(
+        "settings_app.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_transactions",
+        db_index=True,
+    )
+    location = models.ForeignKey(
+        "organization.StockLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_transactions",
+    )
 
     class Meta:
         db_table = "inventory_transactions"

@@ -9,6 +9,66 @@ export interface RestaurantSummary {
   tables_occupied: number;
   orders_open: number;
   orders_today: number;
+  orders_preparing?: number;
+  orders_ready?: number;
+  orders_completed_today?: number;
+  orders_cancelled_today?: number;
+  todays_sales?: number;
+  todays_orders_paid?: number;
+  average_order_value?: number;
+}
+
+export interface CafeteriaProfile {
+  id: string;
+  branch_id: string;
+  business_name: string;
+  trading_name: string;
+  currency: string;
+  timezone: string;
+  language: string;
+  order_prefix: string;
+  invoice_prefix: string;
+  kitchen_barista_mode: string;
+  table_service_enabled: boolean;
+  takeaway_enabled: boolean;
+  delivery_enabled: boolean;
+  reservations_enabled: boolean;
+  tips_enabled: boolean;
+  service_charge_enabled: boolean;
+  loyalty_enabled: boolean;
+  recipe_deduction_enabled: boolean;
+  negative_stock_allowed: boolean;
+  default_warehouse_id: string | null;
+  receipt_header: string;
+  receipt_footer: string;
+}
+
+export interface BaristaTicket {
+  id: string;
+  order_number: string;
+  queue_number: string;
+  priority: string;
+  status: string;
+  service_type: string;
+  waiter_name: string;
+  barista_user_id: string | null;
+  subtotal: number;
+  opened_at: string | null;
+  elapsed_seconds: number;
+  board_column: string;
+  lines: {
+    id: string;
+    name: string;
+    quantity: number;
+    notes: string;
+    modifiers?: { name: string; price_delta: number }[];
+  }[];
+}
+
+export interface BaristaQueue {
+  columns: { NEW: BaristaTicket[]; PREPARING: BaristaTicket[]; READY: BaristaTicket[] };
+  counts: Record<string, number>;
+  generated_at: string;
 }
 
 export interface MenuCategory {
@@ -33,6 +93,25 @@ export interface MenuItem {
   unit_price: number;
   is_available: boolean;
   sort_order: number;
+}
+
+export interface MenuCustomizePayload {
+  menu_item: MenuItem | null;
+  variants: {
+    id: string;
+    name: string;
+    price_adjustment: number;
+    is_default?: boolean;
+    is_available?: boolean;
+  }[];
+  modifier_groups: {
+    id: string;
+    name: string;
+    min_select: number;
+    max_select: number;
+    is_required?: boolean;
+    modifiers: { id: string; name: string; price_delta: number }[];
+  }[];
 }
 
 export interface DiningTable {
@@ -427,8 +506,176 @@ export const restaurantApi = {
           subtotal: number;
           status: string;
         };
-        items: { product_id: string; quantity: number; unit_price: number; name: string; sku: string }[];
-        notes: string;
+        items: { product_id: string; quantity: number; unit_price: number; name?: string; sku?: string }[];
+        notes?: string;
       }>
     >(`/restaurant/orders/${id}/pos/`),
+
+  cafeteriaProfile: (branchId: string) =>
+    apiRequest<ApiResponse<CafeteriaProfile | null>>(
+      `/restaurant/cafeteria-profile/${qs({ branch_id: branchId })}`
+    ),
+  saveCafeteriaProfile: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<CafeteriaProfile>>("/restaurant/cafeteria-profile/", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  baristaQueue: (branchId?: string, stationId?: string) =>
+    apiRequest<ApiResponse<BaristaQueue>>(
+      `/restaurant/barista/queue/${qs({ branch_id: branchId, station_id: stationId })}`
+    ),
+  baristaAction: (orderId: string, action: "accept" | "start" | "ready" | "complete") =>
+    apiRequest<ApiResponse<BaristaTicket>>(
+      `/restaurant/barista/tickets/${orderId}/${action}/`,
+      { method: "POST", body: JSON.stringify({}) }
+    ),
+  wasteList: (page = 1, branchId?: string) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      `/restaurant/waste/${qs({ page, branch_id: branchId })}`
+    ),
+  createWaste: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/waste/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  approveWaste: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/waste/${id}/approve/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  itemVariants: (itemId: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>[]>>(
+      `/restaurant/items/${itemId}/variants/`
+    ),
+  createVariant: (itemId: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(
+      `/restaurant/items/${itemId}/variants/`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+  activateRecipe: (id: string) =>
+    apiRequest<ApiResponse<Recipe>>(`/restaurant/recipes/${id}/activate/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  recipeCosting: (id: string) =>
+    apiRequest<ApiResponse<Recipe>>(`/restaurant/recipes/${id}/costing/`),
+
+  itemCustomizeByProduct: (productId: string) =>
+    apiRequest<ApiResponse<MenuCustomizePayload>>(
+      `/restaurant/items/by-product/${productId}/customize/`
+    ),
+
+  updateOrderCharges: (
+    id: string,
+    data: { tip_amount?: number; service_charge_amount?: number }
+  ) =>
+    apiRequest<ApiResponse<RestaurantOrder>>(`/restaurant/orders/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  addOrderLine: (
+    orderId: string,
+    data: {
+      menu_item_id: string;
+      quantity?: number;
+      variant_id?: string;
+      modifiers?: { modifier_id: string; quantity?: number }[];
+      unit_price?: number;
+      notes?: string;
+    }
+  ) =>
+    apiRequest<ApiResponse<RestaurantOrder>>(`/restaurant/orders/${orderId}/lines/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  listPromotions: (page = 1, branchId?: string) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      `/restaurant/promotions/${qs({ page, branch_id: branchId })}`
+    ),
+  createPromotion: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/promotions/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updatePromotion: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/promotions/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  archivePromotion: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/promotions/${id}/`, {
+      method: "DELETE",
+    }),
+  resolvePromotion: (data: { code: string; branch_id?: string; amount?: number }) =>
+    apiRequest<
+      ApiResponse<{
+        promotion: Record<string, unknown> | null;
+        discount_amount: number;
+      }>
+    >("/restaurant/promotions/resolve/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  listCombos: (page = 1, branchId?: string) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      `/restaurant/combos/${qs({ page, branch_id: branchId })}`
+    ),
+  createCombo: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/combos/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateCombo: (id: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/combos/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  archiveCombo: (id: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/combos/${id}/`, {
+      method: "DELETE",
+    }),
+  loyaltyProgram: (branchId?: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(
+      `/restaurant/loyalty/program/${qs({ branch_id: branchId })}`
+    ),
+  updateLoyaltyProgram: (branchId: string, data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(
+      `/restaurant/loyalty/program/${qs({ branch_id: branchId })}`,
+      { method: "PATCH", body: JSON.stringify(data) }
+    ),
+  enrollLoyalty: (data: { program_id: string; customer_id: string }) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/loyalty/enroll/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  listReservations: (page = 1, branchId?: string, status?: string) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      `/restaurant/reservations/${qs({ page, branch_id: branchId, status })}`
+    ),
+  createReservation: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/reservations/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateReservationStatus: (id: string, status: string) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(
+      `/restaurant/reservations/${id}/status/`,
+      { method: "POST", body: JSON.stringify({ status }) }
+    ),
+  listShifts: (page = 1, branchId?: string) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      `/restaurant/shifts/${qs({ page, branch_id: branchId })}`
+    ),
+  createShift: (data: Record<string, unknown>) =>
+    apiRequest<ApiResponse<Record<string, unknown>>>("/restaurant/shifts/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  shiftAction: (id: string, action: "open" | "close") =>
+    apiRequest<ApiResponse<Record<string, unknown>>>(`/restaurant/shifts/${id}/${action}/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 };

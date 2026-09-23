@@ -82,3 +82,43 @@ def test_consume_reserved_deducts_on_hand(stock_env):
     inv = Inventory.active_objects().get(product=product, warehouse=warehouse)
     assert inv.reserved_quantity == Decimal("0")
     assert inv.quantity == Decimal("8")
+
+
+@pytest.mark.django_db
+def test_direct_sale_cannot_consume_reserved_stock(stock_env):
+    product, warehouse = stock_env["product"], stock_env["warehouse"]
+    InventoryService.reserve_quantity(product=product, warehouse=warehouse, quantity=Decimal("8"))
+
+    InventoryService.apply_sale_delta(product=product, warehouse=warehouse, quantity_delta=Decimal("-5"))
+    inv = Inventory.active_objects().get(product=product, warehouse=warehouse)
+    assert inv.quantity == Decimal("8")  # only the 2 unreserved units were sellable
+    assert inv.reserved_quantity == Decimal("8")
+
+    InventoryService.apply_sale_delta(product=product, warehouse=warehouse, quantity_delta=Decimal("-1"))
+    inv.refresh_from_db()
+    assert inv.quantity == Decimal("8")  # fully reserved: sale is a no-op
+
+
+@pytest.mark.django_db
+def test_sale_clamp_never_adds_stock_or_blocks_returns(stock_env):
+    product, warehouse = stock_env["product"], stock_env["warehouse"]
+    inv = stock_env["inventory"]
+    inv.quantity, inv.reserved_quantity = Decimal("2"), Decimal("5")  # legacy over-reserved row
+    inv.save(update_fields=["quantity", "reserved_quantity", "updated_at"])
+
+    InventoryService.apply_sale_delta(product=product, warehouse=warehouse, quantity_delta=Decimal("-1"))
+    inv.refresh_from_db()
+    assert inv.quantity == Decimal("2")  # not raised to the reserved 5
+
+    InventoryService.apply_sale_delta(product=product, warehouse=warehouse, quantity_delta=Decimal("1"))
+    inv.refresh_from_db()
+    assert inv.quantity == Decimal("3")  # returns are never clamped
+
+
+@pytest.mark.django_db
+def test_consume_reserved_still_sells_its_own_reservation(stock_env):
+    product, warehouse = stock_env["product"], stock_env["warehouse"]
+    InventoryService.reserve_quantity(product=product, warehouse=warehouse, quantity=Decimal("4"))
+    InventoryService.consume_reserved(product=product, warehouse=warehouse, quantity=Decimal("4"))
+    inv = Inventory.active_objects().get(product=product, warehouse=warehouse)
+    assert (inv.quantity, inv.reserved_quantity) == (Decimal("6"), Decimal("0"))

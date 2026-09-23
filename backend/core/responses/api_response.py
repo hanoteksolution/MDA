@@ -1,5 +1,10 @@
+import logging
+
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
+
+
+logger = logging.getLogger(__name__)
 
 
 def success_response(data=None, message="", status=200, code=None):
@@ -45,6 +50,18 @@ def _infer_error_code(status_code: int, errors) -> str:
 
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
+    if response is None:
+        view = context.get("view") if context else None
+        logger.exception(
+            "Unhandled API exception in %s",
+            view.__class__.__name__ if view is not None else "unknown view",
+            exc_info=exc,
+        )
+        return error_response(
+            message="We could not complete this request. Please try again.",
+            status=500,
+            code="SERVER_ERROR",
+        )
     if response is not None:
         errors = response.data
         if isinstance(errors, dict) and "detail" in errors:

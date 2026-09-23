@@ -82,13 +82,11 @@ export function SalesPage() {
   };
 
   const handleMarkPaid = async (invoice: Invoice) => {
-    if (
-      !window.confirm(
-        `Mark ${invoice.number} as paid for ${formatCurrency(invoice.total_amount)}?`
-      )
-    ) {
-      return;
-    }
+    const ok = await appDialog.confirm(
+      `Mark ${invoice.number} as paid for ${formatCurrency(invoice.total_amount)}?`,
+      { title: "Mark as paid", confirmLabel: "Mark paid" }
+    );
+    if (!ok) return;
     try {
       await markInvoicePaid(invoice.id);
       invoiceList.reload();
@@ -100,8 +98,12 @@ export function SalesPage() {
 
   const handleMarkPaidFromDialog = async (invoiceId: string) => {
     const inv = invoiceList.data.find((i) => i.id === invoiceId) as Invoice | undefined;
-    if (inv && !window.confirm(`Mark ${inv.number} as paid for ${formatCurrency(inv.total_amount)}?`)) {
-      return;
+    if (inv) {
+      const ok = await appDialog.confirm(
+        `Mark ${inv.number} as paid for ${formatCurrency(inv.total_amount)}?`,
+        { title: "Mark as paid", confirmLabel: "Mark paid" }
+      );
+      if (!ok) return;
     }
     try {
       await markInvoicePaid(invoiceId);

@@ -104,18 +104,39 @@ class SettingDetailView(APIView):
 
 
 class CompanyProfileView(APIView):
-    permission_classes = [IsAuthenticated, HasPermission("settings.view")]
+    """Branding profile — GET for any signed-in shop user (sidebar/hub); PUT needs settings.update."""
+
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        company = SettingsService.get_company_profile()
+        company = SettingsService.get_company_profile(user=request.user, request=request)
         if not company:
+            # Fall back to tenant registration name so chrome is never blank.
+            from core.tenancy import resolve_acting_tenant
+
+            tenant = resolve_acting_tenant(request=request, user=request.user)
+            if tenant is not None:
+                return success_response(
+                    data={
+                        "id": None,
+                        "name": tenant.name,
+                        "legal_name": tenant.name,
+                        "tax_id": "",
+                        "email": getattr(tenant, "contact_email", "") or "",
+                        "phone": getattr(tenant, "contact_phone", "") or "",
+                        "address": "",
+                        "logo": "",
+                    }
+                )
             return success_response(data=None)
         return success_response(data=CompanySerializer(company).data)
 
     def put(self, request):
         if not request.user.has_permission("settings.update"):
             return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
-        company = SettingsService.update_company_profile(data=request.data, user=request.user)
+        company = SettingsService.update_company_profile(
+            data=request.data, user=request.user, request=request
+        )
         return success_response(data=CompanySerializer(company).data, message="Company updated.")
 
 

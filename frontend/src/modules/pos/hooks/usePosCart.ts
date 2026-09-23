@@ -11,6 +11,11 @@ export interface CartLine {
   maxStock?: number;
   requires_prescription?: boolean;
   module_code?: string;
+  /** Catalog product id when cart line id is a customized composite key. */
+  product_id?: string;
+  menu_item_id?: string;
+  variant_id?: string;
+  modifier_ids?: string[];
 }
 
 export interface RecentSale {
@@ -226,28 +231,54 @@ export function usePosCart() {
     [subtotal]
   );
 
-  const addToCart = useCallback((product: Product) => {
+  const addToCart = useCallback((product: Product, opts?: {
+    name?: string;
+    price?: number;
+    lineKey?: string;
+    product_id?: string;
+    menu_item_id?: string;
+    variant_id?: string;
+    modifier_ids?: string[];
+    allowZeroStock?: boolean;
+  }) => {
     const stock = product.total_stock ?? 0;
-    if (stock <= 0) return false;
+    const unlimited =
+      Boolean(opts?.allowZeroStock) ||
+      stock > 9998 ||
+      (product.module_code || "").toLowerCase() === "restaurant";
+    if (!unlimited && stock <= 0) return false;
+    const maxStock = unlimited ? Math.max(stock, 9999) : stock;
+    const lineId = opts?.lineKey || product.id;
+    const price = opts?.price ?? product.selling_price;
+    const name = opts?.name ?? product.name;
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === product.id);
-      if (existing) {
+      const existing = prev.find((i) => i.id === lineId);
+      if (existing && !opts?.variant_id && !(opts?.modifier_ids || []).length) {
         return prev.map((i) =>
-          i.id === product.id ? { ...i, qty: Math.min(i.qty + 1, stock) } : i
+          i.id === lineId ? { ...i, qty: Math.min(i.qty + 1, maxStock) } : i
+        );
+      }
+      if (existing && opts?.lineKey) {
+        return prev.map((i) =>
+          i.id === lineId ? { ...i, qty: Math.min(i.qty + 1, maxStock) } : i
         );
       }
       return [
         ...prev,
         {
-          id: product.id,
-          name: product.name,
+          id: lineId,
+          name,
           sku: product.sku,
-          price: product.selling_price,
+          price,
           qty: 1,
           image: product.image,
-          maxStock: stock,
+          maxStock,
           requires_prescription: Boolean(product.requires_prescription),
           module_code: product.module_code || "",
+          product_id: opts?.product_id || product.id,
+          menu_item_id: opts?.menu_item_id,
+          variant_id: opts?.variant_id,
+          modifier_ids: opts?.modifier_ids,
         },
       ];
     });

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Iterable, Optional
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.notifications.models import Notification
@@ -24,6 +25,13 @@ class NotificationService:
             "is_read": n.is_read,
             "read_at": n.read_at.isoformat() if n.read_at else None,
             "metadata": n.metadata or {},
+            "branch_id": str(n.branch_id) if n.branch_id else None,
+            "severity": n.severity,
+            "entity_type": n.entity_type,
+            "entity_id": n.entity_id,
+            "audience": n.audience,
+            "action_url": n.action_url,
+            "expires_at": n.expires_at.isoformat() if n.expires_at else None,
             "created_at": n.created_at.isoformat(),
         }
 
@@ -33,10 +41,18 @@ class NotificationService:
         user,
         is_read: Optional[bool] = None,
         notification_type: Optional[str] = None,
+        branch_ids=None,
+        severity: Optional[str] = None,
         request=None,
     ):
+        """``branch_ids``: only alerts for those branches (plus tenant-wide, branch-less ones)."""
         qs = Notification.active_objects().filter(user=user)
         qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+        if branch_ids is not None:
+            qs = qs.filter(Q(branch__isnull=True) | Q(branch_id__in=list(branch_ids)))
+        if severity:
+            qs = qs.filter(severity=severity)
         if is_read is not None:
             qs = qs.filter(is_read=is_read)
         if notification_type:
@@ -102,7 +118,10 @@ class NotificationService:
         metadata: Optional[dict] = None,
         dedupe_key: Optional[str] = None,
         dedupe_hours: int = 24,
+        **extra,
     ) -> Notification | None:
+        """``extra``: optional Phase 6 fields — branch, severity, entity_type, entity_id,
+        audience, expires_at, action_url."""
         meta = dict(metadata or {})
         if dedupe_key:
             meta["dedupe_key"] = dedupe_key
@@ -121,6 +140,7 @@ class NotificationService:
             message=message,
             link=link,
             metadata=meta,
+            **extra,
         )
         notification.save()
         return notification
@@ -166,6 +186,7 @@ class NotificationService:
         metadata: Optional[dict] = None,
         dedupe_key: Optional[str] = None,
         dedupe_hours: int = 24,
+        **extra,
     ) -> int:
         created = 0
         for user in users:
@@ -179,6 +200,78 @@ class NotificationService:
                 metadata=metadata,
                 dedupe_key=dedupe_key,
                 dedupe_hours=dedupe_hours,
+                **extra,
             ):
                 created += 1
         return created
+
+    @staticmethod
+    def branch_audience(branch, *, permission: str | None = None, managers_only: bool = False,
+                        exclude=None) -> list:
+        """Users who may act in ``branch`` — never a tenant-wide broadcast.
+
+        Membership is the real branch permission (`has_branch_permission`), so a user with
+        the codename globally but no access to this branch is not an audience member.
+        """
+        from core.branching import has_branch_permission, is_branch_manager
+
+        users = []
+        for user in User.objects.filter(
+            tenant_id=branch.tenant_id, is_active=True, deleted_at__isnull=True
+        ):
+            if exclude is not None and user.pk == getattr(exclude, "pk", None):
+                continue
+            if permission and not has_branch_permission(user, permission, branch):
+                continue
+            if managers_only and not is_branch_manager(user, branch):
+                continue
+            users.append(user)
+        return users
+
+    @staticmethod
+    def notify_branch(
+        *,
+        branch,
+        notification_type: str,
+        title: str,
+        message: str,
+        severity: str = Notification.SEVERITY_INFO,
+        permission: str | None = None,
+        managers_only: bool = False,
+        entity_type: str = "",
+        entity_id="",
+        link: str = "",
+        action_url: str = "",
+        metadata: Optional[dict] = None,
+        dedupe_key: Optional[str] = None,
+        dedupe_hours: int = 24,
+        exclude=None,
+        expires_at=None,
+    ) -> int:
+        """Alert one branch's audience once per ``dedupe_key`` (per recipient)."""
+        from apps.platform.models import Tenant
+
+        tenant = Tenant.objects.filter(pk=branch.tenant_id).first()
+        audience = (
+            Notification.AUDIENCE_BRANCH_MANAGERS if managers_only else Notification.AUDIENCE_BRANCH
+        )
+        return NotificationService.notify_users(
+            tenant=tenant,
+            users=NotificationService.branch_audience(
+                branch, permission=permission, managers_only=managers_only, exclude=exclude
+            ),
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            link=link,
+            metadata=metadata,
+            dedupe_key=dedupe_key,
+            dedupe_hours=dedupe_hours,
+            branch=branch,
+            severity=severity,
+            entity_type=entity_type,
+            entity_id=str(entity_id or ""),
+            audience=audience,
+            action_url=action_url or link,
+            expires_at=expires_at,
+        )

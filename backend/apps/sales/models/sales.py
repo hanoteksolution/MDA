@@ -112,6 +112,22 @@ class Invoice(TenantScopedModel, BaseModel):
         blank=True,
         related_name="invoices",
     )
+    # Phase 5: where the stock for this sale was drawn from. NULL = legacy behaviour
+    # (the branch's default warehouse). Stock reversals must use the same warehouse.
+    terminal = models.ForeignKey(
+        "organization.PosTerminal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoices",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_invoices",
+    )
     amount_refunded = models.DecimalField(max_digits=18, decimal_places=4, default=0)
 
     class Meta:
@@ -278,11 +294,67 @@ class CashierSession(TenantScopedModel, BaseModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True)
     notes = models.TextField(blank=True)
 
+    # Phase 5: a session is the POS shift on one terminal + cash register. All nullable
+    # so pre-Phase-5 sessions and branches that never configured a terminal keep working.
+    terminal = models.ForeignKey(
+        "organization.PosTerminal",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sessions",
+    )
+    register = models.ForeignKey(
+        "organization.CashRegister",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sessions",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pos_sessions",
+    )
+    location = models.ForeignKey(
+        "organization.StockLocation",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pos_sessions",
+    )
+    cash_in = models.DecimalField(max_digits=18, decimal_places=4, default=0)
+    cash_out = models.DecimalField(max_digits=18, decimal_places=4, default=0)
+    variance_reason = models.CharField(max_length=255, blank=True)
+    variance_approved_by = models.ForeignKey(
+        "authentication.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_cash_variances",
+    )
+    variance_approved_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = "cashier_sessions"
         ordering = ["-opened_at"]
         indexes = [
             models.Index(fields=["branch", "cashier", "status"], name="idx_cashier_sess_branch"),
+        ]
+        constraints = [
+            # One open shift per terminal / per drawer, enforced by the database so two
+            # concurrent opens cannot both succeed (the service check alone is racy).
+            models.UniqueConstraint(
+                fields=["terminal"],
+                condition=models.Q(status="open", deleted_at__isnull=True, terminal__isnull=False),
+                name="uniq_open_session_per_terminal",
+            ),
+            models.UniqueConstraint(
+                fields=["register"],
+                condition=models.Q(status="open", deleted_at__isnull=True, register__isnull=False),
+                name="uniq_open_session_per_register",
+            ),
         ]
 
     def __str__(self):

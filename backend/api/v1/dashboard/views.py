@@ -1,6 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.reports.services.branch_report_service import resolve_view_branch_id
 from core.responses.api_response import success_response
 from core.services.analytics_service import AnalyticsService
 from core.utils.pagination import paginate_queryset
@@ -12,16 +13,22 @@ class DashboardKPIView(APIView):
 
     def get(self, request):
         period = request.query_params.get("period", "today")
-        branch_id = getattr(request.user.branch, "id", None)
-        return success_response(data=AnalyticsService.get_kpis(branch_id=branch_id, period=period))
+        branch_id = resolve_view_branch_id(request)
+        return success_response(data=AnalyticsService.get_kpis(
+            branch_id=branch_id, period=period,
+            module_code=request.query_params.get("module_code"),
+            user=request.user, request=request,
+        ))
 
 
 class DashboardRecentSalesView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
-        data = AnalyticsService.get_recent_sales(branch_id=branch_id)
+        branch_id = resolve_view_branch_id(request)
+        data = AnalyticsService.get_recent_sales(
+            branch_id=branch_id, user=request.user, request=request
+        )
         return success_response(data={"results": data, "count": len(data)})
 
 
@@ -29,8 +36,12 @@ class DashboardLowStockView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
-        data = AnalyticsService.get_low_stock(branch_id=branch_id)
+        branch_id = resolve_view_branch_id(request)
+        data = AnalyticsService.get_low_stock(
+            branch_id=branch_id,
+            module_code=request.query_params.get("module_code"),
+            user=request.user, request=request,
+        )
         return success_response(data={"results": data, "count": len(data)})
 
 
@@ -38,9 +49,11 @@ class DashboardTopProductsView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
+        branch_id = resolve_view_branch_id(request)
         period = request.query_params.get("period", "month")
-        data = AnalyticsService.get_top_products(branch_id=branch_id, period=period)
+        data = AnalyticsService.get_top_products(
+            branch_id=branch_id, period=period, user=request.user, request=request
+        )
         return success_response(data=data)
 
 
@@ -48,8 +61,10 @@ class DashboardChartsView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("dashboard.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
-        return success_response(data=AnalyticsService.get_chart_data(branch_id=branch_id))
+        branch_id = resolve_view_branch_id(request)
+        return success_response(data=AnalyticsService.get_chart_data(
+            branch_id=branch_id, user=request.user, request=request
+        ))
 
 
 class DashboardWidgetsView(APIView):
@@ -82,8 +97,8 @@ class DashboardAlertsView(APIView):
     def get(self, request):
         from apps.inventory.services.inventory_service import InventoryService
 
-        low = list(InventoryService.get_low_stock(branch_id=getattr(request.user.branch, "id", None))[:10])
-        out = list(InventoryService.get_out_of_stock(branch_id=getattr(request.user.branch, "id", None))[:10])
+        low = list(InventoryService.get_low_stock(branch_id=resolve_view_branch_id(request))[:10])
+        out = list(InventoryService.get_out_of_stock(branch_id=resolve_view_branch_id(request))[:10])
         out_ids = {inv.id for inv in out}
         alerts = []
         for inv in out:

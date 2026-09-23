@@ -4,6 +4,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.authentication.services.staff_evaluation_service import StaffEvaluationService
+from apps.reports.services.branch_report_service import (
+    BranchReportService,
+    resolve_report_scope,
+    resolve_view_branch_id,
+)
 from apps.reports.services.report_service import ReportService
 from core.responses.api_response import error_response, success_response
 from core.services.analytics_service import AnalyticsService
@@ -23,9 +28,7 @@ class ReportDataView(APIView):
     def get(self, request):
         category = request.query_params.get("category", "")
         report = request.query_params.get("report", "")
-        branch_id = request.query_params.get("branch_id") or getattr(
-            request.user.branch, "id", None
-        )
+        branch_id = resolve_view_branch_id(request)
         date_from = request.query_params.get("date_from") or None
         date_to = request.query_params.get("date_to") or None
         try:
@@ -54,9 +57,7 @@ class ReportExportView(APIView):
                 message="category and report are required.",
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        branch_id = request.query_params.get("branch_id") or getattr(
-            request.user.branch, "id", None
-        )
+        branch_id = resolve_view_branch_id(request)
         date_from = request.query_params.get("date_from") or None
         date_to = request.query_params.get("date_to") or None
         try:
@@ -81,7 +82,7 @@ class SalesReportPrintView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("reports.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
+        branch_id = resolve_view_branch_id(request)
         date_from = request.query_params.get("date_from") or None
         date_to = request.query_params.get("date_to") or None
         data = AnalyticsService.get_sales_report_print(
@@ -96,11 +97,29 @@ class ReportsChartView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("reports.view")]
 
     def get(self, request):
-        branch_id = getattr(request.user.branch, "id", None)
-        charts = AnalyticsService.get_chart_data(branch_id=branch_id)
+        branch_id = resolve_view_branch_id(request)
+        charts = AnalyticsService.get_chart_data(
+            branch_id=branch_id, user=request.user, request=request
+        )
         category = request.query_params.get("category", "sales")
         key = "revenue" if category in ("sales", "customers", "gym") else "profit"
         return success_response(data=charts.get(key, charts["revenue"]))
+
+
+class BranchReportView(APIView):
+    """Sales / stock value / P&L / cash for one branch, several, or consolidated (B6-1)."""
+
+    permission_classes = [IsAuthenticated, HasPermission("reports.view")]
+
+    def get(self, request, report):
+        scope = resolve_report_scope(request=request)
+        data = BranchReportService.run(
+            report=report,
+            scope=scope,
+            date_from=request.query_params.get("date_from") or None,
+            date_to=request.query_params.get("date_to") or None,
+        )
+        return success_response(data=data)
 
 
 class StaffPerformanceView(APIView):

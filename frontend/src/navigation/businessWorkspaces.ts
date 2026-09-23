@@ -18,11 +18,14 @@ import {
   Dumbbell,
   FlaskConical,
   UtensilsCrossed,
+  Coffee,
   Goal,
   BedDouble,
   Home,
   Briefcase,
   UserCheck,
+  Calendar,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -34,6 +37,7 @@ import {
   ENGINE_MODULE_CODES,
   type ModuleWorkspace,
 } from "./moduleWorkspaces";
+import { schoolNavSections } from "./schoolNavigation";
 
 export { filterVisibleWorkspaces, retailUnlocked, propertyUnlocked, VENUE_MODULE_CODES, ENGINE_MODULE_CODES };
 
@@ -48,6 +52,7 @@ export const INDUSTRY_PATH_CODES = [
   "futsal",
   "project",
   "travel",
+  "school",
 ] as const;
 
 export type IndustryPathCode = (typeof INDUSTRY_PATH_CODES)[number];
@@ -66,6 +71,10 @@ export interface WorkspaceNavItem {
 export interface WorkspaceNavSection {
   label: string;
   items: WorkspaceNavItem[];
+  /** Group icon, shown in the collapsed sidebar rail for collapsible groups. */
+  icon?: LucideIcon;
+  /** Render as an expandable group (large modules such as School). */
+  collapsible?: boolean;
 }
 
 export function isIndustryPath(code: string | null | undefined): boolean {
@@ -102,7 +111,7 @@ function moduleOk(
 
 export function industryWorkspacesForUser(
   enabled: string[] | undefined,
-  opts?: { elevated?: boolean; hasPermission?: PermFn }
+  opts?: { elevated?: boolean; hasPermission?: PermFn; businessTypeCode?: string | null }
 ): ModuleWorkspace[] {
   return filterVisibleWorkspaces(enabled, {
     ...opts,
@@ -113,13 +122,19 @@ export function industryWorkspacesForUser(
 
 export function switcherWorkspacesForUser(
   enabled: string[] | undefined,
-  opts?: { elevated?: boolean; hasPermission?: PermFn; includeFinance?: boolean }
+  opts?: {
+    elevated?: boolean;
+    hasPermission?: PermFn;
+    includeFinance?: boolean;
+    businessTypeCode?: string | null;
+  }
 ): ModuleWorkspace[] {
   return filterVisibleWorkspaces(enabled, {
     elevated: opts?.elevated,
     hasPermission: opts?.hasPermission,
     includeOverview: true,
     includeFinance: opts?.includeFinance !== false,
+    businessTypeCode: opts?.businessTypeCode,
   });
 }
 
@@ -170,16 +185,24 @@ const WORKSPACE_NAV_ORDER: Record<string, string[]> = {
   cafeteria: [
     "dashboard",
     "pos",
-    "sales",
+    "orders",
+    "barista",
+    "kitchen",
     "products",
     "inventory",
+    "waste",
     "purchasing",
     "customers",
     "suppliers",
-    "kitchen",
+    "promotions",
+    "combos",
+    "loyalty",
+    "reservations",
     "tables",
+    "shifts",
     "finance",
     "reports",
+    "settings",
   ],
   gym: [
     "dashboard",
@@ -304,6 +327,20 @@ const WORKSPACE_FEATURES: Record<string, Record<string, FeatureNavSpec>> = {
     tables: { label: "Tables", suffix: "tables", icon: UtensilsCrossed, permission: "restaurant.view", module: "restaurant" },
   },
   cafeteria: {
+    orders: {
+      label: "Orders",
+      suffix: "orders",
+      icon: ShoppingCart,
+      permission: "restaurant.view",
+      module: "restaurant",
+    },
+    barista: {
+      label: "Barista Queue",
+      suffix: "barista",
+      icon: Coffee,
+      permission: ["restaurant.kitchen", "cafeteria.barista.queue", "restaurant.view"],
+      module: "restaurant",
+    },
     kitchen: {
       label: "Kitchen",
       suffix: "kitchen",
@@ -311,7 +348,62 @@ const WORKSPACE_FEATURES: Record<string, Record<string, FeatureNavSpec>> = {
       permission: ["restaurant.kitchen", "restaurant.floor", "restaurant.view"],
       module: "restaurant",
     },
-    tables: { label: "Tables", suffix: "tables", icon: UtensilsCrossed, permission: "restaurant.view", module: "restaurant" },
+    waste: {
+      label: "Waste",
+      suffix: "waste",
+      icon: FlaskConical,
+      permission: ["cafeteria.waste.view", "restaurant.view", "inventory.view"],
+      module: "restaurant",
+    },
+    tables: {
+      label: "Tables",
+      suffix: "tables",
+      icon: UtensilsCrossed,
+      permission: "restaurant.view",
+      module: "restaurant",
+    },
+    settings: {
+      label: "Settings",
+      suffix: "settings",
+      icon: Settings,
+      permission: ["cafeteria.settings.view", "restaurant.manage", "restaurant.view"],
+      module: "restaurant",
+    },
+    promotions: {
+      label: "Promotions",
+      suffix: "promotions",
+      icon: Receipt,
+      permission: "restaurant.view",
+      module: "restaurant",
+    },
+    combos: {
+      label: "Combos",
+      suffix: "combos",
+      icon: Package,
+      permission: "restaurant.view",
+      module: "restaurant",
+    },
+    loyalty: {
+      label: "Loyalty",
+      suffix: "loyalty",
+      icon: Users,
+      permission: "restaurant.view",
+      module: "restaurant",
+    },
+    reservations: {
+      label: "Reservations",
+      suffix: "reservations",
+      icon: Calendar,
+      permission: ["restaurant.floor", "restaurant.view"],
+      module: "restaurant",
+    },
+    shifts: {
+      label: "Shifts",
+      suffix: "shifts",
+      icon: UserCheck,
+      permission: ["cafeteria.staff.view", "restaurant.view"],
+      module: "restaurant",
+    },
   },
   gym: {
     members: { label: "Members", suffix: "members", icon: Users, permission: "gym.view", module: "gym" },
@@ -528,6 +620,13 @@ export function industryNavSections(
   const can = (item: { permission?: string | string[]; module?: string | string[] }) =>
     permOk(item.permission, hasPermission, elevated) && moduleOk(item.module, enabled, elevated);
 
+  if (workspace === "school") {
+    const school = schoolNavSections((codes) =>
+      permOk(codes, hasPermission, elevated) && moduleOk("school", enabled, elevated)
+    );
+    return [...school, { label: "Platform", items: [{ to: "/modules", label: "All workspaces", icon: LayoutGrid }] }];
+  }
+
   const items: WorkspaceNavItem[] = [];
 
   order.forEach((code) => {
@@ -633,6 +732,10 @@ export function overviewNavSections(
     systemItems.push({ to: "/platform", label: "Platform", icon: Globe2, permission: "platform.view" });
     systemItems.push({ to: "/platform/tenants", label: "Tenants", icon: Building2, permission: "platform.view" });
     systemItems.push({ to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view" });
+    if (elevated) {
+      // Provider infrastructure (SMS / payments) is Super Admin only; the API enforces the same.
+      systemItems.push({ to: "/platform/integrations", label: "Integrations", icon: Plug });
+    }
     if (permOk("subscriptions.manage", hasPermission, elevated)) {
       systemItems.push({
         to: "/platform/subscriptions",
@@ -698,6 +801,7 @@ export function platformNavSections(
           { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view", end: true },
           { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view" },
           { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
+          ...(elevated ? [{ to: "/platform/integrations", label: "Integrations", icon: Plug }] : []),
           { to: "/modules", label: "All workspaces", icon: LayoutGrid },
         ].filter((i) => can(i.permission)),
       },

@@ -39,11 +39,16 @@ class OnboardingProvisionView(APIView):
         try:
             result = OnboardingService.provision(data=request.data)
         except OnboardingError as exc:
-            http_status = status.HTTP_409_CONFLICT if exc.code == "SLUG_TAKEN" else status.HTTP_400_BAD_REQUEST
+            http_status = (
+                status.HTTP_409_CONFLICT
+                if exc.code == "SUBDOMAIN_TAKEN"
+                else status.HTTP_400_BAD_REQUEST
+            )
             return error_response(
                 message=exc.message,
                 status=http_status,
                 code=exc.code,
+                details={"suggestions": exc.suggestions} if exc.suggestions else None,
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)

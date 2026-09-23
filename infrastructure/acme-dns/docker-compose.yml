@@ -1,0 +1,25 @@
+# acme-dns: challenge-only authoritative nameserver for ACME DNS-01.
+#
+#   cd infrastructure/acme-dns && docker compose up -d
+#
+# Port 53 is published on the public IP only, so it does not collide with the
+# systemd-resolved stub on 127.0.0.53. The HTTP API is bound to loopback —
+# nothing but acme.sh on this host ever needs to reach it.
+
+services:
+  acme-dns:
+    image: joohoi/acme-dns:latest
+    container_name: acme_dns
+    restart: unless-stopped
+    ports:
+      - "88.222.220.238:53:53/udp"
+      - "88.222.220.238:53:53/tcp"
+      - "127.0.0.1:8081:8081/tcp"
+    volumes:
+      - /opt/acme-dns/config:/etc/acme-dns:ro
+      - /opt/acme-dns/data:/var/lib/acme-dns
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

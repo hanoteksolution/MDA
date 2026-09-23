@@ -62,6 +62,7 @@ export function Header({ compact }: HeaderProps) {
         <button
           type="button"
           onClick={toggleDarkMode}
+          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
           className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {darkMode ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}

@@ -158,3 +158,59 @@ export interface ProductFormData {
   warehouse_id?: string;
   attributes?: { definition_id?: string; code?: string; value: unknown }[] | Record<string, unknown>;
 }
+
+// --- Branch Phase 3: branch aggregation, cross-branch availability, ledger history ---
+
+export interface BranchStockDashboard {
+  branch_id: string;
+  total_skus: number;
+  inventory_value: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  reserved_quantity: number;
+  recent_movements_count: number;
+}
+
+export interface BranchAvailability {
+  branch_id: string;
+  branch_name: string;
+  on_hand: number;
+  reserved: number;
+  available: number;
+  in_transit: number;
+}
+
+export interface OtherBranchAvailability {
+  branch_id: string;
+  branch_name: string;
+  available: number;
+}
+
+export interface ProductAvailability {
+  product_id: string;
+  product_sku: string;
+  product_name: string;
+  current_branch: BranchAvailability;
+  /** Empty when the caller lacks inventory.cross_branch_view — not an error. */
+  other_branches: OtherBranchAvailability[];
+}
+
+export interface StockMovementRecord {
+  id: string;
+  movement_type: string;
+  product_id: string;
+  product_sku: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  branch_id: string | null;
+  location_id: string | null;
+  location_name: string | null;
+  destination_warehouse_id: string | null;
+  quantity: number;
+  unit_cost: number | null;
+  reference_type: string;
+  reference_id: string | null;
+  performed_by: string | null;
+  notes: string;
+  created_at: string;
+}

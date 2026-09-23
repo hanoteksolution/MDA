@@ -1,3 +1,17 @@
+import { FinancePage as SchoolFinancePage } from '@/modules/school/sis/FinancePage';
+import { FeeGenerationPage } from '@/modules/school/sis/FeeGenerationPage';
+import { BillingTransactionsPage } from '@/modules/school/sis/BillingTransactionsPage';
+import { MarksPage } from '@/modules/school/sis/MarksPage';
+import { PromotionPage } from '@/modules/school/sis/PromotionPage';
+import { SisListPage } from "@/modules/school/sis/ListPage";
+import { SisFormPage } from "@/modules/school/sis/FormPage";
+import { SisDetailPage } from "@/modules/school/sis/DetailPage";
+import { AdmissionsDashboardPage } from "@/modules/school/sis/DashboardPage";
+import { AttendancePage } from "@/modules/school/sis/AttendancePage";
+import { TimetablePage } from "@/modules/school/sis/TimetablePage";
+import { FoundationListPage } from "@/modules/school/pages/FoundationListPage";
+import { FoundationFormPage } from "@/modules/school/pages/FoundationFormPage";
+import { FoundationDetailPage } from "@/modules/school/pages/FoundationDetailPage";
 import type { ReactNode } from "react";
 import { Route } from "react-router-dom";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
@@ -21,6 +35,9 @@ import {
   OfficePage,
   ProjectManagementPage,
   TravelAgencyPage,
+  SchoolPage,
+  AcademicYearsPage,
+  SchoolSettingsPage,
 } from "@/app/routes/modules";
 import {
   MedicineEditPage,
@@ -42,6 +59,7 @@ import { CustomerFormPage } from "@/modules/customers/pages/CustomersPage";
 import { PurchaseFormPage } from "@/modules/purchases/pages/PurchasesPage";
 import { SupplierFormPage } from "@/modules/suppliers/pages/SuppliersPage";
 import { SettingsPage } from "@/modules/settings/pages/SettingsPage";
+import { IntegrationsPage } from "@/modules/settings/integrations/IntegrationsPage";
 import {
   InvoiceEditPage,
   InvoiceFormPage,
@@ -69,6 +87,34 @@ import {
   RestaurantMenuItemEditPage,
   RestaurantMenuItemFormPage,
 } from "@/modules/restaurant/pages/RestaurantMenuItemPages";
+import { CafeteriaDashboardPage } from "@/modules/cafeteria/pages/CafeteriaDashboardPage";
+import { BaristaBoardPage } from "@/modules/cafeteria/pages/BaristaBoardPage";
+import { CafeteriaSettingsPage } from "@/modules/cafeteria/pages/CafeteriaSettingsPage";
+import { WastePage } from "@/modules/cafeteria/pages/WastePage";
+import {
+  CombosPage,
+  LoyaltyPage,
+  PromotionsPage,
+  ReservationsPage,
+  ShiftsPage,
+} from "@/modules/cafeteria/pages/CommercePages";
+import {
+  RestaurantFloorDetailPage,
+  RestaurantFloorEditPage,
+  RestaurantFloorFormPage,
+  RestaurantIngredientDetailPage,
+  RestaurantIngredientEditPage,
+  RestaurantIngredientFormPage,
+  RestaurantModifierDetailPage,
+  RestaurantModifierEditPage,
+  RestaurantModifierFormPage,
+  RestaurantRecipeDetailPage,
+  RestaurantRecipeEditPage,
+  RestaurantRecipeFormPage,
+  RestaurantStationDetailPage,
+  RestaurantStationEditPage,
+  RestaurantStationFormPage,
+} from "@/modules/restaurant/pages/RestaurantOpsPages";
 import {
   ProjectWbsDetailPage,
   ProjectWbsEditPage,
@@ -160,23 +206,6 @@ const TRAVEL_EXTENDED_RESOURCES = [
   ["refunds", "travel.refunds", TravelRefundPages],
   ["expenses", "travel.expenses", TravelExpensePages],
 ] as const;
-import {
-  RestaurantFloorDetailPage,
-  RestaurantFloorEditPage,
-  RestaurantFloorFormPage,
-  RestaurantIngredientDetailPage,
-  RestaurantIngredientEditPage,
-  RestaurantIngredientFormPage,
-  RestaurantModifierDetailPage,
-  RestaurantModifierEditPage,
-  RestaurantModifierFormPage,
-  RestaurantRecipeDetailPage,
-  RestaurantRecipeEditPage,
-  RestaurantRecipeFormPage,
-  RestaurantStationDetailPage,
-  RestaurantStationEditPage,
-  RestaurantStationFormPage,
-} from "@/modules/restaurant/pages/RestaurantOpsPages";
 
 function gated(
   workspace: string,
@@ -195,7 +224,7 @@ function gated(
 
 const HOME_PAGE: Record<string, ReactNode> = {
   restaurant: <RestaurantPage />,
-  cafeteria: <RestaurantPage />,
+  cafeteria: <CafeteriaDashboardPage />,
   gym: <GymPage />,
   pharmacy: <PharmacyPage />,
   hotel: <HotelPage />,
@@ -204,6 +233,7 @@ const HOME_PAGE: Record<string, ReactNode> = {
   futsal: <FutsalPage />,
   project: <ProjectManagementPage />,
   travel: <TravelAgencyPage />,
+  school: <SchoolPage />,
 };
 
 const HOME_GUARD: Record<string, { permission: string | string[]; module?: string | string[] }> = {
@@ -220,6 +250,7 @@ const HOME_GUARD: Record<string, { permission: string | string[]; module?: strin
   futsal: { permission: "futsal.view", module: "futsal" },
   project: { permission: "projects.view", module: "project_management" },
   travel: { permission: "travel.bookings.view", module: "travel_agency" },
+  school: { permission: "school.view", module: "school" },
 };
 
 /** Shared-engine aliases: /restaurant/pos → PosPage, etc. Industry homes stay on existing pages. */
@@ -364,10 +395,15 @@ export function industryCapabilityRoutes() {
         path={`/${ws}/reports`}
         element={gated(ws, "reports.view", undefined, <ReportsPage />)}
       />,
-      <Route
+      ws !== "school" && <Route
         key={`${ws}-settings`}
         path={`/${ws}/settings`}
         element={gated(ws, "settings.view", undefined, <SettingsPage />)}
+      />,
+      ws !== "school" && <Route
+        key={`${ws}-settings-integrations`}
+        path={`/${ws}/settings/integrations`}
+        element={gated(ws, ["integrations.view", "integrations.payments.view", "integrations.sms.billing.view"], undefined, <IntegrationsPage />)}
       />,
       <Route
         key={`${ws}-settings-branches-new`}
@@ -385,6 +421,22 @@ export function industryCapabilityRoutes() {
 
 export function industryFeatureRoutes() {
   return [
+    <Route key="school-academics" path="/school/academics/:resource" element={gated("school", "school.view", "school", <FoundationListPage />)} />,
+    <Route key="school-academics-new" path="/school/academics/:resource/new" element={gated("school", "school.view", "school", <FoundationFormPage />)} />,
+    <Route key="school-academics-edit" path="/school/academics/:resource/:id/edit" element={gated("school", "school.view", "school", <FoundationFormPage />)} />,
+    <Route key="school-sis-list" path="/school/sis/:resource" element={gated("school", "school.view", "school", <SisListPage />)} />,
+    <Route key="school-sis-new" path="/school/sis/:resource/new" element={gated("school", "school.view", "school", <SisFormPage />)} />,
+    <Route key="school-sis-edit" path="/school/sis/:resource/:id/edit" element={gated("school", "school.view", "school", <SisFormPage />)} />,
+    <Route key="school-sis-detail" path="/school/sis/:resource/:id" element={gated("school", "school.view", "school", <SisDetailPage />)} />,
+    <Route key="school-fee-finance" path="/school/finance/fees" element={gated("school", "school.view", "school", <SchoolFinancePage />)} />,
+    <Route key="school-fee-generation" path="/school/finance/generate" element={gated("school", "school.view", "school", <FeeGenerationPage />)} />,
+    <Route key="school-billing-transactions" path="/school/finance/transactions" element={gated("school", "school.view", "school", <BillingTransactionsPage />)} />,
+    <Route key="school-marks" path="/school/marks" element={gated("school", "school.view", "school", <MarksPage />)} />,
+    <Route key="school-promotions" path="/school/promotions" element={gated("school", "school.view", "school", <PromotionPage />)} />,
+    <Route key="school-attendance" path="/school/attendance" element={gated("school", "school.view", "school", <AttendancePage />)} />,
+    <Route key="school-timetable" path="/school/timetable" element={gated("school", "school.view", "school", <TimetablePage />)} />,
+    <Route key="school-admissions" path="/school/admissions" element={gated("school", "school.view", "school", <AdmissionsDashboardPage />)} />,
+    <Route key="school-academics-detail" path="/school/academics/:resource/:id" element={gated("school", "school.view", "school", <FoundationDetailPage />)} />,
     <Route
       key="project-home"
       path="/project"
@@ -394,6 +446,21 @@ export function industryFeatureRoutes() {
       key="travel-home"
       path="/travel"
       element={gated("travel", "travel.bookings.view", "travel_agency", <TravelAgencyPage />)}
+    />,
+    <Route
+      key="school-home"
+      path="/school"
+      element={gated("school", "school.view", "school", <SchoolPage />)}
+    />,
+    <Route
+      key="school-academic-years"
+      path="/school/academic-years"
+      element={gated("school", "school.view", "school", <AcademicYearsPage />)}
+    />,
+    <Route
+      key="school-settings"
+      path="/school/settings"
+      element={gated("school", "school.view", "school", <SchoolSettingsPage />)}
     />,
     <Route
       key="project-projects"
@@ -587,8 +654,74 @@ export function industryFeatureRoutes() {
     <Route
       key="cafeteria-home"
       path="/cafeteria"
+      element={gated("cafeteria", ["restaurant.view", "cafeteria.dashboard.view"], "restaurant", <CafeteriaDashboardPage />)}
+    />,
+    <Route
+      key="cafeteria-barista"
+      path="/cafeteria/barista"
+      element={gated("cafeteria", ["restaurant.kitchen", "cafeteria.barista.queue", "restaurant.view"], "restaurant", <BaristaBoardPage />)}
+    />,
+    <Route
+      key="cafeteria-orders"
+      path="/cafeteria/orders"
       element={gated("cafeteria", "restaurant.view", "restaurant", <RestaurantPage />)}
     />,
+    <Route
+      key="cafeteria-waste"
+      path="/cafeteria/waste"
+      element={gated("cafeteria", ["cafeteria.waste.view", "restaurant.view", "inventory.view"], "restaurant", <WastePage />)}
+    />,
+    <Route
+      key="cafeteria-promotions"
+      path="/cafeteria/promotions"
+      element={gated("cafeteria", "restaurant.view", "restaurant", <PromotionsPage />)}
+    />,
+    <Route
+      key="cafeteria-combos"
+      path="/cafeteria/combos"
+      element={gated("cafeteria", "restaurant.view", "restaurant", <CombosPage />)}
+    />,
+    <Route
+      key="cafeteria-loyalty"
+      path="/cafeteria/loyalty"
+      element={gated("cafeteria", "restaurant.view", "restaurant", <LoyaltyPage />)}
+    />,
+    <Route
+      key="cafeteria-reservations"
+      path="/cafeteria/reservations"
+      element={gated("cafeteria", ["restaurant.floor", "restaurant.view"], "restaurant", <ReservationsPage />)}
+    />,
+    <Route
+      key="cafeteria-shifts"
+      path="/cafeteria/shifts"
+      element={gated("cafeteria", ["cafeteria.staff.view", "restaurant.view"], "restaurant", <ShiftsPage />)}
+    />,
+    <Route
+      key="cafeteria-settings"
+      path="/cafeteria/settings"
+      element={gated("cafeteria", ["cafeteria.settings.view", "restaurant.manage", "restaurant.view"], "restaurant", <CafeteriaSettingsPage />)}
+    />,
+    <Route
+      key="cafeteria-menu-item-new"
+      path="/cafeteria/menu/items/new"
+      element={gated("cafeteria", ["restaurant.manage", "restaurant.menu.create"], "restaurant", <RestaurantMenuItemFormPage />)}
+    />,
+    <Route
+      key="cafeteria-menu-item-edit"
+      path="/cafeteria/menu/items/:id/edit"
+      element={gated("cafeteria", ["restaurant.manage", "restaurant.menu.update"], "restaurant", <RestaurantMenuItemEditPage />)}
+    />,
+    <Route
+      key="cafeteria-menu-item-detail"
+      path="/cafeteria/menu/items/:id"
+      element={gated("cafeteria", "restaurant.view", "restaurant", <RestaurantMenuItemDetailPage />)}
+    />,
+    <Route key="cafeteria-ingredient-new" path="/cafeteria/ingredients/new" element={gated("cafeteria", ["restaurant.manage", "inventory.manage", "products.manage"], "restaurant", <RestaurantIngredientFormPage />)} />,
+    <Route key="cafeteria-ingredient-edit" path="/cafeteria/ingredients/:id/edit" element={gated("cafeteria", ["restaurant.manage", "inventory.manage", "products.manage"], "restaurant", <RestaurantIngredientEditPage />)} />,
+    <Route key="cafeteria-ingredient-detail" path="/cafeteria/ingredients/:id" element={gated("cafeteria", "restaurant.view", "restaurant", <RestaurantIngredientDetailPage />)} />,
+    <Route key="cafeteria-recipe-new" path="/cafeteria/recipes/new" element={gated("cafeteria", ["restaurant.manage", "restaurant.menu.update", "cafeteria.recipes.create"], "restaurant", <RestaurantRecipeFormPage />)} />,
+    <Route key="cafeteria-recipe-edit" path="/cafeteria/recipes/:id/edit" element={gated("cafeteria", ["restaurant.manage", "restaurant.menu.update", "cafeteria.recipes.update"], "restaurant", <RestaurantRecipeEditPage />)} />,
+    <Route key="cafeteria-recipe-detail" path="/cafeteria/recipes/:id" element={gated("cafeteria", ["restaurant.view", "cafeteria.recipes.view"], "restaurant", <RestaurantRecipeDetailPage />)} />,
     <Route
       key="retail-home"
       path="/retail"

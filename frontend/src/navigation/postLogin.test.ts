@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { postLoginPath, shouldShowModuleHub } from "./postLogin";
+import { isElevatedUser, postLoginPath, shouldShowModuleHub } from "./postLogin";
 import type { User } from "@/types/models";
 
 function user(partial: Partial<User> = {}): User {
@@ -19,6 +19,23 @@ function user(partial: Partial<User> = {}): User {
     ...partial,
   };
 }
+
+describe("isElevatedUser", () => {
+  it("exempts Superadmin / Platform Admin from the subscription gate", () => {
+    expect(isElevatedUser(user({ is_super_admin: true }))).toBe(true);
+    expect(isElevatedUser(user({ is_platform_admin: true }))).toBe(true);
+    expect(isElevatedUser(user({ is_superuser: true }))).toBe(true);
+    expect(isElevatedUser(user({ role: { id: "r1", name: "Super Admin", slug: "super_admin" } }))).toBe(
+      true
+    );
+  });
+
+  it("never exempts a regular tenant admin from the subscription gate", () => {
+    expect(isElevatedUser(user({ role: { id: "r2", name: "Admin", slug: "admin" } }))).toBe(false);
+    expect(isElevatedUser(user())).toBe(false);
+    expect(isElevatedUser(null)).toBe(false);
+  });
+});
 
 describe("postLoginPath", () => {
   it("sends elevated admins to the hub", () => {

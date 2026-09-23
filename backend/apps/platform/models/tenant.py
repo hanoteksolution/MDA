@@ -300,18 +300,28 @@ class TenantSubscription(BaseModel):
 
 
 class SubscriptionPayment(BaseModel):
-    """Tracks Waafi/EVC subscription payments for automatic renewal."""
+    """A subscription payment request (the subscription "invoice").
+
+    Checkout rows (``intent`` set) are paid through the shared payment framework: a sales Invoice in
+    Safari's house tenant + a ``PaymentIntent``. Only a verified provider webhook settling that
+    intent confirms the row and activates/renews the subscription (SubscriptionBillingService).
+    Rows without an intent are legacy Waafi/EVC requests (manual, audited recovery only).
+    """
 
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
     STATUS_FAILED = "failed"
     STATUS_EXPIRED = "expired"
+    STATUS_REVIEW = "review"  # money/identity did not verify: a human decides, nothing was activated
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_CONFIRMED, "Confirmed"),
         (STATUS_FAILED, "Failed"),
         (STATUS_EXPIRED, "Expired"),
+        (STATUS_REVIEW, "Under review"),
     ]
+    KIND_RENEW = "renew"
+    KIND_NEW_PLAN = "new_plan"
 
     subscription = models.ForeignKey(
         TenantSubscription,
@@ -335,10 +345,27 @@ class SubscriptionPayment(BaseModel):
         related_name="reported_subscription_payments",
     )
     notes = models.TextField(blank=True)
+    # ── verified checkout (payment framework) ──
+    kind = models.CharField(max_length=10, blank=True)
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    currency = models.CharField(max_length=3, blank=True)
+    invoice = models.ForeignKey("sales.Invoice", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    intent = models.OneToOneField(
+        "integrations.PaymentIntent", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="subscription_payment",
+    )
+    idempotency_key = models.CharField(max_length=64, blank=True)
+    failure_reason = models.CharField(max_length=300, blank=True)
 
     class Meta:
         db_table = "subscription_payments"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subscription", "idempotency_key"], condition=~models.Q(idempotency_key=""),
+                name="uniq_subscription_payment_key",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.payment_reference} ({self.status})"

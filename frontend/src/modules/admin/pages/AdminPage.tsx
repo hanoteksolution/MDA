@@ -83,7 +83,11 @@ export function AdminPage() {
   }, [tab, loadUsers, loadRoles, loadPermissions]);
 
   const handleDeactivateUser = async (id: string, username: string) => {
-    if (!confirm(`Deactivate user "${username}"? They will no longer be able to sign in.`)) return;
+    const ok = await appDialog.confirm(
+      `Deactivate user "${username}"? They will no longer be able to sign in.`,
+      { title: "Deactivate user", tone: "danger", confirmLabel: "Deactivate" }
+    );
+    if (!ok) return;
     try {
       await adminApi.deactivateUser(id);
       loadUsers();

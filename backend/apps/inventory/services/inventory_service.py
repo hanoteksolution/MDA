@@ -2,7 +2,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 
 from apps.audit.repositories.audit_repository import AuditRepository
 from apps.inventory.models import (
@@ -14,7 +14,7 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.products.models import Product
-from core.tenancy import apply_tenant_scope, stamp_tenant_id
+from core.tenancy import apply_tenant_scope, resolve_acting_tenant, stamp_tenant_id
 
 
 def _normalize_module_code(module_code=None) -> str:
@@ -49,6 +49,39 @@ def _module_scope_products(qs, *, module_code=None):
     return qs.filter(module_code=code)
 
 
+def _default_location_id(warehouse):
+    """The location a movement uses when the caller doesn't name one explicitly.
+
+    BRANCH_INVENTORY.md §5.1: historical rows stay NULL rather than guessed, but every
+    *new* movement gets a real location — defaulting to the warehouse's default
+    StockLocation, which every warehouse has had since Phase 2's
+    ``ensure_default_locations``.
+    """
+    if warehouse is None:
+        return None
+    from apps.organization.models import StockLocation
+
+    return (
+        StockLocation.active_objects()
+        .filter(warehouse_id=warehouse.pk, is_default=True)
+        .values_list("pk", flat=True)
+        .first()
+    )
+
+
+def _movement_stamp(*, warehouse, user=None, location_id=None):
+    """Common branch/location/actor fields for a new StockMovement or InventoryTransaction.
+
+    Centralised so every mutation path stamps the same way — the brief's warning
+    against "different services inventing different formulas" applies to ledger
+    metadata too, not only to quantity math.
+    """
+    return {
+        "branch_id": getattr(warehouse, "branch_id", None),
+        "location_id": location_id if location_id is not None else _default_location_id(warehouse),
+    }
+
+
 class WarehouseService:
     @staticmethod
     def list_warehouses(*, branch_id=None, is_active=None, user=None, request=None):
@@ -63,10 +96,20 @@ class WarehouseService:
     @staticmethod
     @transaction.atomic
     def create(*, data, user=None):
+        from apps.organization.services.structure_service import (
+            StockLocationService,
+            validate_warehouse_branch,
+        )
+
         payload = stamp_tenant_id(dict(data), user=user)
         if data.get("is_default"):
             Warehouse.objects.filter(branch_id=data["branch_id"]).update(is_default=False)
-        return Warehouse.objects.create(**payload, created_by=user)
+        warehouse = Warehouse.objects.create(**payload, created_by=user)
+        # The warehouse rule: branch ownership is validated now, never inferred later.
+        validate_warehouse_branch(warehouse)
+        # Every warehouse has somewhere for a movement to point from day one.
+        StockLocationService.ensure_default_locations(warehouse=warehouse, actor=user)
+        return warehouse
 
     @staticmethod
     @transaction.atomic
@@ -83,20 +126,28 @@ class WarehouseService:
 class InventoryService:
     @staticmethod
     @transaction.atomic
-    def backfill_missing_inventory(*, user=None, warehouse=None, module_code=None):
+    def backfill_missing_inventory(
+        *, user=None, request=None, tenant=None, warehouse=None, module_code=None
+    ):
         """Create qty=0 inventory rows for products that have none (so they appear in Stock)."""
-        wh = warehouse or (
-            Warehouse.active_objects().filter(is_default=True).first()
-            or Warehouse.active_objects().first()
+        tenant = tenant or resolve_acting_tenant(user=user, request=request)
+        wh_qs = apply_tenant_scope(
+            Warehouse.active_objects(), user=user, request=request, tenant=tenant
         )
+        wh = warehouse or (wh_qs.filter(is_default=True).first() or wh_qs.first())
         if not wh:
             return 0
+        if tenant is not None and wh.tenant_id != getattr(tenant, "pk", tenant):
+            raise ValueError("Warehouse does not belong to the acting tenant.")
         existing_ids = set(
             Inventory.active_objects()
             .filter(warehouse=wh)
             .values_list("product_id", flat=True)
         )
-        products = _module_scope_products(Product.active_objects(), module_code=module_code)
+        products = apply_tenant_scope(
+            Product.active_objects(), user=user, request=request, tenant=tenant
+        )
+        products = _module_scope_products(products, module_code=module_code)
         missing = list(products.exclude(id__in=existing_ids))
         for product in missing:
             InventoryService.ensure_inventory_record(product=product, warehouse=wh, user=user)
@@ -104,22 +155,29 @@ class InventoryService:
 
     @staticmethod
     @transaction.atomic
-    def dedupe_inventory(*, user=None, preferred_branch_id=None):
+    def dedupe_inventory(
+        *, user=None, request=None, tenant=None, preferred_branch_id=None
+    ):
         """Merge duplicate inventory rows so each product×warehouse appears once.
 
-        Also collapses same-named warehouses (e.g. two 'Main Warehouse' rows for
-        Cappuccino on different branch records) into one keeper row.
+        Warehouse identity is its primary key. Rows from different warehouses,
+        branches, or tenants must never be combined merely because their display
+        names/codes happen to match.
         """
         merged = 0
+        tenant = tenant or resolve_acting_tenant(user=user, request=request)
+        inventory_qs = apply_tenant_scope(
+            Inventory.active_objects(), user=user, request=request, tenant=tenant
+        )
 
         # Exact product + warehouse duplicates
         by_exact: dict[tuple, list] = defaultdict(list)
         for inv in (
-            Inventory.active_objects()
+            inventory_qs
             .select_related("warehouse")
             .order_by("product_id", "warehouse_id", "-quantity", "created_at")
         ):
-            by_exact[(inv.product_id, inv.warehouse_id)].append(inv)
+            by_exact[(inv.tenant_id, inv.product_id, inv.warehouse_id)].append(inv)
 
         for group in by_exact.values():
             if len(group) < 2:
@@ -144,45 +202,6 @@ class InventoryService:
                 extra.soft_delete(user=user)
                 merged += 1
 
-        # Same product + same warehouse display name (across duplicate branch records)
-        by_name: dict[tuple, list] = defaultdict(list)
-        for inv in Inventory.active_objects().select_related("warehouse"):
-            key = (
-                inv.product_id,
-                (inv.warehouse.name or "").strip().lower(),
-                (inv.warehouse.code or "").strip().lower(),
-            )
-            by_name[key].append(inv)
-
-        for group in by_name.values():
-            if len(group) < 2:
-                continue
-
-            def _keeper_score(r):
-                prefer = 1 if preferred_branch_id and str(r.warehouse.branch_id) == str(preferred_branch_id) else 0
-                return (prefer, r.quantity, r.warehouse.is_default, r.created_at)
-
-            group.sort(key=_keeper_score, reverse=True)
-            keeper = group[0]
-            for extra in group[1:]:
-                keeper.quantity += extra.quantity
-                keeper.reserved_quantity += extra.reserved_quantity
-                keeper.damaged_quantity += extra.damaged_quantity
-                keeper.returned_quantity += extra.returned_quantity
-                extra.soft_delete(user=user)
-                merged += 1
-            keeper.updated_by = user
-            keeper.save(
-                update_fields=[
-                    "quantity",
-                    "reserved_quantity",
-                    "damaged_quantity",
-                    "returned_quantity",
-                    "updated_by",
-                    "updated_at",
-                ]
-            )
-
         return merged
 
     @staticmethod
@@ -196,10 +215,12 @@ class InventoryService:
         module_code=None,
         user=None,
         request=None,
+        tenant=None,
     ):
         if ensure_rows:
-            InventoryService.dedupe_inventory(preferred_branch_id=branch_id, user=user)
-            wh_qs = apply_tenant_scope(Warehouse.active_objects(), user=user, request=request)
+            wh_qs = apply_tenant_scope(
+                Warehouse.active_objects(), user=user, request=request, tenant=tenant
+            )
             InventoryService.backfill_missing_inventory(
                 warehouse=(
                     wh_qs.filter(pk=warehouse_id).first()
@@ -211,6 +232,7 @@ class InventoryService:
                     )
                 ),
                 user=user,
+                request=request,
                 module_code=module_code,
             )
         qs = (
@@ -218,7 +240,7 @@ class InventoryService:
             .select_related("product", "product__category", "warehouse")
             .filter(product__deleted_at__isnull=True)
         )
-        qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         qs = _module_scope_inventory(qs, module_code=module_code)
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)
@@ -236,7 +258,9 @@ class InventoryService:
         return qs.order_by("product__name")
 
     @staticmethod
-    def get_reorder_candidates(*, branch_id=None, module_code=None, user=None, request=None):
+    def get_reorder_candidates(
+        *, branch_id=None, module_code=None, user=None, request=None, tenant=None
+    ):
         """Products at/below minimum stock — hook for future Celery reorder alerts."""
         return InventoryService.list_inventory(
             branch_id=branch_id,
@@ -245,25 +269,33 @@ class InventoryService:
             module_code=module_code,
             user=user,
             request=request,
+            tenant=tenant,
         )
 
     @staticmethod
-    def get_low_stock(*, branch_id=None, module_code=None, user=None, request=None):
+    def get_low_stock(
+        *, branch_id=None, module_code=None, user=None, request=None, tenant=None
+    ):
         return InventoryService.get_reorder_candidates(
-            branch_id=branch_id, module_code=module_code, user=user, request=request
+            branch_id=branch_id, module_code=module_code, user=user, request=request,
+            tenant=tenant,
         )
 
     @staticmethod
-    def get_out_of_stock(*, branch_id=None, module_code=None, user=None, request=None):
+    def get_out_of_stock(
+        *, branch_id=None, module_code=None, user=None, request=None, tenant=None
+    ):
         return InventoryService.list_inventory(
-            branch_id=branch_id, module_code=module_code, user=user, request=request
+            branch_id=branch_id, module_code=module_code, user=user, request=request,
+            tenant=tenant,
         ).filter(quantity__lte=0)
 
     @staticmethod
-    def get_summary(*, branch_id=None, module_code=None, user=None, request=None):
-        InventoryService.dedupe_inventory(preferred_branch_id=branch_id, user=user)
+    def get_summary(
+        *, branch_id=None, module_code=None, user=None, request=None, tenant=None
+    ):
         qs = Inventory.active_objects().select_related("product")
-        qs = apply_tenant_scope(qs, user=user, request=request)
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         qs = _module_scope_inventory(qs, module_code=module_code)
         if branch_id:
             qs = qs.filter(warehouse__branch_id=branch_id)
@@ -271,7 +303,12 @@ class InventoryService:
             total_items=Count("id"),
             total_quantity=Sum("quantity"),
             # Retail/on-hand value at selling price (what the stock is worth to sell)
-            inventory_value=Sum(F("quantity") * F("product__selling_price")),
+            inventory_value=Sum(
+                ExpressionWrapper(
+                    F("quantity") * F("product__selling_price"),
+                    output_field=DecimalField(max_digits=38, decimal_places=4),
+                )
+            ),
         )
         # Low stock = at/below min but still some units; out of stock counted separately
         low_stock_count = qs.filter(
@@ -371,6 +408,7 @@ class InventoryService:
                 created_by=user,
             )
 
+            stamp = _movement_stamp(warehouse=warehouse, user=user)
             StockMovement.objects.create(
                 product=product,
                 warehouse=warehouse,
@@ -380,6 +418,8 @@ class InventoryService:
                 reference_id=adjustment.id,
                 notes=reason,
                 created_by=user,
+                performed_by=user,
+                **stamp,
             )
 
             InventoryTransaction.objects.create(
@@ -391,6 +431,7 @@ class InventoryService:
                 reference_type="adjustment",
                 reference_id=adjustment.id,
                 created_by=user,
+                **stamp,
             )
 
         AuditRepository.create(
@@ -575,6 +616,7 @@ class InventoryService:
         inv.updated_by = user
         inv.save(update_fields=["reserved_quantity", "updated_by", "updated_at"])
 
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
         InventoryTransaction.objects.create(
             inventory=inv,
             transaction_type="reserve",
@@ -584,6 +626,7 @@ class InventoryService:
             reference_type=reference_type,
             reference_id=reference_id,
             created_by=user,
+            **stamp,
         )
         if notes:
             StockMovement.objects.create(
@@ -595,6 +638,8 @@ class InventoryService:
                 reference_id=reference_id,
                 notes=f"RESERVE: {notes}",
                 created_by=user,
+                performed_by=user,
+                **stamp,
             )
         return inv
 
@@ -625,6 +670,7 @@ class InventoryService:
         inv.updated_by = user
         inv.save(update_fields=["reserved_quantity", "updated_by", "updated_at"])
 
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
         InventoryTransaction.objects.create(
             inventory=inv,
             transaction_type="unreserve",
@@ -634,6 +680,7 @@ class InventoryService:
             reference_type=reference_type,
             reference_id=reference_id,
             created_by=user,
+            **stamp,
         )
         if notes:
             StockMovement.objects.create(
@@ -645,6 +692,8 @@ class InventoryService:
                 reference_id=reference_id,
                 notes=f"UNRESERVE: {notes}",
                 created_by=user,
+                performed_by=user,
+                **stamp,
             )
         return inv
 
@@ -693,6 +742,7 @@ class InventoryService:
         reference_type="invoice",
         user=None,
         notes="",
+        location_id=None,
     ):
         """
         Apply a sale-related stock change.
@@ -711,14 +761,20 @@ class InventoryService:
             product=product, warehouse=warehouse, user=user
         )
         qty_before = inv.quantity
-        # Never drive on-hand below zero: oversell clamps to out-of-stock (0).
-        # Example: sell 150 with only 100 on hand → stock becomes 0, not -50.
+        # Never drive on-hand below zero, and never below what is currently
+        # reserved (a transfer reservation, a POS hold, etc.) — a direct sale must
+        # not consume stock an active reservation is holding. Oversell clamps to
+        # that floor instead of raising, matching the existing sale-side policy.
         qty_after = qty_before + delta
-        if qty_after < 0:
-            qty_after = Decimal("0")
-            delta = qty_after - qty_before
-            if delta == 0:
-                return inv
+        if delta < 0:
+            # Only ever clamp a deduction, and never so far that it adds stock
+            # (on-hand already below the floor is left as-is, not raised).
+            floor = min(max(inv.reserved_quantity, Decimal("0")), qty_before)
+            if qty_after < floor:
+                qty_after = floor
+                delta = qty_after - qty_before
+                if delta == 0:
+                    return inv
         inv.quantity = qty_after
         inv.updated_by = user
         inv.save(update_fields=["quantity", "updated_by", "updated_at"])
@@ -726,6 +782,7 @@ class InventoryService:
         movement_type = "sale" if delta < 0 else "return"
         txn_type = "out" if delta < 0 else "return"
         ref_type = reference_type or "invoice"
+        stamp = _movement_stamp(warehouse=warehouse, user=user, location_id=location_id)
 
         StockMovement.objects.create(
             product=product,
@@ -736,6 +793,8 @@ class InventoryService:
             reference_id=reference_id,
             notes=notes,
             created_by=user,
+            performed_by=user,
+            **stamp,
         )
         InventoryTransaction.objects.create(
             inventory=inv,
@@ -745,6 +804,7 @@ class InventoryService:
             quantity_change=delta,
             reference_type=ref_type,
             reference_id=reference_id,
+            **stamp,
             created_by=user,
         )
         # Pharmacy FEFO when batches exist for this product/warehouse.
@@ -789,6 +849,7 @@ class InventoryService:
         reference_id,
         user=None,
         notes="",
+        location_id=None,
     ):
         """
         quantity_by_product maps product_id → signed inventory delta
@@ -813,7 +874,405 @@ class InventoryService:
                 reference_id=reference_id,
                 user=user,
                 notes=notes,
+                location_id=location_id,
             )
+
+    # --- Branch Phase 3 additions (BRANCH_INVENTORY.md §6). Same locking discipline as
+    # every existing mutation path: select_for_update inside @transaction.atomic, write
+    # the ledger in the same transaction as the balance change. ---
+
+    @staticmethod
+    @transaction.atomic
+    def damage_stock(
+        *, product, warehouse, quantity, reason="", reference_type="", reference_id=None, user=None
+    ):
+        """Move on-hand units into damaged_quantity. Physical count is unchanged;
+        sellable on-hand decreases."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Damage quantity must be positive.")
+
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        if qty > inv.quantity:
+            raise ValueError(
+                f"Cannot damage {qty} of {product.sku}; only {inv.quantity} on hand."
+            )
+        qty_before = inv.quantity
+        inv.quantity = qty_before - qty
+        inv.damaged_quantity = inv.damaged_quantity + qty
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "damaged_quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type="damage",
+            quantity=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            notes=reason,
+            created_by=user,
+            performed_by=user,
+            **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="damage",
+            quantity_before=qty_before,
+            quantity_after=inv.quantity,
+            quantity_change=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+            **stamp,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def write_off_stock(
+        *,
+        product,
+        warehouse,
+        quantity,
+        source="damaged",
+        reason="",
+        reference_type="",
+        reference_id=None,
+        user=None,
+    ):
+        """Permanently remove stock already known to be bad (damaged) or still on hand.
+
+        Distinct from ``adjustment``: an adjustment corrects a miscounted number, a
+        write-off disposes of known-bad stock (BRANCH_INVENTORY.md §5.2).
+        """
+        if source not in ("damaged", "on_hand"):
+            raise ValueError("source must be 'damaged' or 'on_hand'.")
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Write-off quantity must be positive.")
+
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        if source == "damaged":
+            if qty > inv.damaged_quantity:
+                raise ValueError(
+                    f"Cannot write off {qty} of {product.sku}; only {inv.damaged_quantity} "
+                    "damaged."
+                )
+            inv.damaged_quantity = inv.damaged_quantity - qty
+            inv.updated_by = user
+            inv.save(update_fields=["damaged_quantity", "updated_by", "updated_at"])
+            qty_before = qty_after = inv.quantity  # on-hand is unaffected
+        else:
+            if qty > inv.quantity:
+                raise ValueError(
+                    f"Cannot write off {qty} of {product.sku}; only {inv.quantity} on hand."
+                )
+            qty_before = inv.quantity
+            inv.quantity = qty_before - qty
+            qty_after = inv.quantity
+            inv.updated_by = user
+            inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type="write_off",
+            quantity=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            notes=reason,
+            created_by=user,
+            performed_by=user,
+            metadata={"source": source},
+            **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="write_off",
+            quantity_before=qty_before,
+            quantity_after=qty_after,
+            quantity_change=(qty_after - qty_before),
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+            **stamp,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def receive_purchase_return(
+        *, product, warehouse, quantity, reason="", reference_type="", reference_id=None, user=None
+    ):
+        """Return stock to a supplier: decrements on-hand. Rejected if it would go
+        negative — a return can never remove stock that isn't there (unlike a sale,
+        which is allowed to clamp; see BRANCH_INVENTORY.md §1)."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Purchase-return quantity must be positive.")
+
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        if qty > inv.quantity:
+            raise ValueError(
+                f"Cannot return {qty} of {product.sku} to the supplier; only "
+                f"{inv.quantity} on hand."
+            )
+        qty_before = inv.quantity
+        inv.quantity = qty_before - qty
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type="purchase_return",
+            quantity=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            notes=reason,
+            created_by=user,
+            performed_by=user,
+            **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="out",
+            quantity_before=qty_before,
+            quantity_after=inv.quantity,
+            quantity_change=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+            **stamp,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def record_opening_balance(*, product, warehouse, quantity, notes="", user=None):
+        """A warehouse's very first stock figure for a product. Refuses if a non-zero
+        Inventory row already exists — this is a one-time starting figure, not a
+        correction tool (use create_adjustment for that)."""
+        qty = Decimal(str(quantity))
+        if qty < 0:
+            raise ValueError("Opening balance cannot be negative.")
+
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        if inv.quantity != 0:
+            raise ValueError(
+                f"{product.sku} already has an opening balance recorded at "
+                f"{warehouse.code} ({inv.quantity} on hand)."
+            )
+        inv.quantity = qty
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type="opening_balance",
+            quantity=qty,
+            notes=notes,
+            created_by=user,
+            performed_by=user,
+            **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv,
+            transaction_type="in",
+            quantity_before=Decimal("0"),
+            quantity_after=qty,
+            quantity_change=qty,
+            created_by=user,
+            **stamp,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def move_stock(
+        *,
+        product,
+        source_warehouse,
+        destination_warehouse,
+        quantity,
+        notes="",
+        reference_type="",
+        reference_id=None,
+        user=None,
+        allow_negative_available=False,
+    ):
+        """Same-branch (or any-branch, in Phase 3) warehouse-to-warehouse move.
+
+        The primitive Phase 4's cross-branch service will call for the "credit the
+        destination on receipt" half of its workflow (BRANCH_INVENTORY.md §6). Writes
+        ``warehouse_move``, never ``transfer_in``/``transfer_out`` — those names are
+        reserved for the branch-transfer workflow so the two are never confused in a
+        report. Not wired to ``StockTransferService`` in this phase (§2 boundary).
+
+        Source and destination Inventory rows are locked in ascending ``pk`` order
+        (not "source then destination") so two concurrent moves between the same
+        warehouse pair in opposite directions cannot deadlock — the Phase 2 lesson
+        (BRANCH_INVENTORY.md §6.1).
+        """
+        if source_warehouse.pk == destination_warehouse.pk:
+            raise ValueError("Source and destination warehouses must differ.")
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            raise ValueError("Move quantity must be positive.")
+
+        source_inv = InventoryService.ensure_inventory_record(
+            product=product, warehouse=source_warehouse, user=user
+        )
+        destination_inv = InventoryService.ensure_inventory_record(
+            product=product, warehouse=destination_warehouse, user=user
+        )
+        first_pk, second_pk = sorted([source_inv.pk, destination_inv.pk], key=str)
+        locked = {
+            row.pk: row
+            for row in Inventory.objects.select_for_update().filter(pk__in=[first_pk, second_pk])
+        }
+        src_inv = locked[source_inv.pk]
+        dst_inv = locked[destination_inv.pk]
+
+        available = src_inv.quantity - src_inv.reserved_quantity
+        if not allow_negative_available and qty > available:
+            raise ValueError(
+                f"Insufficient available stock for {product.sku} "
+                f"(available={available}, requested={qty})."
+            )
+
+        src_before = src_inv.quantity
+        src_inv.quantity = src_before - qty
+        src_inv.updated_by = user
+        src_inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        dst_before = dst_inv.quantity
+        dst_inv.quantity = dst_before + qty
+        dst_inv.updated_by = user
+        dst_inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        source_stamp = _movement_stamp(warehouse=source_warehouse, user=user)
+        dest_location_id = _default_location_id(destination_warehouse)
+        StockMovement.objects.create(
+            product=product,
+            warehouse=source_warehouse,
+            destination_warehouse=destination_warehouse,
+            destination_location_id=dest_location_id,
+            movement_type="warehouse_move",
+            quantity=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            notes=notes,
+            created_by=user,
+            performed_by=user,
+            **source_stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=src_inv,
+            transaction_type="out",
+            quantity_before=src_before,
+            quantity_after=src_inv.quantity,
+            quantity_change=-qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+            **source_stamp,
+        )
+        dest_stamp = _movement_stamp(
+            warehouse=destination_warehouse, user=user, location_id=dest_location_id
+        )
+        InventoryTransaction.objects.create(
+            inventory=dst_inv,
+            transaction_type="in",
+            quantity_before=dst_before,
+            quantity_after=dst_inv.quantity,
+            quantity_change=qty,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            created_by=user,
+            **dest_stamp,
+        )
+        return src_inv, dst_inv
+
+    # --- Phase 4: branch transfer primitives. Dispatch and receive are separate
+    # calls (unlike move_stock) so the destination is credited only at receipt,
+    # never at dispatch — see BranchTransferService. ---
+
+    @staticmethod
+    @transaction.atomic
+    def dispatch_reserved(
+        *, product, warehouse, quantity, reference_type="branch_transfer", reference_id=None,
+        user=None, notes="",
+    ):
+        """Convert a reservation into an outbound branch transfer: unreserve, then
+        decrement on-hand. Writes ``transfer_out`` — never ``sale`` — since this stock
+        is leaving via a transfer, not being sold."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            return None
+        InventoryService.unreserve_quantity(
+            product=product, warehouse=warehouse, quantity=qty,
+            reference_type=reference_type, reference_id=reference_id, user=user,
+        )
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        qty_before = inv.quantity
+        qty_after = qty_before - qty
+        if qty_after < 0:
+            raise ValueError(
+                f"Cannot dispatch {qty} of {product.sku}; only {qty_before} on hand."
+            )
+        inv.quantity = qty_after
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product, warehouse=warehouse, movement_type="transfer_out", quantity=-qty,
+            reference_type=reference_type, reference_id=reference_id, notes=notes,
+            created_by=user, performed_by=user, **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv, transaction_type="out", quantity_before=qty_before,
+            quantity_after=qty_after, quantity_change=-qty, reference_type=reference_type,
+            reference_id=reference_id, created_by=user, **stamp,
+        )
+        return inv
+
+    @staticmethod
+    @transaction.atomic
+    def receive_transfer_in(
+        *, product, warehouse, quantity, reference_type="branch_transfer", reference_id=None,
+        user=None, notes="",
+    ):
+        """Credit on-hand for an inbound branch transfer. Writes ``transfer_in``."""
+        qty = Decimal(str(quantity))
+        if qty <= 0:
+            return None
+        inv = InventoryService._locked_inventory(product=product, warehouse=warehouse, user=user)
+        qty_before = inv.quantity
+        qty_after = qty_before + qty
+        inv.quantity = qty_after
+        inv.updated_by = user
+        inv.save(update_fields=["quantity", "updated_by", "updated_at"])
+
+        stamp = _movement_stamp(warehouse=warehouse, user=user)
+        StockMovement.objects.create(
+            product=product, warehouse=warehouse, movement_type="transfer_in", quantity=qty,
+            reference_type=reference_type, reference_id=reference_id, notes=notes,
+            created_by=user, performed_by=user, **stamp,
+        )
+        InventoryTransaction.objects.create(
+            inventory=inv, transaction_type="in", quantity_before=qty_before,
+            quantity_after=qty_after, quantity_change=qty, reference_type=reference_type,
+            reference_id=reference_id, created_by=user, **stamp,
+        )
+        return inv
 
     @staticmethod
     def list_adjustments(*, user=None, request=None):
@@ -824,3 +1283,23 @@ class InventoryService:
             .order_by("-created_at")
         )
         return apply_tenant_scope(qs, user=user, request=request)
+
+    @staticmethod
+    def list_movements(
+        *, product=None, warehouse=None, branch_id=None, user=None, request=None, tenant=None
+    ):
+        """Read-only ledger history for a product stock-detail screen (movement
+        traceability, BRANCH_INVENTORY.md §5). Never a mutation path."""
+        qs = (
+            StockMovement.active_objects()
+            .select_related("product", "warehouse", "branch", "location", "performed_by")
+            .order_by("-created_at")
+        )
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
+        if product is not None:
+            qs = qs.filter(product=product)
+        if warehouse is not None:
+            qs = qs.filter(warehouse=warehouse)
+        if branch_id is not None:
+            qs = qs.filter(branch_id=branch_id)
+        return qs

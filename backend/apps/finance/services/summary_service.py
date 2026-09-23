@@ -23,7 +23,9 @@ class FinanceSummaryService:
         if tenant_id:
             ChartService.ensure_default_chart(tenant_id=tenant_id, user=user, request=request)
 
-        kpis_base = AnalyticsService.get_kpis(branch_id=branch_id, period=period)
+        kpis_base = AnalyticsService.get_kpis(
+            branch_id=branch_id, period=period, user=user, request=request
+        )
 
         period_start = AnalyticsService._period_start(period)
         op_exp_qs = apply_tenant_scope(Expense.active_objects(), user=user, request=request)
@@ -57,7 +59,9 @@ class FinanceSummaryService:
                     "source": "operating",
                 }
             )
-        for po in AnalyticsService._purchase_qs(branch_id=branch_id, period=period).order_by(
+        for po in AnalyticsService._purchase_qs(
+            branch_id=branch_id, period=period, user=user, request=request
+        ).order_by(
             "-order_date"
         )[:10]:
             expenses_list.append(
@@ -74,7 +78,9 @@ class FinanceSummaryService:
         expenses_list.sort(key=lambda x: x["date"], reverse=True)
 
         activity = []
-        inv_qs = AnalyticsService._invoice_qs(branch_id=branch_id, period=period).order_by(
+        inv_qs = AnalyticsService._invoice_qs(
+            branch_id=branch_id, period=period, user=user, request=request
+        ).order_by(
             "-issue_date"
         )[:5]
         for inv in inv_qs:
@@ -104,10 +110,6 @@ class FinanceSummaryService:
             for entry in JournalService.list(user=user, request=request)[:15]:
                 journal.append(JournalService.serialize(entry))
 
-        if not accounts:
-            inv_summary = AnalyticsService.get_finance_summary(branch_id=branch_id, period=period)
-            accounts = inv_summary.get("accounts", [])
-
         return {
             "kpis": {
                 "revenue": kpis_base["revenue"],
@@ -122,6 +124,8 @@ class FinanceSummaryService:
             "accounts": accounts,
             "expenses": expenses_list[:20],
             "journal": journal,
-            "chart": AnalyticsService.get_chart_data(branch_id=branch_id)["profit"],
+            "chart": AnalyticsService.get_chart_data(
+                branch_id=branch_id, user=user, request=request
+            )["profit"],
             "has_ledger": bool(tenant_id and accounts),
         }

@@ -20,7 +20,7 @@ from uuid import UUID
 from django.db import transaction
 
 from apps.inventory.models import InventoryTransaction, StockMovement, Warehouse
-from apps.inventory.services.inventory_service import InventoryService
+from apps.inventory.services.inventory_service import InventoryService, _movement_stamp
 from apps.products.models import Product
 from apps.purchases.models import PurchaseOrder, PurchaseOrderItem
 from core.tenancy import apply_tenant_scope
@@ -122,6 +122,10 @@ class PurchaseReceivingService:
         warehouse = wh_qs.select_for_update().get(pk=warehouse_id)
         if not warehouse.is_active:
             raise ReceivingError("Warehouse is inactive.")
+        if warehouse.branch_id != po.branch_id:
+            # A purchase order belongs to one branch; receiving into another branch's
+            # warehouse would stamp stock, ledger and payable on different branches.
+            raise ReceivingError("Receive into a warehouse of the purchase order's branch.")
 
         items_by_product = {
             item.product_id: item
@@ -161,6 +165,7 @@ class PurchaseReceivingService:
             inv.save(update_fields=["quantity", "updated_by", "updated_at"])
 
             tenant_id = getattr(warehouse, "tenant_id", None) or getattr(po, "tenant_id", None)
+            stamp = _movement_stamp(warehouse=warehouse, user=user)
             StockMovement.objects.create(
                 product=product,
                 warehouse=warehouse,
@@ -171,6 +176,9 @@ class PurchaseReceivingService:
                 notes=notes or f"GRN for {po.order_number}",
                 tenant_id=tenant_id,
                 created_by=user,
+                performed_by=user,
+                unit_cost=line.unit_cost,
+                **stamp,
             )
             InventoryTransaction.objects.create(
                 inventory=inv,
@@ -182,6 +190,7 @@ class PurchaseReceivingService:
                 reference_id=po.id,
                 tenant_id=tenant_id,
                 created_by=user,
+                **stamp,
             )
 
             PurchaseReceivingService._pharmacy_batch_hook(

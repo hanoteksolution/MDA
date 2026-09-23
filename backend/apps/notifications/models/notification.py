@@ -13,12 +13,36 @@ class Notification(TenantScopedModel, BaseModel):
     TYPE_PHARMACY_EXPIRY = "pharmacy_batch_expiry"
     TYPE_ACCOUNTING_HEALTH = "accounting_health"
     TYPE_SYSTEM = "system"
+    TYPE_BRANCH_TRANSFER = "branch_transfer"
+    TYPE_CASH_VARIANCE = "cash_variance"
     TYPE_CHOICES = [
         (TYPE_LOW_STOCK, "Low stock"),
         (TYPE_GYM_EXPIRY, "Gym membership expiry"),
         (TYPE_PHARMACY_EXPIRY, "Pharmacy batch expiry"),
         (TYPE_ACCOUNTING_HEALTH, "Accounting health"),
         (TYPE_SYSTEM, "System"),
+        (TYPE_BRANCH_TRANSFER, "Branch transfer"),
+        (TYPE_CASH_VARIANCE, "Cash variance"),
+    ]
+
+    SEVERITY_INFO = "INFO"
+    SEVERITY_WARNING = "WARNING"
+    SEVERITY_CRITICAL = "CRITICAL"
+    SEVERITY_CHOICES = [
+        (SEVERITY_INFO, "Info"),
+        (SEVERITY_WARNING, "Warning"),
+        (SEVERITY_CRITICAL, "Critical"),
+    ]
+
+    AUDIENCE_USER = "USER"
+    AUDIENCE_BRANCH = "BRANCH"
+    AUDIENCE_BRANCH_MANAGERS = "BRANCH_MANAGERS"
+    AUDIENCE_TENANT = "TENANT"
+    AUDIENCE_CHOICES = [
+        (AUDIENCE_USER, "Single user"),
+        (AUDIENCE_BRANCH, "Branch staff"),
+        (AUDIENCE_BRANCH_MANAGERS, "Branch managers"),
+        (AUDIENCE_TENANT, "Whole tenant"),
     ]
 
     user = models.ForeignKey(
@@ -33,6 +57,22 @@ class Notification(TenantScopedModel, BaseModel):
     is_read = models.BooleanField(default=False, db_index=True)
     read_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    # Phase 6: alert-centre dimensions. All optional so every existing caller is unchanged.
+    branch = models.ForeignKey(
+        "settings_app.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    severity = models.CharField(
+        max_length=10, choices=SEVERITY_CHOICES, default=SEVERITY_INFO, db_index=True
+    )
+    entity_type = models.CharField(max_length=60, blank=True)
+    entity_id = models.CharField(max_length=64, blank=True)
+    audience = models.CharField(max_length=20, choices=AUDIENCE_CHOICES, default=AUDIENCE_USER)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    action_url = models.CharField(max_length=500, blank=True)
 
     class Meta:
         db_table = "notifications"

@@ -34,7 +34,14 @@ const DEFAULT_CAPS: Record<PosProfileCode, PosCapabilities> = {
     rx: true,
     charge_to_room: false,
   },
-  CAFETERIA: { waiters: true, tables: true, batches: false, charge_to_room: false },
+  CAFETERIA: {
+    waiters: true,
+    tables: true,
+    batches: false,
+    modifiers: true,
+    kitchen_ticket: true,
+    charge_to_room: false,
+  },
   RESTAURANT: {
     waiters: true,
     tables: true,
@@ -56,6 +63,7 @@ function inferCode(modules: string[]): PosProfileCode {
   if (modules.includes("hotel") && (modules.includes("restaurant") || modules.includes("pos"))) {
     return "HOTEL_SERVICE";
   }
+  if (modules.includes("cafeteria")) return "CAFETERIA";
   if (modules.includes("restaurant")) return "RESTAURANT";
   if (modules.includes("pharmacy")) return "PHARMACY";
   if (modules.includes("gym")) return "GYM";
@@ -78,7 +86,9 @@ export function usePosProfile(profile: PosProfile | null | undefined) {
     return {
       code,
       capabilities,
-      showTables: Boolean(capabilities.tables) && hasModule("restaurant"),
+      showTables:
+        Boolean(capabilities.tables) &&
+        (hasModule("restaurant") || hasModule("cafeteria")),
       showBatches:
         Boolean(capabilities.batches) &&
         hasModule("pharmacy") &&
@@ -90,6 +100,7 @@ export function usePosProfile(profile: PosProfile | null | undefined) {
       showWaiters: capabilities.waiters !== false,
       showChargeToRoom:
         Boolean(capabilities.charge_to_room) && hasModule("hotel"),
+      showModifiers: Boolean(capabilities.modifiers),
     };
   }, [profile, modules, hasModule, hasFeature]);
 }

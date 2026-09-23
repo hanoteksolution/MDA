@@ -97,10 +97,15 @@ REPORT_CATALOG: list[dict[str, Any]] = [
     },
     {
         "id": "restaurant",
-        "title": "Restaurant Reports",
-        "description": "Tables, open tickets, and menu catalog",
+        "title": "Restaurant / Cafeteria Reports",
+        "description": "Sales, barista, waste, tables, and menu",
         "module": "restaurant",
         "reports": [
+            "Daily Sales Summary",
+            "Sales by Product",
+            "Sales by Order Type",
+            "Barista Performance",
+            "Waste Report",
             "Table Status",
             "Open Orders",
             "Orders by Status",

@@ -208,11 +208,12 @@ export function PlatformSubscriptionsPage() {
   };
 
   const confirmPayment = async (paymentId: string) => {
+    // Exceptional recovery only (e.g. verified bank transfer); recorded in the audit log.
+    const reason = window.prompt("Reason for manual confirmation (recorded in the audit log):")?.trim();
+    if (!reason) return;
     setConfirmingId(paymentId);
     try {
-      await platformApi.confirmSubscriptionPayment(paymentId, {
-        notes: "Confirmed from platform subscriptions console",
-      });
+      await platformApi.confirmSubscriptionPayment(paymentId, { reason });
       await appDialog.alert("Payment confirmed — subscription auto-renewed.", {
         title: "Renewed",
         tone: "success",
@@ -602,14 +603,18 @@ export function PlatformSubscriptionsPage() {
                       <p className="text-xs text-muted-foreground">Payer: {p.payer_phone}</p>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    loading={confirmingId === p.id}
-                    onClick={() => void confirmPayment(p.id)}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Confirm & renew
-                  </Button>
+                  {p.is_checkout ? (
+                    <span className="text-xs text-muted-foreground">Online checkout · awaiting verified payment</span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      loading={confirmingId === p.id}
+                      onClick={() => void confirmPayment(p.id)}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Confirm & renew
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

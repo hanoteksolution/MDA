@@ -11,6 +11,7 @@ from apps.restaurant.serializers.restaurant_serializers import (
     serialize_recipe_ingredient,
     serialize_station,
     serialize_table,
+    serialize_variant,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "serialize_table",
     "serialize_order",
     "serialize_line",
+    "serialize_variant",
 ]

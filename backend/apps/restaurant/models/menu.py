@@ -10,11 +10,32 @@ from core.models.tenant import TenantScopedModel
 
 class MenuCategory(TenantScopedModel, BaseModel):
     name = models.CharField(max_length=120, db_index=True)
+    code = models.CharField(max_length=40, blank=True, db_index=True)
+    description = models.TextField(blank=True)
+    image_url = models.CharField(max_length=500, blank=True)
+    color_accent = models.CharField(max_length=20, blank=True)
     branch = models.ForeignKey(
         "settings_app.Branch",
         on_delete=models.CASCADE,
         related_name="restaurant_menu_categories",
     )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children",
+    )
+    kitchen_station = models.ForeignKey(
+        "restaurant.KitchenStation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="menu_categories",
+    )
+    tax_group = models.CharField(max_length=40, blank=True)
+    pos_visible = models.BooleanField(default=True)
+    mobile_visible = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=100)
     is_active = models.BooleanField(default=True, db_index=True)
     notes = models.TextField(blank=True)
@@ -46,11 +67,33 @@ class MenuItem(TenantScopedModel, BaseModel):
         blank=True,
         related_name="restaurant_menu_items",
     )
+    kitchen_station = models.ForeignKey(
+        "restaurant.KitchenStation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="menu_items",
+    )
     name = models.CharField(max_length=200, db_index=True)
     sku = models.CharField(max_length=50, blank=True, db_index=True)
     description = models.TextField(blank=True)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    base_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    preparation_time_minutes = models.PositiveSmallIntegerField(default=5)
     is_available = models.BooleanField(default=True, db_index=True)
+    is_featured = models.BooleanField(default=False)
+    is_popular = models.BooleanField(default=False)
+    pos_visible = models.BooleanField(default=True)
+    mobile_visible = models.BooleanField(default=True)
+    track_inventory = models.BooleanField(default=True)
+    allow_modifiers = models.BooleanField(default=True)
+    allow_notes = models.BooleanField(default=True)
+    available_dine_in = models.BooleanField(default=True)
+    available_takeaway = models.BooleanField(default=True)
+    available_delivery = models.BooleanField(default=False)
+    availability_start = models.TimeField(null=True, blank=True)
+    availability_end = models.TimeField(null=True, blank=True)
+    coffee_attrs = models.JSONField(default=dict, blank=True)
     sort_order = models.PositiveIntegerField(default=100)
 
     class Meta:
@@ -68,10 +111,16 @@ class DiningTable(TenantScopedModel, BaseModel):
     STATUS_FREE = "free"
     STATUS_OCCUPIED = "occupied"
     STATUS_RESERVED = "reserved"
+    STATUS_CLEANING = "cleaning"
+    STATUS_BLOCKED = "blocked"
+    STATUS_OUT_OF_SERVICE = "out_of_service"
     STATUS_CHOICES = [
         (STATUS_FREE, "Free"),
         (STATUS_OCCUPIED, "Occupied"),
         (STATUS_RESERVED, "Reserved"),
+        (STATUS_CLEANING, "Cleaning"),
+        (STATUS_BLOCKED, "Blocked"),
+        (STATUS_OUT_OF_SERVICE, "Out of service"),
     ]
 
     branch = models.ForeignKey(
@@ -150,6 +199,15 @@ class RestaurantOrder(TenantScopedModel, BaseModel):
         (SERVICE_QUICK_SALE, "Quick sale"),
     ]
 
+    PRIORITY_NORMAL = "normal"
+    PRIORITY_HIGH = "high"
+    PRIORITY_RUSH = "rush"
+    PRIORITY_CHOICES = [
+        (PRIORITY_NORMAL, "Normal"),
+        (PRIORITY_HIGH, "High"),
+        (PRIORITY_RUSH, "Rush"),
+    ]
+
     branch = models.ForeignKey(
         "settings_app.Branch",
         on_delete=models.CASCADE,
@@ -177,10 +235,28 @@ class RestaurantOrder(TenantScopedModel, BaseModel):
         related_name="restaurant_orders",
     )
     waiter_name = models.CharField(max_length=120, blank=True)
+    barista_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restaurant_barista_orders",
+    )
+    queue_number = models.CharField(max_length=20, blank=True, db_index=True)
+    priority = models.CharField(
+        max_length=20, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL
+    )
     guest_count = models.PositiveSmallIntegerField(default=1)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tip_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    service_charge_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0
+    )
     notes = models.TextField(blank=True)
     opened_at = models.DateTimeField(default=timezone.now, db_index=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    ready_at = models.DateTimeField(null=True, blank=True)
+    served_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -216,6 +292,20 @@ class OrderLine(TenantScopedModel, BaseModel):
     order = models.ForeignKey(RestaurantOrder, on_delete=models.CASCADE, related_name="lines")
     menu_item = models.ForeignKey(
         MenuItem, on_delete=models.PROTECT, related_name="order_lines"
+    )
+    variant = models.ForeignKey(
+        "restaurant.MenuItemVariant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lines",
+    )
+    kitchen_station = models.ForeignKey(
+        "restaurant.KitchenStation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lines",
     )
     product = models.ForeignKey(
         "products.Product",
@@ -268,6 +358,25 @@ class RestaurantFloor(TenantScopedModel, BaseModel):
 
 
 class KitchenStation(TenantScopedModel, BaseModel):
+    TYPE_COFFEE_BAR = "coffee_bar"
+    TYPE_COLD_DRINKS = "cold_drinks"
+    TYPE_KITCHEN = "kitchen"
+    TYPE_BAKERY = "bakery"
+    TYPE_DESSERT = "dessert"
+    TYPE_JUICE = "juice"
+    TYPE_GRILL = "grill"
+    TYPE_OTHER = "other"
+    TYPE_CHOICES = [
+        (TYPE_COFFEE_BAR, "Coffee bar"),
+        (TYPE_COLD_DRINKS, "Cold drinks"),
+        (TYPE_KITCHEN, "Kitchen"),
+        (TYPE_BAKERY, "Bakery"),
+        (TYPE_DESSERT, "Dessert"),
+        (TYPE_JUICE, "Juice"),
+        (TYPE_GRILL, "Grill"),
+        (TYPE_OTHER, "Other"),
+    ]
+
     branch = models.ForeignKey(
         "settings_app.Branch",
         on_delete=models.CASCADE,
@@ -275,6 +384,9 @@ class KitchenStation(TenantScopedModel, BaseModel):
     )
     name = models.CharField(max_length=120)
     code = models.CharField(max_length=30, db_index=True)
+    station_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default=TYPE_KITCHEN, db_index=True
+    )
     sort_order = models.PositiveIntegerField(default=100)
     is_active = models.BooleanField(default=True, db_index=True)
     notes = models.TextField(blank=True)
@@ -370,7 +482,19 @@ class Ingredient(TenantScopedModel, BaseModel):
     name = models.CharField(max_length=150)
     code = models.CharField(max_length=40, db_index=True)
     unit = models.CharField(max_length=30, default="unit")
+    purchase_unit = models.CharField(max_length=30, blank=True)
+    consumption_unit = models.CharField(max_length=30, blank=True)
+    # Consumption units contained in one purchase unit (e.g. 1000 g per kg).
+    conversion_rate = models.DecimalField(max_digits=12, decimal_places=4, default=1)
     unit_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    average_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    last_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    min_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    max_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    reorder_level = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    expiry_tracking = models.BooleanField(default=False)
+    batch_tracking = models.BooleanField(default=False)
+    storage_location = models.CharField(max_length=120, blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
     notes = models.TextField(blank=True)
 
@@ -389,6 +513,15 @@ class Ingredient(TenantScopedModel, BaseModel):
 
 
 class Recipe(TenantScopedModel, BaseModel):
+    STATUS_DRAFT = "draft"
+    STATUS_ACTIVE = "active"
+    STATUS_ARCHIVED = "archived"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_ARCHIVED, "Archived"),
+    ]
+
     branch = models.ForeignKey(
         "settings_app.Branch",
         on_delete=models.CASCADE,
@@ -401,6 +534,9 @@ class Recipe(TenantScopedModel, BaseModel):
     )
     name = models.CharField(max_length=150)
     version = models.CharField(max_length=20, default="v1")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True
+    )
     yield_qty = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     waste_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     is_active = models.BooleanField(default=True, db_index=True)
@@ -409,6 +545,11 @@ class Recipe(TenantScopedModel, BaseModel):
     class Meta:
         db_table = "restaurant_recipes"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "menu_item", "status"], name="idx_rest_recipe_active"
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.version})"

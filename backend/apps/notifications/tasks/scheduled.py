@@ -33,28 +33,27 @@ def scan_low_stock():
             continue
         with tenant_context(tenant, enforce=True):
             qs = InventoryService.get_reorder_candidates()
-            qs = qs.select_related("product", "warehouse")
+            qs = qs.select_related("product", "warehouse", "warehouse__branch")
             for inv in qs[:200]:
                 product = inv.product
-                dedupe_key = f"low_stock:{inv.id}"
-                count = NotificationService.notify_tenant_permission(
-                    tenant=tenant,
-                    permission_codename="inventory.view",
+                out = inv.quantity <= 0
+                # Branch-scoped audience: only staff who can see this branch's inventory.
+                total += NotificationService.notify_branch(
+                    branch=inv.warehouse.branch,
+                    permission="inventory.view",
                     notification_type=Notification.TYPE_LOW_STOCK,
-                    title=f"Low stock: {product.name}",
+                    title=f"{'Out of stock' if out else 'Low stock'}: {product.name}",
                     message=(
                         f"{product.name} ({product.sku}) is at {inv.quantity} "
                         f"(min {product.minimum_stock}) in {inv.warehouse.name}."
                     ),
+                    severity=Notification.SEVERITY_CRITICAL if out else Notification.SEVERITY_WARNING,
+                    entity_type="inventory",
+                    entity_id=inv.id,
                     link="/inventory",
-                    metadata={
-                        "entity_type": "inventory",
-                        "entity_id": str(inv.id),
-                        "product_id": str(product.id),
-                    },
-                    dedupe_key=dedupe_key,
+                    metadata={"product_id": str(product.id)},
+                    dedupe_key=f"low_stock:{inv.id}",
                 )
-                total += count
     return {"notifications_created": total}
 
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { SidebarSection, sectionActive } from "./SidebarSection";
 import { resolveMediaUrl } from "@/config/api";
 import { cn } from "@/utils/cn";
 import { settingsApi } from "@/services/api/admin";
@@ -20,33 +21,49 @@ import {
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, activeWorkspace } = useUIStore();
+  const location = useLocation();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const { hasPermission, hasAnyPermission, isSuperAdmin } = usePermissions();
   const { hasModule, hasAnyModule, modules } = useModules();
-  const [companyName, setCompanyName] = useState("MDA ERP");
+  const fallbackName = user?.tenant_name?.trim() || "Business";
+  const [companyName, setCompanyName] = useState(fallbackName);
   const [logoUrl, setLogoUrl] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (user?.tenant_name?.trim()) {
+      setCompanyName(user.tenant_name.trim());
+    }
+  }, [user?.tenant_name]);
 
   useEffect(() => {
     let active = true;
     const loadCompany = async () => {
       try {
         const res = await settingsApi.company();
-        if (!active || !res.data) return;
-        setCompanyName(res.data.name || "MDA ERP");
-        setLogoUrl(resolveMediaUrl(res.data.logo));
+        if (!active) return;
+        if (!res.data) {
+          setCompanyName(user?.tenant_name?.trim() || fallbackName);
+          setLogoUrl(undefined);
+          return;
+        }
+        setCompanyName(res.data.name || user?.tenant_name?.trim() || fallbackName);
+        setLogoUrl(resolveMediaUrl(res.data.logo) || undefined);
       } catch {
-        /* keep defaults */
+        if (active) {
+          setCompanyName(user?.tenant_name?.trim() || fallbackName);
+        }
       }
     };
-    loadCompany();
-    const onUpdate = () => loadCompany();
+    void loadCompany();
+    const onUpdate = () => void loadCompany();
     window.addEventListener("mda:company-updated", onUpdate);
     return () => {
       active = false;
       window.removeEventListener("mda:company-updated", onUpdate);
     };
-  }, []);
+  }, [user?.tenant_name, fallbackName]);
 
   const focused =
     activeWorkspace && activeWorkspace !== "overview" && activeWorkspace !== "hub"
@@ -58,8 +75,9 @@ export function Sidebar() {
       industryWorkspacesForUser(user?.enabled_modules ?? modules, {
         elevated: isSuperAdmin,
         hasPermission,
+        businessTypeCode: user?.business_type_code,
       }),
-    [user?.enabled_modules, modules, isSuperAdmin, hasPermission]
+    [user?.enabled_modules, user?.business_type_code, modules, isSuperAdmin, hasPermission]
   );
 
   const visibleSections: WorkspaceNavSection[] = useMemo(() => {
@@ -97,7 +115,11 @@ export function Sidebar() {
     hasAnyModule,
   ]);
 
-  const initial = (companyName || "M").charAt(0).toUpperCase();
+  const initial = (companyName || "B").charAt(0).toUpperCase();
+  const subtitle =
+    focused?.kind === "industry"
+      ? focused.label
+      : user?.business_type_name || user?.branch?.name || "Workspace";
 
   return (
     <aside
@@ -113,11 +135,11 @@ export function Sidebar() {
         )}
       >
         {!sidebarCollapsed ? (
-          <NavLink to="/modules" className="flex min-w-0 flex-1 items-center gap-2.5" title="All workspaces">
+          <NavLink to="/modules" className="flex min-w-0 flex-1 items-center gap-2.5" title={companyName}>
             {logoUrl ? (
               <img
                 src={logoUrl}
-                alt=""
+                alt={companyName}
                 className="h-9 w-9 shrink-0 rounded-xl object-contain bg-background border border-border"
               />
             ) : (
@@ -127,17 +149,15 @@ export function Sidebar() {
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-foreground">{companyName}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {focused?.kind === "industry" ? focused.label : "Enterprise Edition"}
-              </p>
+              <p className="truncate text-[10px] text-muted-foreground">{subtitle}</p>
             </div>
           </NavLink>
         ) : (
-          <NavLink to="/modules" className="flex flex-1 justify-center" title="All workspaces">
+          <NavLink to="/modules" className="flex flex-1 justify-center" title={companyName}>
             {logoUrl ? (
               <img
                 src={logoUrl}
-                alt=""
+                alt={companyName}
                 className="h-8 w-8 rounded-lg object-contain bg-background border border-border"
                 title={companyName}
               />
@@ -162,44 +182,19 @@ export function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin xl:px-3 xl:py-4">
         {visibleSections.map((section) => (
-          <div key={section.label} className="mb-4 xl:mb-5">
-            {!sidebarCollapsed && (
-              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                {section.label}
-              </p>
-            )}
-            {sidebarCollapsed && <div className="mx-auto mb-1.5 h-px w-6 bg-sidebar-border" aria-hidden />}
-            <div className="space-y-0.5">
-              {section.items.map(({ to, label, icon: Icon, end }) => (
-                <NavLink
-                  key={`${to}-${label}`}
-                  to={to}
-                  end={end}
-                  title={label}
-                  aria-label={label}
-                  className={({ isActive }) =>
-                    cn(
-                      "group relative flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all",
-                      sidebarCollapsed && "justify-center px-2",
-                      isActive
-                        ? "bg-primary/10 text-primary shadow-sm"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground"
-                    )
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-                      )}
-                      <Icon className="h-[18px] w-[18px] shrink-0" />
-                      {!sidebarCollapsed && <span className="truncate">{label}</span>}
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </div>
-          </div>
+          <SidebarSection
+            key={section.label}
+            section={section}
+            collapsed={sidebarCollapsed}
+            pathname={location.pathname}
+            open={openGroups[section.label] ?? sectionActive(section, location.pathname)}
+            onToggle={() =>
+              setOpenGroups((groups) => ({
+                ...groups,
+                [section.label]: !(groups[section.label] ?? sectionActive(section, location.pathname)),
+              }))
+            }
+          />
         ))}
       </nav>
 
@@ -217,6 +212,7 @@ export function Sidebar() {
         )}
         <button
           onClick={() => logout()}
+          aria-label="Sign out"
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
         >
           <LogOut className="h-[18px] w-[18px] shrink-0" />

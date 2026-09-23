@@ -6,6 +6,8 @@ from api.v1.pos.views import (
     PosProfileView,
     PosReceiptNumberView,
     PosRefundView,
+    PosSessionApproveVarianceView,
+    PosSessionCashMovementView,
     PosSessionCloseView,
     PosSessionCurrentView,
     PosSessionListView,
@@ -25,5 +27,11 @@ urlpatterns = [
     path("sessions/open/", PosSessionOpenView.as_view(), name="pos-session-open"),
     path("sessions/current/", PosSessionCurrentView.as_view(), name="pos-session-current"),
     path("sessions/close/", PosSessionCloseView.as_view(), name="pos-session-close"),
+    path("sessions/cash-movement/", PosSessionCashMovementView.as_view(), name="pos-session-cash-movement"),
+    path(
+        "sessions/approve-variance/",
+        PosSessionApproveVarianceView.as_view(),
+        name="pos-session-approve-variance",
+    ),
     path("refunds/", PosRefundView.as_view(), name="pos-refunds"),
 ]

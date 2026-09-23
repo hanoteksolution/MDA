@@ -14,17 +14,20 @@ import { cn, formatCurrency } from "@/utils/cn";
 import { productsApi } from "@/services/api/catalog";
 import { customersApi } from "@/services/api/partners";
 import { useAuthStore } from "@/store/authStore";
+import { useBranchStore } from "@/store/branchStore";
 import type { Product } from "@/types/models/catalog";
 import type { Category } from "@/types/models/catalog";
 import { useScopedPath } from "@/hooks/useScopedPath";
 import { productModuleCode, normalizeProductModule, productModuleLabel, productModuleToneClass } from "@/utils/productModuleScope";
 import { usePosCart, roundMoney } from "../hooks/usePosCart";
 import { usePosProfile } from "../hooks/usePosProfile";
+import { usePosShift } from "../hooks/usePosShift";
 import { PosProductCard } from "../components/PosProductCard";
 import { PosCartPanel } from "../components/PosCartPanel";
 import { PosCheckoutPanel } from "../components/PosCheckoutPanel";
 import { PosHeldSalesPanel } from "../components/PosHeldSalesPanel";
 import { PosWaiterSalesPanel } from "../components/PosWaiterSalesPanel";
+import { PosMenuCustomizeDialog } from "../components/PosMenuCustomizeDialog";
 import { posApi, type PosProfile, type PosWaiter } from "@/services/api/pos";
 import { restaurantApi, type RestaurantOrder } from "@/services/api/restaurant";
 import { hotelApi, type HotelOpenFolio } from "@/services/api/hotel";
@@ -54,6 +57,16 @@ export function PosPage() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState<string | null>(null);
+
+  // Branch + terminal shift guard (Phase 5, FE-5). The backend enforces the same rule;
+  // this tells the cashier why before they tender payment.
+  const activeBranchId = useBranchStore((s) => s.activeBranchId);
+  const shift = usePosShift(activeBranchId ?? user?.branch?.id ?? null);
+  const [shiftFloat, setShiftFloat] = useState("0");
+  const [shiftTerminalId, setShiftTerminalId] = useState("");
+  const requestCheckout = useCallback(() => {
+    if (!shift.blockReason) setCheckoutOpen(true);
+  }, [shift.blockReason]);
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [waiterSalesOpen, setWaiterSalesOpen] = useState(false);
   const [waiters, setWaiters] = useState<PosWaiter[]>([]);
@@ -68,7 +81,8 @@ export function PosPage() {
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [openFolios, setOpenFolios] = useState<HotelOpenFolio[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
-  const { showTables, showChargeToRoom } = usePosProfile(posProfile);
+  const [customizeProduct, setCustomizeProduct] = useState<Product | null>(null);
+  const { showTables, showChargeToRoom, showModifiers } = usePosProfile(posProfile);
 
   const {
     cart, favorites, heldSales, discountPct, setDiscountPct, discountAmount, setDiscountAmount, discountMode, taxRate,
@@ -230,9 +244,55 @@ export function PosPage() {
 
   const handleAdd = useCallback(
     (product: Product) => {
-      if (!addToCart(product)) return;
+      if (showModifiers) {
+        setCustomizeProduct(product);
+        return;
+      }
+      if (!addToCart(product, { allowZeroStock: true })) return;
     },
-    [addToCart]
+    [addToCart, showModifiers]
+  );
+
+  const handleCustomizeConfirm = useCallback(
+    async (payload: {
+      name: string;
+      price: number;
+      variant_id?: string;
+      modifier_ids: string[];
+      menu_item_id: string;
+    }) => {
+      const product = customizeProduct;
+      setCustomizeProduct(null);
+      if (!product) return;
+      const lineKey =
+        payload.variant_id || payload.modifier_ids.length
+          ? `${product.id}:${payload.variant_id || ""}:${payload.modifier_ids.slice().sort().join(",")}`
+          : product.id;
+      addToCart(product, {
+        name: payload.name,
+        price: payload.price,
+        lineKey,
+        product_id: product.id,
+        menu_item_id: payload.menu_item_id || undefined,
+        variant_id: payload.variant_id,
+        modifier_ids: payload.modifier_ids,
+        allowZeroStock: true,
+      });
+      if (restaurantOrderId && payload.menu_item_id) {
+        try {
+          await restaurantApi.addOrderLine(restaurantOrderId, {
+            menu_item_id: payload.menu_item_id,
+            quantity: 1,
+            variant_id: payload.variant_id,
+            modifiers: payload.modifier_ids.map((id) => ({ modifier_id: id })),
+            unit_price: payload.price,
+          });
+        } catch {
+          /* cart still holds the line for POS checkout */
+        }
+      }
+    },
+    [addToCart, customizeProduct, restaurantOrderId]
   );
 
   const customerName = useMemo(() => {
@@ -307,7 +367,7 @@ export function PosPage() {
         replaceCart(
           (payload.items || []).map((i) => ({
             id: i.product_id,
-            name: i.name,
+            name: i.name || "Item",
             sku: i.sku || "",
             price: i.unit_price,
             qty: i.quantity,
@@ -568,13 +628,13 @@ export function PosPage() {
           break;
         case "F5":
           e.preventDefault();
-          if (cart.length) setCheckoutOpen(true);
+          if (cart.length) requestCheckout();
           break;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cart.length, clearPosCart, handleHold]);
+  }, [cart.length, clearPosCart, handleHold, requestCheckout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -869,6 +929,48 @@ export function PosPage() {
           onClose={() => setWaiterSalesOpen(false)}
         />
 
+        {/* Shift / branch guard: shown while selling is blocked */}
+        {shift.blockReason && (
+          <div className="absolute left-1/2 top-3 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-800 backdrop-blur-xl dark:text-amber-300">
+            <span>{shift.blockReason}</span>
+            {shift.terminalRequired && !shift.session && (
+              <>
+                {shift.terminals.length > 1 && (
+                  <select
+                    aria-label="Terminal"
+                    className="h-8 rounded-md border bg-background px-2 text-foreground"
+                    value={shiftTerminalId}
+                    onChange={(e) => setShiftTerminalId(e.target.value)}
+                  >
+                    <option value="">Terminal…</option>
+                    {shift.terminals.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Input
+                  aria-label="Opening float"
+                  type="number"
+                  min="0"
+                  className="h-8 w-24"
+                  value={shiftFloat}
+                  onChange={(e) => setShiftFloat(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  disabled={shift.terminals.length > 1 && !shiftTerminalId}
+                  onClick={() => void shift.openShift(Number(shiftFloat) || 0, shiftTerminalId || undefined)}
+                >
+                  Open shift
+                </Button>
+              </>
+            )}
+            {shift.error && <span className="text-destructive">{shift.error}</span>}
+          </div>
+        )}
+
         {/* Checkout toast */}
         <AnimatePresence>
           {checkoutMsg && (
@@ -925,7 +1027,7 @@ export function PosPage() {
             onCreateWaiter={handleCreateWaiter}
             onUpdateQty={updateQty}
             onRemove={removeLine}
-            onOpenCheckout={() => setCheckoutOpen(true)}
+            onOpenCheckout={requestCheckout}
             onHold={handleHold}
             onViewWaiterSales={() => setWaiterSalesOpen(true)}
             restaurantLabel={restaurantLabel}
@@ -959,10 +1061,19 @@ export function PosPage() {
         restaurantLabel={restaurantLabel ?? undefined}
         hotelFolioId={hotelFolioId ?? undefined}
         hotelLabel={hotelLabel ?? undefined}
+        tipsEnabled={Boolean(posProfile?.capabilities?.modifiers) || showModifiers}
         onClose={() => setCheckoutOpen(false)}
         onSaveDraft={handleHold}
         onComplete={handleCheckoutComplete}
       />
+
+      {customizeProduct ? (
+        <PosMenuCustomizeDialog
+          product={customizeProduct}
+          onClose={() => setCustomizeProduct(null)}
+          onConfirm={(p) => void handleCustomizeConfirm(p)}
+        />
+      ) : null}
 
       {floorOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">

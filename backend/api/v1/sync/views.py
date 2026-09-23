@@ -61,6 +61,18 @@ class SubscriptionStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from core.tenancy import is_platform_unscoped_actor
+
+        if is_platform_unscoped_actor(request.user):
+            return success_response(data={
+                "has_subscription": False,
+                "locked": False,
+                "show_alert": False,
+                "is_usable": True,
+                "alert": None,
+                "evaluated_on": timezone.localdate().isoformat(),
+            })
+
         data = ShopSyncService.get_subscription_status()
         # Cloud browser shops: evaluate live subscription when no sync cache exists
         if not data.get("has_subscription"):

@@ -171,7 +171,11 @@ export function toneForWorkspace(code: string): WorkspaceTone {
 
 export function brandForWorkspace(code: string, darkMode: boolean): BrandTokens {
   const tone = toneForWorkspace(code);
-  return darkMode ? TONE_BRAND[tone].dark : TONE_BRAND[tone].light;
+  const tokens = darkMode ? TONE_BRAND[tone].dark : TONE_BRAND[tone].light;
+  if (code === "school" && !darkMode) {
+    return { ...tokens, primary: "243 75% 58%", primaryHover: "243 75% 50%", ring: "243 75% 58%" };
+  }
+  return tokens;
 }
 
 export function applyWorkspaceBrand(code: string, darkMode = false): void {
@@ -180,7 +184,9 @@ export function applyWorkspaceBrand(code: string, darkMode = false): void {
   const root = document.documentElement;
   root.style.setProperty("--primary", tokens.primary);
   root.style.setProperty("--primary-hover", tokens.primaryHover);
-  root.style.setProperty("--primary-foreground", "0 0% 100%");
+  root.style.setProperty("--primary-foreground", code === "school" && darkMode ? "222 47% 11%" : "0 0% 100%");
+  if (code === "school" && !darkMode) root.style.setProperty("--muted-foreground", "215 20% 40%");
+  else root.style.removeProperty("--muted-foreground");
   root.style.setProperty("--accent", tokens.accent);
   root.style.setProperty("--accent-foreground", tokens.accentForeground);
   root.style.setProperty("--sidebar-accent", tokens.sidebarAccent);

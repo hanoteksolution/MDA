@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { syncApi, type SubscriptionStatus } from "@/services/api/sync";
 import { platformApi } from "@/services/api/platform";
 import { useAuthStore } from "@/store/authStore";
+import { isElevatedUser } from "@/navigation/postLogin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/utils/cn";
@@ -33,6 +34,7 @@ function dismissKey(subscriptionId: string): string {
  */
 export function SubscriptionAlertDialog() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const exempt = useAuthStore((s) => isElevatedUser(s.user));
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [open, setOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -44,7 +46,7 @@ export function SubscriptionAlertDialog() {
   const [tracking, setTracking] = useState(false);
 
   const load = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || exempt) {
       setStatus(null);
       setOpen(false);
       return;
@@ -74,7 +76,7 @@ export function SubscriptionAlertDialog() {
       setStatus(null);
       setOpen(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, exempt]);
 
   useEffect(() => {
     void load();
@@ -232,7 +234,7 @@ export function SubscriptionAlertDialog() {
     }
   };
 
-  if (!open || !status?.alert) {
+  if (exempt || !open || !status?.alert) {
     return null;
   }
 

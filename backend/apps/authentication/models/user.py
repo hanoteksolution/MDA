@@ -9,6 +9,12 @@ from core.models.base import BaseModel
 class Role(BaseModel):
     ELEVATED_SLUGS = frozenset({"super_admin", "platform_admin"})
     SYSTEM_ROLES = [
+        ("school_owner", "School Owner"),
+        ("school_admin", "School Admin"),
+        ("school_principal", "School Principal"),
+        ("school_academic_director", "School Academic Director"),
+        ("school_registrar", "School Registrar"),
+        ("school_teacher", "School Teacher"),
         ("platform_admin", "Platform Admin"),
         ("super_admin", "Super Admin"),
         ("admin", "Admin"),

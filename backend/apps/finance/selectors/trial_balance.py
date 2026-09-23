@@ -13,7 +13,8 @@ from core.tenancy import apply_tenant_scope, stamp_tenant_id
 
 class TrialBalanceSelector:
     @staticmethod
-    def run(*, date_from=None, date_to=None, user=None, request=None) -> dict:
+    def run(*, date_from=None, date_to=None, user=None, request=None, branch_id=None) -> dict:
+        """``branch_id``: None = consolidated, ``"unassigned"`` = lines with no branch."""
         payload = stamp_tenant_id({}, user=user, request=request)
         tenant_id = payload.get("tenant_id")
         if not tenant_id:
@@ -33,6 +34,10 @@ class TrialBalanceSelector:
                 entry__deleted_at__isnull=True,
                 entry__tenant_id=tenant_id,
             )
+            if branch_id == "unassigned":
+                line_qs = line_qs.filter(branch__isnull=True)
+            elif branch_id:
+                line_qs = line_qs.filter(branch_id=branch_id)
             if date_from:
                 line_qs = line_qs.filter(entry__entry_date__gte=date_from)
             if date_to:

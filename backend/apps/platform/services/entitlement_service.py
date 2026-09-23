@@ -61,6 +61,9 @@ WRITE_EXEMPT_PREFIXES = (
     "/api/v1/onboarding/",
     "/api/v1/platform/subscriptions/",
     "/api/v1/platform/payments/",
+    # An expired tenant must still be able to pay; provider webhooks must always settle.
+    "/api/v1/billing/",
+    "/api/v1/integrations/payments/webhooks/",
     "/api/v1/notifications/",
     "/admin/",
 )
@@ -315,11 +318,11 @@ class EntitlementService:
             return None
 
         user = getattr(request, "user", None)
-        if user is not None and getattr(user, "is_authenticated", False):
-            if is_platform_unscoped_actor(user):
-                return None
-        else:
+        if user is None or not getattr(user, "is_authenticated", False):
             user = EntitlementService._authenticate_jwt(request)
+
+        if is_platform_unscoped_actor(user):
+            return None
 
         tenant = resolve_acting_tenant(request=request, user=user)
         if tenant is None:

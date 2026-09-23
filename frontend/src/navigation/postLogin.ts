@@ -24,6 +24,7 @@ export function hubWorkspacesForUser(
     hasPermission,
     includeOverview: false,
     includeFinance: elevated || hasPermission("finance.view"),
+    businessTypeCode: user?.business_type_code,
   });
 }
 

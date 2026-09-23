@@ -234,6 +234,81 @@ def test_transfer_cancel_draft(inv_env):
 
 
 @pytest.mark.django_db
+def test_inventory_dedupe_never_merges_matching_warehouse_names_across_tenants(inv_env):
+    other_tenant = Tenant.objects.create(
+        name="Other Co", slug="other-co", status=Tenant.STATUS_ACTIVE
+    )
+    other_company = Company.objects.create(name="Other Co", tenant=other_tenant)
+    other_branch = Branch.objects.create(
+        company=other_company,
+        tenant=other_tenant,
+        name="Main",
+        code="OTHER",
+        is_default=True,
+    )
+    other_warehouse = Warehouse.objects.create(
+        branch=other_branch,
+        tenant=other_tenant,
+        name=inv_env["wh_a"].name,
+        code=inv_env["wh_a"].code,
+        is_default=True,
+    )
+    other_inventory = Inventory.objects.create(
+        tenant=other_tenant,
+        product=inv_env["product"],
+        warehouse=other_warehouse,
+        quantity=Decimal("30"),
+    )
+
+    merged = InventoryService.dedupe_inventory(tenant=inv_env["tenant"])
+
+    assert merged == 0
+    inv_env["inv_a"].refresh_from_db()
+    other_inventory.refresh_from_db()
+    assert inv_env["inv_a"].deleted_at is None
+    assert other_inventory.deleted_at is None
+    assert inv_env["inv_a"].quantity == Decimal("20")
+    assert other_inventory.quantity == Decimal("30")
+
+
+@pytest.mark.django_db
+def test_inventory_summary_is_tenant_and_module_scoped_and_handles_large_values(inv_env):
+    inv_env["inv_a"].quantity = Decimal("99999999999999.0000")
+    inv_env["inv_a"].save(update_fields=["quantity", "updated_at"])
+
+    gym_product = Product.objects.create(
+        tenant=inv_env["tenant"],
+        sku="GYM-STOCK-1",
+        name="Gym stock",
+        category=inv_env["product"].category,
+        unit=inv_env["product"].unit,
+        module_code="gym",
+        cost_price=Decimal("2.00"),
+        selling_price=Decimal("3.00"),
+        minimum_stock=1,
+    )
+    Inventory.objects.create(
+        tenant=inv_env["tenant"],
+        product=gym_product,
+        warehouse=inv_env["wh_a"],
+        quantity=Decimal("7"),
+    )
+
+    retail = InventoryService.get_summary(
+        tenant=inv_env["tenant"], module_code="retail"
+    )
+    gym = InventoryService.get_summary(
+        tenant=inv_env["tenant"], module_code="gym"
+    )
+
+    assert retail["total_items"] == 1
+    assert retail["total_quantity"] == float(Decimal("99999999999999.0000"))
+    assert retail["inventory_value"] == float(Decimal("799999999999992.0000"))
+    assert gym["total_items"] == 1
+    assert gym["total_quantity"] == 7.0
+
+
+@pytest.mark.django_db
 def test_receive_preview(inv_env):
     data = PurchaseReceivingService.preview(purchase_order_id=inv_env["po"].id)
     assert data["lines"][0]["quantity_remaining"] == 10.0

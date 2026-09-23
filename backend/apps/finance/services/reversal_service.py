@@ -19,7 +19,11 @@ class ReversalError(ValueError):
 class AccountingReversalService:
     @staticmethod
     @transaction.atomic
-    def reverse_entry(*, entry: JournalEntry, user=None, reason: str = "") -> JournalEntry:
+    def reverse_entry(*, entry: JournalEntry, user=None, reason: str = "", billing_workflow: bool = False) -> JournalEntry:
+        if not billing_workflow and entry.source_module=='school':
+            from apps.finance.events.event_types import SCHOOL_BILLING_EVENTS
+            if AccountingEvent.objects.filter(journal_entry=entry,event_type__in=SCHOOL_BILLING_EVENTS).exists():
+                raise ReversalError('Use the billing reversal workflow to preserve receipt allocations and receivables.')
         if entry.status != JournalEntry.STATUS_POSTED:
             raise ReversalError("Only posted journals can be reversed.")
         if entry.reversal_entries.filter(deleted_at__isnull=True, status=JournalEntry.STATUS_POSTED).exists():
@@ -47,6 +51,9 @@ class AccountingReversalService:
                     "debit": line.credit,
                     "credit": line.debit,
                     "memo": f"Reversal: {line.memo}" if line.memo else "Reversal",
+                    "branch_id": line.branch_id,
+                    "cost_center_id": line.cost_center_id,
+                    "business_unit_id": line.business_unit_id,
                 }
             )
 
@@ -58,7 +65,7 @@ class AccountingReversalService:
             data={
                 "tenant_id": entry.tenant_id,
                 "entry_date": timezone.localdate(),
-                "description": description,
+                "description": description[:255],
                 "source_type": entry.source_type,
                 "source_module": entry.source_module or "",
                 "source_id": entry.source_id,

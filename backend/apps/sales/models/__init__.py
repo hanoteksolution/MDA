@@ -24,3 +24,6 @@ __all__ = [
     "SaleRefundItem",
 ]
 
+
+from .billing import BillingMethod, ServiceInvoice, ServiceInvoiceLine, BillingReceipt, BillingAllocation, BillingCredit, BillingRefund
+__all__ += ['BillingMethod','ServiceInvoice','ServiceInvoiceLine','BillingReceipt','BillingAllocation','BillingCredit','BillingRefund']

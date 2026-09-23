@@ -23,36 +23,49 @@ function HubHeader({ onOpenSearch }: { onOpenSearch: () => void }) {
   const logout = useAuthStore((s) => s.logout);
   const { darkMode, toggleDarkMode, setActiveWorkspace, activeWorkspace } = useUIStore();
   const { hasPermission, isSuperAdmin } = usePermissions();
-  const [companyName, setCompanyName] = useState("Safari ERP");
+  const fallbackName = user?.tenant_name?.trim() || "Business";
+  const [companyName, setCompanyName] = useState(fallbackName);
   const [logoUrl, setLogoUrl] = useState<string | undefined>();
 
   const workspaces = useMemo(
     () => hubWorkspacesForUser(user, hasPermission),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, isSuperAdmin, user?.enabled_modules, user?.permissions]
+    [user, isSuperAdmin, user?.enabled_modules, user?.permissions, user?.business_type_code]
   );
+
+  useEffect(() => {
+    if (user?.tenant_name?.trim()) {
+      setCompanyName(user.tenant_name.trim());
+    }
+  }, [user?.tenant_name]);
 
   useEffect(() => {
     let active = true;
     settingsApi
       .company()
       .then((res) => {
-        if (!active || !res.data) return;
-        setCompanyName(res.data.name || "Safari ERP");
-        setLogoUrl(resolveMediaUrl(res.data.logo));
+        if (!active) return;
+        if (!res.data) {
+          setCompanyName(user?.tenant_name?.trim() || fallbackName);
+          setLogoUrl(undefined);
+          return;
+        }
+        setCompanyName(res.data.name || user?.tenant_name?.trim() || fallbackName);
+        setLogoUrl(resolveMediaUrl(res.data.logo) || undefined);
       })
       .catch(() => {
-        /* keep defaults */
+        if (active) setCompanyName(user?.tenant_name?.trim() || fallbackName);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.tenant_name, fallbackName]);
 
-  const initial = (companyName || "S").charAt(0).toUpperCase();
+  const initial = (companyName || "B").charAt(0).toUpperCase();
   const displayName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "User";
-  const tenantLabel = user?.branch?.name || user?.managed_shop_group?.name || "Main Branch";
+  const tenantLabel =
+    user?.business_type_name || user?.branch?.name || user?.managed_shop_group?.name || "Main Branch";
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
   return (

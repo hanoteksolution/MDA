@@ -327,6 +327,36 @@ class PosService:
         else:
             discount_amount = subtotal * (discount_pct / Decimal("100"))
         discount_amount = _money(discount_amount)
+
+        # Auto-apply cafeteria/restaurant promotion or coupon code onto the invoice discount.
+        promo_code = (data.get("promotion_code") or "").strip()
+        applied_promotion = None
+        if promo_code:
+            from apps.restaurant.services.commerce_service import (
+                CommerceError,
+                CommerceService,
+            )
+
+            try:
+                applied_promotion, promo_discount = CommerceService.resolve_active_promotion(
+                    code=promo_code,
+                    branch_id=branch.id if branch else None,
+                    amount=subtotal,
+                    user=user,
+                )
+                promo_discount = _money(promo_discount)
+                # Prefer the larger of manual discount vs promo (do not double-stack).
+                if promo_discount > discount_amount:
+                    discount_amount = promo_discount
+                if applied_promotion and applied_promotion.name:
+                    order_notes = (
+                        f"{order_notes} promo:{applied_promotion.code}".strip()
+                        if order_notes
+                        else f"promo:{applied_promotion.code}"
+                    )
+            except CommerceError as exc:
+                raise ValueError(str(exc)) from exc
+
         # VAT on full subtotal (before discount) so waving tax via $ discount totals cleanly.
         tax_amount = _money(subtotal * tax_rate)
         after_discount = _money(subtotal - discount_amount)
@@ -444,6 +474,17 @@ class PosService:
         else:
             cashier_session = CashierSessionService.get_open(user=user, branch_id=str(branch.id))
 
+        # Phase 5: a terminal-enforced branch sells only inside an open shift, and the
+        # stock comes from that shift's terminal warehouse. Legacy branches get (None, None).
+        terminal, sale_warehouse_obj = CashierSessionService.checkout_context(
+            branch=branch,
+            session=cashier_session,
+            terminal_id=data.get("terminal_id"),
+        )
+        if terminal is not None:
+            invoice_data["terminal"] = terminal
+            invoice_data["warehouse"] = sale_warehouse_obj
+
         if held_invoice is not None:
             invoice = InvoiceService.update(
                 instance=held_invoice,
@@ -555,6 +596,29 @@ class PosService:
 
             try:
                 order = RestaurantService.get_order(pk=restaurant_order_id, user=user)
+                tip = data.get("tip_amount")
+                service = data.get("service_charge_amount")
+                if tip is not None or service is not None:
+                    order = RestaurantService.update_order_charges(
+                        order=order,
+                        tip_amount=tip if tip is not None else None,
+                        service_charge_amount=service if service is not None else None,
+                        user=user,
+                    )
+                # Optional promotion coupon → discount already applied on POS invoice;
+                # record code on order notes for audit.
+                promo_code = (data.get("promotion_code") or "").strip()
+                if promo_code and promo_code.lower() not in (order.notes or "").lower():
+                    order.notes = f"{(order.notes or '').strip()} promo:{promo_code}".strip()
+                    order.save(update_fields=["notes", "updated_at"])
+                loyalty_member_id = (data.get("loyalty_member_id") or "").strip()
+                if loyalty_member_id and f"loyalty_member:{loyalty_member_id}" not in (
+                    order.notes or ""
+                ):
+                    order.notes = (
+                        f"{(order.notes or '').strip()} loyalty_member:{loyalty_member_id}"
+                    ).strip()
+                    order.save(update_fields=["notes", "updated_at"])
                 order = RestaurantService.update_order_status(
                     order=order,
                     status=order.STATUS_PAID,
@@ -1109,6 +1173,10 @@ class PosService:
             tax_rate=tax_rate,
         )
 
+        if hasattr(invoice,'service_billing'):
+            from apps.sales.services.billing_service import balance
+            receipt['items'] += [{'name':i.description,'sku':'','quantity':1,'unit_price':float(i.gross_amount),'line_total':float(i.amount)} for i in invoice.service_lines.all()]
+            receipt['balance_due']=float(balance(invoice))
         created = timezone.localtime(invoice.created_at)
         receipt["date"] = invoice.issue_date.isoformat()
         receipt["time"] = created.strftime("%H:%M")

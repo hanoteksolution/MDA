@@ -251,6 +251,9 @@ class PosSessionOpenView(APIView):
                 branch_id=request.data.get("branch_id"),
                 opening_float=request.data.get("opening_float") or 0,
                 notes=request.data.get("notes") or "",
+                terminal_id=request.data.get("terminal_id"),
+                register_id=request.data.get("register_id"),
+                request=request,
             )
         except CashierSessionError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
@@ -279,12 +282,67 @@ class PosSessionCloseView(APIView):
                 user=request.user,
                 closing_cash_counted=request.data.get("closing_cash_counted"),
                 notes=request.data.get("notes") or "",
+                request=request,
             )
         except CashierSessionError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
             data=CashierSessionService.serialize(session),
             message="Cashier session closed.",
+        )
+
+
+class PosSessionCashMovementView(APIView):
+    """Paid-in / paid-out on the open shift (feeds expected drawer cash)."""
+
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def post(self, request):
+        from apps.sales.services.cashier_session_service import (
+            CashierSessionError,
+            CashierSessionService,
+        )
+
+        if not request.data.get("session_id"):
+            return error_response(message="session_id is required.", status=status.HTTP_400_BAD_REQUEST)
+        try:
+            session = CashierSessionService.record_cash_movement(
+                session_id=request.data.get("session_id"),
+                user=request.user,
+                kind=request.data.get("kind"),
+                amount=request.data.get("amount"),
+                reason=request.data.get("reason") or "",
+                request=request,
+            )
+        except CashierSessionError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=CashierSessionService.serialize(session), message="Cash movement recorded."
+        )
+
+
+class PosSessionApproveVarianceView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission("pos.access")]
+
+    def post(self, request):
+        from apps.sales.services.cashier_session_service import (
+            CashierSessionError,
+            CashierSessionService,
+        )
+
+        if not request.data.get("session_id"):
+            return error_response(message="session_id is required.", status=status.HTTP_400_BAD_REQUEST)
+        try:
+            session = CashierSessionService.approve_variance(
+                session_id=request.data.get("session_id"),
+                user=request.user,
+                reason=request.data.get("reason") or "",
+                request=request,
+            )
+        except CashierSessionError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=CashierSessionService.serialize(session), message="Cash variance approved."
         )
 
 

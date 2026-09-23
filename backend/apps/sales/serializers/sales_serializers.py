@@ -97,4 +97,10 @@ def serialize_invoice(inv: Invoice, *, include_items=False) -> dict:
             _serialize_item(i, product_fields={"name": i.product.name, "sku": i.product.sku})
             for i in inv.items.select_related("product")
         ]
+    if hasattr(inv,'service_billing'):
+        from apps.sales.services.billing_service import balance
+        data['balance_due']=float(balance(inv))
+        data['item_count']=inv.service_lines.count()
+        if include_items:
+            data['items'] += [{'id':str(i.pk),'product_id':None,'product_name':i.description,'product_sku':'','quantity':1,'unit_price':float(i.gross_amount),'line_total':float(i.amount),'discount_amount':float(i.discount_amount),'line_type':'service'} for i in inv.service_lines.all()]
     return data

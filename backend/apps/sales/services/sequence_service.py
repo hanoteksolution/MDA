@@ -46,11 +46,16 @@ class DocumentSequenceService:
         except DocumentSequence.DoesNotExist:
             seed = DocumentSequenceService._seed_value(branch=branch, kind=kind)
             try:
-                seq = DocumentSequence.objects.create(
-                    branch=branch,
-                    kind=kind,
-                    last_value=seed,
-                )
+                # Savepoint: on PostgreSQL an IntegrityError otherwise aborts the whole
+                # outer transaction, so the concurrent-first-allocation fallback below
+                # could never run.
+                with transaction.atomic():
+                    seq = DocumentSequence.objects.create(
+                        branch=branch,
+                        kind=kind,
+                        last_value=seed,
+                        tenant_id=getattr(branch, "tenant_id", None),
+                    )
             except IntegrityError:
                 seq = DocumentSequence.objects.select_for_update().get(
                     branch=branch, kind=kind, deleted_at__isnull=True

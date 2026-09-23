@@ -137,7 +137,8 @@ export function PlatformShopsPage() {
   const [plans, setPlans] = useState<PlatformPlanRow[]>([]);
   const [businessTypes, setBusinessTypes] = useState<PlatformBusinessTypeRow[]>([]);
   const [baseDomain, setBaseDomain] = useState("erp.safaritechno.com");
-  const [loading, setLoading] = useState(true);
+  const [shopsLoading, setShopsLoading] = useState(true);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -156,11 +157,28 @@ export function PlatformShopsPage() {
     primary_domain: "",
   });
 
-  const load = () => {
-    setLoading(true);
+  const loadShops = () => {
+    setShopsLoading(true);
+    platformApi
+      .tenants("month")
+      .then((tenantsRes) => {
+        const groupId = user?.managed_shop_group?.id;
+        const scoped = groupId
+          ? tenantsRes.data.filter((s) => s.shop_group_id === groupId)
+          : tenantsRes.data;
+        setShops(scoped);
+      })
+      .catch((err) => {
+        setShops([]);
+        setFormError(err instanceof Error ? err.message : "Could not load shops from server.");
+      })
+      .finally(() => setShopsLoading(false));
+  };
+
+  const loadFormMeta = () => {
+    setMetaLoading(true);
     const requests: Promise<unknown>[] = [
-      platformApi.tenants("month"),
-      platformApi.subscriptions(true),
+      ...(isGroupManager ? [] : [platformApi.subscriptions(true)]),
       platformApi.subscriptions(),
       platformApi.plans(),
       platformApi.shopGroups(),
@@ -168,20 +186,18 @@ export function PlatformShopsPage() {
     ];
     Promise.all(requests)
       .then((results) => {
-        const [tenantsRes, unassignedRes, allRes, plansRes, groupsRes, businessTypesRes] = results as [
-          Awaited<ReturnType<typeof platformApi.tenants>>,
-          Awaited<ReturnType<typeof platformApi.subscriptions>>,
-          Awaited<ReturnType<typeof platformApi.subscriptions>>,
-          Awaited<ReturnType<typeof platformApi.plans>>,
-          Awaited<ReturnType<typeof platformApi.shopGroups>>,
-          Awaited<ReturnType<typeof platformApi.businessTypes>>,
-        ];
+        let offset = 0;
+        const unassignedRes = isGroupManager
+          ? null
+          : (results[offset++] as Awaited<ReturnType<typeof platformApi.subscriptions>>);
+        const allRes = results[offset++] as Awaited<ReturnType<typeof platformApi.subscriptions>>;
+        const plansRes = results[offset++] as Awaited<ReturnType<typeof platformApi.plans>>;
+        const groupsRes = results[offset++] as Awaited<ReturnType<typeof platformApi.shopGroups>>;
+        const businessTypesRes = results[offset++] as Awaited<
+          ReturnType<typeof platformApi.businessTypes>
+        >;
         const groupId = user?.managed_shop_group?.id;
-        const scoped = groupId
-          ? tenantsRes.data.filter((s) => s.shop_group_id === groupId)
-          : tenantsRes.data;
-        setShops(scoped);
-        setUnassignedSubs(isGroupManager ? [] : unassignedRes.data);
+        setUnassignedSubs(isGroupManager ? [] : unassignedRes?.data ?? []);
         setAllSubs(allRes.data);
         setPlans(plansRes.data);
         setShopGroups(groupsRes.data);
@@ -200,17 +216,21 @@ export function PlatformShopsPage() {
           return next;
         });
       })
-      .catch((err) => {
-        setShops([]);
+      .catch(() => {
         setUnassignedSubs([]);
         setAllSubs([]);
-        setFormError(err instanceof Error ? err.message : "Could not load shops from server.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => setMetaLoading(false));
+  };
+
+  const load = () => {
+    loadShops();
+    loadFormMeta();
   };
 
   useEffect(() => {
-    load();
+    loadShops();
+    loadFormMeta();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when identity/group changes
   }, [user?.id, user?.managed_shop_group?.id]);
 
@@ -232,13 +252,11 @@ export function PlatformShopsPage() {
 
 
   const handleDeleteShop = async (shop: PlatformTenantRow) => {
-    if (
-      !confirm(
-        `Delete shop "${shop.name}"?\n\nThis removes it from the platform list. This cannot be undone from here.`
-      )
-    ) {
-      return;
-    }
+    const ok = await appDialog.confirm(
+      `Delete shop "${shop.name}"?\n\nThis removes it from the platform list. This cannot be undone from here.`,
+      { title: "Delete shop", tone: "danger", confirmLabel: "Delete" }
+    );
+    if (!ok) return;
     setDeletingId(shop.id);
     try {
       await platformApi.deleteShop(shop.id);
@@ -435,15 +453,15 @@ export function PlatformShopsPage() {
         </Link>
       ),
     },
-    ...(isGroupManager || shopGroups.length
-      ? [
+    ...(isGroupManager
+      ? []
+      : [
           {
             key: "group",
             header: "Group",
             cell: (r: PlatformTenantRow) => r.shop_group_name ?? "—",
           } as Column<PlatformTenantRow>,
-        ]
-      : []),
+        ]),
     { key: "plan", header: "Plan", cell: (r) => r.subscription?.plan ?? "—" },
     { key: "ref", header: "Subscription", cell: (r) => r.subscription?.reference_code ?? "—" },
     {
@@ -517,8 +535,8 @@ export function PlatformShopsPage() {
       breadcrumbs={["Home", "Platform"]}
       actions={
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={load}>
-            <RefreshCw className="h-4 w-4" /> Refresh
+          <Button variant="secondary" size="sm" onClick={load} disabled={shopsLoading || metaLoading}>
+            <RefreshCw className={`h-4 w-4 ${shopsLoading || metaLoading ? "animate-spin" : ""}`} /> Refresh
           </Button>
           {canManage && (
             <Button
@@ -533,6 +551,7 @@ export function PlatformShopsPage() {
                   });
                 }
               }}
+              disabled={metaLoading}
             >
               <Plus className="h-4 w-4" /> Add Shop
             </Button>
@@ -1259,7 +1278,7 @@ export function PlatformShopsPage() {
         exportTitle="Platform Shops"
         columns={columns}
         data={shops}
-        loading={loading}
+        loading={shopsLoading}
         emptyMessage={isGroupManager ? "No shops linked to your group yet." : "No shops yet. Add your first shop."}
         defaultPageSize={10}
       />

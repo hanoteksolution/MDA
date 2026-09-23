@@ -190,6 +190,72 @@ DEFAULT_RULE_SPECS = [
             },
         ],
     },
+    {
+        "event_type": event_types.CAFETERIA_WASTE_POSTED,
+        "name": "Cafeteria waste / spoilage",
+        "priority": 100,
+        "conditions": {},
+        "description_field": "reason",
+        "description_prefix": "Waste",
+        "lines": [
+            {
+                "side": PostingRuleLine.SIDE_DEBIT,
+                "mapping_key": "WASTE_EXPENSE",
+                "amount_field": "total_cost",
+                "memo": "{waste_type:Waste}",
+            },
+            {
+                "side": PostingRuleLine.SIDE_CREDIT,
+                "mapping_key": "DEFAULT_INVENTORY",
+                "amount_field": "total_cost",
+                "memo": "Inventory write-off",
+            },
+        ],
+    },
+    {
+        "event_type": event_types.CAFETERIA_TIP_RECORDED,
+        "name": "Cafeteria tip liability",
+        "priority": 100,
+        "conditions": {},
+        "description_field": "order_number",
+        "description_prefix": "Tip",
+        "lines": [
+            {
+                "side": PostingRuleLine.SIDE_DEBIT,
+                "mapping_key": "@payment_mapping",
+                "amount_field": "amount",
+                "memo": "Tip collected",
+            },
+            {
+                "side": PostingRuleLine.SIDE_CREDIT,
+                "mapping_key": "TIP_PAYABLE",
+                "amount_field": "amount",
+                "memo": "Employee tip payable",
+            },
+        ],
+    },
+    {
+        "event_type": event_types.CAFETERIA_SERVICE_CHARGE,
+        "name": "Cafeteria service charge",
+        "priority": 100,
+        "conditions": {},
+        "description_field": "order_number",
+        "description_prefix": "Service charge",
+        "lines": [
+            {
+                "side": PostingRuleLine.SIDE_DEBIT,
+                "mapping_key": "@payment_mapping",
+                "amount_field": "amount",
+                "memo": "Service charge",
+            },
+            {
+                "side": PostingRuleLine.SIDE_CREDIT,
+                "mapping_key": "SERVICE_CHARGE_REVENUE",
+                "amount_field": "amount",
+                "memo": "Service charge revenue",
+            },
+        ],
+    },
 ]
 
 
@@ -204,6 +270,9 @@ class PostingRuleService:
             event_types.SUPPLIER_PAYMENT_COMPLETED,
             event_types.FUTSAL_INCOME_RECORDED,
             event_types.FUTSAL_EXPENSE_RECORDED,
+            event_types.CAFETERIA_WASTE_POSTED,
+            event_types.CAFETERIA_TIP_RECORDED,
+            event_types.CAFETERIA_SERVICE_CHARGE,
         }
     )
 

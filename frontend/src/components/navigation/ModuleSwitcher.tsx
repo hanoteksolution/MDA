@@ -26,6 +26,7 @@ export function ModuleSwitcher({ compact }: { compact?: boolean }) {
     elevated: isSuperAdmin,
     includeFinance: isSuperAdmin || hasPermission("finance.view"),
     hasPermission,
+    businessTypeCode: user?.business_type_code,
   });
 
   const industries = list.filter((w) => w.kind === "industry");

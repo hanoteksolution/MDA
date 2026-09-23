@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { appDialog } from "@/components/feedback/AppDialog";
 import { formatCurrency } from "@/utils/cn";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
@@ -377,7 +378,11 @@ export function FinancePage() {
   };
 
   const reversePostedJournal = async (entryId: string) => {
-    if (!confirm("Post an offsetting reversal journal? The original entry stays immutable.")) return;
+    const ok = await appDialog.confirm(
+      "Post an offsetting reversal journal? The original entry stays immutable.",
+      { title: "Reverse journal", confirmLabel: "Post reversal" }
+    );
+    if (!ok) return;
     setJournalBusy(entryId);
     setJournalMsg(null);
     try {

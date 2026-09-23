@@ -156,6 +156,13 @@ class StockTransferService:
 
         source = transfer.source_warehouse
         destination = transfer.destination_warehouse
+        # D4 / B4-7: StockTransfer is same-branch only. Inter-branch moves go through
+        # BranchTransferRequest (branch_transfer_service.py). Historical cross-branch
+        # rows are left untouched; this only guards new confirmations.
+        if source.branch_id != destination.branch_id:
+            raise TransferError(
+                "Cross-branch transfers must use the branch transfer request workflow."
+            )
         tenant_id = transfer.tenant_id or getattr(source, "tenant_id", None)
 
         # Lock both sides in stable order to reduce deadlock risk.

@@ -669,6 +669,31 @@ class OrderDetailView(APIView):
             return _not_found("Order")
         return success_response(data=serialize_order(order))
 
+    def patch(self, request, pk):
+        if not user_has_any(
+            request.user,
+            "restaurant.manage",
+            "restaurant.floor",
+            "restaurant.orders.update",
+        ):
+            return error_response(message="Forbidden.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            order = RestaurantService.get_order(pk=pk, user=request.user, request=request)
+            data = request.data or {}
+            order = RestaurantService.update_order_charges(
+                order=order,
+                tip_amount=data.get("tip_amount") if "tip_amount" in data else None,
+                service_charge_amount=(
+                    data.get("service_charge_amount")
+                    if "service_charge_amount" in data
+                    else None
+                ),
+                user=request.user,
+            )
+        except (RestaurantError, ObjectDoesNotExist) as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(data=serialize_order(order), message="Charges updated.")
+
 
 class OrderPosPayloadView(APIView):
     """Hydrate POS cart from an open restaurant order (ensures Product links)."""

@@ -6,6 +6,11 @@ services:
     ports:
       - "127.0.0.1:5437:5432"
 
+  api:
+    volumes:
+      - mda_media:/app/media
+      - /var/lib/mda/tls-sync:/var/lib/mda/tls-sync
+
   web:
     ports:
       - "8010:80"

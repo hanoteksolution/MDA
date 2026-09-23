@@ -26,6 +26,8 @@ INSTALLED_APPS = [
     "core",
     "apps.authentication",
     "apps.settings_app",
+    "apps.organization",
+    "apps.integrations",
     "apps.audit",
     "apps.products",
     "apps.inventory",
@@ -44,6 +46,8 @@ INSTALLED_APPS = [
     "apps.office_rental",
     "apps.project_management",
     "apps.travel_agency",
+    "apps.hr",
+    "apps.school",
     "apps.finance",
     "apps.reports",
     "apps.notifications",
@@ -140,6 +144,11 @@ REST_FRAMEWORK = {
         "anon": "60/minute",
         "user": "600/minute",
         "auth": "20/minute",
+        "public_catalog": "120/minute",
+        "subdomain_check": "30/minute",
+        "registration": "5/hour",
+        "registration_status": "60/minute",
+        "email_verification": "10/hour",
     },
 }
 
@@ -167,6 +176,13 @@ CORS_ALLOW_CREDENTIALS = True
 
 # SaaS subdomain base: {slug}.erp.safaritechno.com
 TENANT_BASE_DOMAIN = config("TENANT_BASE_DOMAIN", default="erp.safaritechno.com")
+PUBLIC_APP_URL = config("PUBLIC_APP_URL", default=f"https://{TENANT_BASE_DOMAIN}")
+TERMS_VERSION = config("TERMS_VERSION", default="2026-09-01")
+PRIVACY_VERSION = config("PRIVACY_VERSION", default="2026-09-01")
+REGISTRATION_REQUIRE_EMAIL_VERIFICATION = config(
+    "REGISTRATION_REQUIRE_EMAIL_VERIFICATION", default=False, cast=bool
+)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@safaritechno.com")
 
 # Apex / platform hosts that do not bind a shop tenant
 PLATFORM_HOSTS = config("PLATFORM_HOSTS", default="")
@@ -184,6 +200,15 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
 
+# Integrations (SMS / payments): Fernet key(s), comma-separated for rotation (decision D6).
+# Empty => the integrations module refuses to store or use credentials; there is no plaintext fallback.
+INTEGRATION_ENCRYPTION_KEY = config("INTEGRATION_ENCRYPTION_KEY", default="")
+# Reseller SMS: tenants spend purchased credits per message segment (no credit = not sent).
+SMS_CREDITS_ENFORCED = config("SMS_CREDITS_ENFORCED", default=True, cast=bool)
+# MOCK payment providers may never collect real (billing) payments; see apps/integrations/billing_guard.py.
+PAYMENT_ALLOW_MOCK_PROVIDERS = config("PAYMENT_ALLOW_MOCK_PROVIDERS", default=DEBUG, cast=bool)
+SMS_ALLOW_PRIVATE_URLS = config("SMS_ALLOW_PRIVATE_URLS", default=False, cast=bool)
+
 # Central Accounting Engine
 ACCOUNTING_ENGINE_ENABLED = config("ACCOUNTING_ENGINE_ENABLED", default=True, cast=bool)
 ACCOUNTING_STRICT_AFTER_CUTOVER = config(
@@ -194,6 +219,18 @@ CELERY_BEAT_SCHEDULE = {
     "notifications-daily-scans": {
         "task": "notifications.run_all_scheduled_scans",
         "schedule": 60 * 60 * 6,
+    },
+    "integrations-sms-retry": {
+        "task": "integrations.retry_due_sms",
+        "schedule": 60 * 5,
+    },
+    "integrations-payment-expiry": {
+        "task": "integrations.expire_payment_intents",
+        "schedule": 60 * 5,
+    },
+    "integrations-sms-credit-expiry": {
+        "task": "integrations.expire_sms_credits",
+        "schedule": 60 * 30,
     },
     "finance-accounting-health": {
         "task": "finance.scan_accounting_health",

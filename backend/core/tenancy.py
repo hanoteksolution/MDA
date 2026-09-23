@@ -104,9 +104,11 @@ def is_platform_unscoped_actor(user) -> bool:
         return False
 
 
-def apply_tenant_scope(queryset, *, request=None, user=None, field: str = "tenant_id"):
+def apply_tenant_scope(
+    queryset, *, request=None, user=None, tenant=None, field: str = "tenant_id"
+):
     """Filter a queryset to the acting tenant. Fail closed for shop users without tenant."""
-    tenant = resolve_acting_tenant(request=request, user=user)
+    tenant = tenant or resolve_acting_tenant(request=request, user=user)
     actor = user or (getattr(request, "user", None) if request is not None else None)
     if tenant is not None:
         return queryset.filter(**{field: _tenant_pk(tenant)})

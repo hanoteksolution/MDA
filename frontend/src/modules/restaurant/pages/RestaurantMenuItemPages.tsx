@@ -161,15 +161,49 @@ export function RestaurantMenuItemDetailPage() {
   const navigate = useNavigate();
   const [row, setRow] = useState<MenuItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [variants, setVariants] = useState<
+    { id: string; name: string; price_adjustment: number; is_default?: boolean }[]
+  >([]);
+  const [variantForm, setVariantForm] = useState({ name: "", price_adjustment: "0" });
+  const [savingVariant, setSavingVariant] = useState(false);
+
+  const reloadVariants = async (itemId: string) => {
+    try {
+      const res = await restaurantApi.itemVariants(itemId);
+      setVariants((res.data as typeof variants) || []);
+    } catch {
+      setVariants([]);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
     restaurantApi
       .item(id)
-      .then((res) => setRow(res.data))
+      .then(async (res) => {
+        setRow(res.data);
+        await reloadVariants(res.data.id);
+      })
       .catch((err) => appDialog.alert(err instanceof Error ? err.message : "Menu item not found."))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const addVariant = async () => {
+    if (!row || !variantForm.name.trim()) return;
+    setSavingVariant(true);
+    try {
+      await restaurantApi.createVariant(row.id, {
+        name: variantForm.name.trim(),
+        price_adjustment: Number(variantForm.price_adjustment || 0),
+      });
+      setVariantForm({ name: "", price_adjustment: "0" });
+      await reloadVariants(row.id);
+    } catch (err) {
+      await appDialog.alert(err instanceof Error ? err.message : "Could not create variant");
+    } finally {
+      setSavingVariant(false);
+    }
+  };
 
   if (loading || !row) {
     return (
@@ -204,6 +238,52 @@ export function RestaurantMenuItemDetailPage() {
           <p><span className="text-muted-foreground">Category</span> · {row.category_name}</p>
           <p className="md:col-span-2 xl:col-span-3"><span className="text-muted-foreground">Description</span> · {row.description || "—"}</p>
         </div>
+      </ContentSection>
+
+      <ContentSection title="Sizes / Variants" description="POS size options with price adjustments.">
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <FormField label="Variant name">
+            <Input
+              value={variantForm.name}
+              onChange={(e) => setVariantForm((s) => ({ ...s, name: e.target.value }))}
+              placeholder="Large"
+            />
+          </FormField>
+          <FormField label="Price adjustment">
+            <Input
+              type="number"
+              step="0.01"
+              value={variantForm.price_adjustment}
+              onChange={(e) => setVariantForm((s) => ({ ...s, price_adjustment: e.target.value }))}
+            />
+          </FormField>
+          <div className="flex items-end">
+            <Button type="button" loading={savingVariant} onClick={() => void addVariant()}>
+              Add variant
+            </Button>
+          </div>
+        </div>
+        {variants.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No variants yet.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {variants.map((v) => (
+              <li
+                key={v.id}
+                className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2"
+              >
+                <span>
+                  {v.name}
+                  {v.is_default ? " · default" : ""}
+                </span>
+                <span className="tabular-nums text-muted-foreground">
+                  {Number(v.price_adjustment) >= 0 ? "+" : ""}
+                  {formatCurrency(Number(v.price_adjustment || 0))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </ContentSection>
     </PageLayout>
   );

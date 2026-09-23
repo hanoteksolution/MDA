@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.inventory.services.inventory_service import InventoryService
 from apps.purchases.models import PurchaseOrder
 from apps.sales.models import Expense, Invoice, InvoiceItem
+from core.tenancy import apply_tenant_scope
 
 
 class AnalyticsService:
@@ -26,8 +27,12 @@ class AnalyticsService:
         return today
 
     @staticmethod
-    def _invoice_qs(*, branch_id=None, period="today", date_from=None, date_to=None):
+    def _invoice_qs(
+        *, branch_id=None, period="today", date_from=None, date_to=None,
+        user=None, request=None, tenant=None
+    ):
         qs = Invoice.active_objects().select_related("customer", "branch")
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         qs = qs.exclude(status=Invoice.STATUS_CANCELLED)
@@ -42,8 +47,12 @@ class AnalyticsService:
         return qs
 
     @staticmethod
-    def _purchase_qs(*, branch_id=None, period="today", date_from=None, date_to=None):
+    def _purchase_qs(
+        *, branch_id=None, period="today", date_from=None, date_to=None,
+        user=None, request=None, tenant=None
+    ):
         qs = PurchaseOrder.active_objects().select_related("supplier", "branch")
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         qs = qs.filter(status__in=[PurchaseOrder.STATUS_ORDERED, PurchaseOrder.STATUS_RECEIVED])
@@ -58,9 +67,16 @@ class AnalyticsService:
         return qs
 
     @staticmethod
-    def get_kpis(*, branch_id=None, period="today"):
-        inv_qs = AnalyticsService._invoice_qs(branch_id=branch_id, period=period)
-        po_qs = AnalyticsService._purchase_qs(branch_id=branch_id, period=period)
+    def get_kpis(
+        *, branch_id=None, period="today", module_code=None,
+        user=None, request=None, tenant=None
+    ):
+        inv_qs = AnalyticsService._invoice_qs(
+            branch_id=branch_id, period=period, user=user, request=request, tenant=tenant
+        )
+        po_qs = AnalyticsService._purchase_qs(
+            branch_id=branch_id, period=period, user=user, request=request, tenant=tenant
+        )
         inv_agg = inv_qs.aggregate(
             total_sales=Sum("total_amount"),
             cash_collected=Sum("amount_paid"),
@@ -70,13 +86,18 @@ class AnalyticsService:
         revenue = total_sales
         purchase_expenses = float(po_qs.aggregate(t=Sum("total_amount"))["t"] or 0)
         period_start = AnalyticsService._period_start(period)
-        op_qs = Expense.active_objects().filter(expense_date__gte=period_start)
+        op_qs = apply_tenant_scope(
+            Expense.active_objects(), user=user, request=request, tenant=tenant
+        ).filter(expense_date__gte=period_start)
         if branch_id:
             op_qs = op_qs.filter(branch_id=branch_id)
         operating_expenses = float(op_qs.aggregate(t=Sum("amount"))["t"] or 0)
         expenses = purchase_expenses + operating_expenses
         profit = revenue - expenses
-        summary = InventoryService.get_summary(branch_id=branch_id)
+        summary = InventoryService.get_summary(
+            branch_id=branch_id, module_code=module_code,
+            user=user, request=request, tenant=tenant
+        )
         return {
             "total_sales": total_sales,
             "revenue": revenue,
@@ -92,8 +113,9 @@ class AnalyticsService:
         }
 
     @staticmethod
-    def get_recent_sales(*, branch_id=None, limit=10):
+    def get_recent_sales(*, branch_id=None, limit=10, user=None, request=None, tenant=None):
         qs = Invoice.active_objects().select_related("customer").order_by("-issue_date", "-created_at")
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         results = []
@@ -109,11 +131,15 @@ class AnalyticsService:
         return results
 
     @staticmethod
-    def get_low_stock(*, branch_id=None, limit=20):
+    def get_low_stock(
+        *, branch_id=None, limit=20, module_code=None,
+        user=None, request=None, tenant=None
+    ):
         """One alert row per product (stock summed), no out-of-stock double-listing."""
-        # Consolidate split stock before reading alerts
-        InventoryService.dedupe_inventory(preferred_branch_id=branch_id)
-        qs = InventoryService.get_low_stock()
+        qs = InventoryService.get_low_stock(
+            branch_id=branch_id, module_code=module_code, user=user, request=request,
+            tenant=tenant,
+        )
         if branch_id:
             qs = qs.filter(warehouse__branch_id=branch_id)
 
@@ -135,11 +161,16 @@ class AnalyticsService:
         return list(by_product.values())[:limit]
 
     @staticmethod
-    def get_top_products(*, branch_id=None, period="month", limit=10):
+    def get_top_products(
+        *, branch_id=None, period="month", limit=10, user=None, request=None, tenant=None
+    ):
         qs = InvoiceItem.objects.filter(
             invoice__deleted_at__isnull=True,
             invoice__issue_date__gte=AnalyticsService._period_start(period),
         ).exclude(invoice__status=Invoice.STATUS_CANCELLED)
+        qs = apply_tenant_scope(
+            qs, user=user, request=request, tenant=tenant, field="invoice__tenant_id"
+        )
         if branch_id:
             qs = qs.filter(invoice__branch_id=branch_id)
         rows = (
@@ -159,7 +190,10 @@ class AnalyticsService:
         ]
 
     @staticmethod
-    def _monthly_series(*, branch_id=None, months=12, value_field="total_amount", model="invoice"):
+    def _monthly_series(
+        *, branch_id=None, months=12, value_field="total_amount", model="invoice",
+        user=None, request=None, tenant=None
+    ):
         today = timezone.localdate()
         start = (today.replace(day=1) - timedelta(days=months * 31)).replace(day=1)
         if model == "invoice":
@@ -171,6 +205,7 @@ class AnalyticsService:
                 status__in=[PurchaseOrder.STATUS_ORDERED, PurchaseOrder.STATUS_RECEIVED],
             )
             date_field = "order_date"
+        qs = apply_tenant_scope(qs, user=user, request=request, tenant=tenant)
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         rows = (
@@ -182,9 +217,15 @@ class AnalyticsService:
         return {r["month"].strftime("%Y-%m"): float(r["total"] or 0) for r in rows if r["month"]}
 
     @staticmethod
-    def get_chart_data(*, branch_id=None):
-        sales_map = AnalyticsService._monthly_series(branch_id=branch_id, months=12, model="invoice")
-        expense_map = AnalyticsService._monthly_series(branch_id=branch_id, months=12, model="purchase")
+    def get_chart_data(*, branch_id=None, user=None, request=None, tenant=None):
+        sales_map = AnalyticsService._monthly_series(
+            branch_id=branch_id, months=12, model="invoice",
+            user=user, request=request, tenant=tenant
+        )
+        expense_map = AnalyticsService._monthly_series(
+            branch_id=branch_id, months=12, model="purchase",
+            user=user, request=request, tenant=tenant
+        )
         today = timezone.localdate()
         sales_trend = []
         revenue_chart = []

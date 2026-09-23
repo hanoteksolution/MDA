@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -112,6 +112,32 @@ function ToneIcon({ tone }: { tone: DialogTone }) {
 export function AppDialogHost() {
   const request = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const [mounted, setMounted] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!request || !mounted) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const controls = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'));
+    controls()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (request.kind === 'confirm') request.resolve(false); else request.resolve();
+      }
+      if (event.key === 'Tab') {
+        const items = controls(); const first = items[0]; const last = items[items.length - 1];
+        if (!items.length) { event.preventDefault(); dialog.focus(); }
+        else if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+      }
+    };
+    const focusin = (event: FocusEvent) => { if (!dialog.contains(event.target as Node)) controls()[0]?.focus(); };
+    document.addEventListener('keydown', keydown);
+    document.addEventListener('focusin', focusin);
+    return () => { document.removeEventListener('keydown', keydown); document.removeEventListener('focusin', focusin); if (previous?.isConnected) previous.focus(); };
+  }, [request, mounted]);
 
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -137,6 +163,8 @@ export function AppDialogHost() {
             }}
           />
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="app-dialog-title"

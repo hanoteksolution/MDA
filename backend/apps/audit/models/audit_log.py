@@ -14,6 +14,18 @@ class AuditLog(models.Model):
         related_name="audit_logs",
         db_index=True,
     )
+    branch = models.ForeignKey(
+        "settings_app.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs",
+        db_index=True,
+        help_text=(
+            "Branch the mutation happened in. Forward-only: historical rows keep NULL "
+            "because back-dating a branch onto an audit row would falsify the trail."
+        ),
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

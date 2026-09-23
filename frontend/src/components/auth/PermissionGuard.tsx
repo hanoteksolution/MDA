@@ -10,6 +10,8 @@ interface PermissionGuardProps {
   /** TenantModule code(s); also requires dependencies (usable set from /me). */
   module?: string | string[];
   fallback?: string;
+  /** Only Super Admin / Platform Admin (platform infrastructure such as integration providers). */
+  elevatedOnly?: boolean;
 }
 
 export function PermissionGuard({
@@ -17,11 +19,12 @@ export function PermissionGuard({
   permission,
   module,
   fallback = "/dashboard",
+  elevatedOnly = false,
 }: PermissionGuardProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
-  const { hasPermission, hasAnyPermission } = usePermissions();
+  const { hasPermission, hasAnyPermission, isSuperAdmin } = usePermissions();
   const { hasModule, hasAnyModule } = useModules();
 
   // Refresh / cold start: token exists but /me has not returned yet — do not redirect.
@@ -37,7 +40,7 @@ export function PermissionGuard({
     ? hasAnyPermission(...permission)
     : hasPermission(permission);
 
-  if (!allowed) {
+  if (!allowed || (elevatedOnly && !isSuperAdmin)) {
     return <Navigate to={fallback} replace />;
   }
   if (module) {

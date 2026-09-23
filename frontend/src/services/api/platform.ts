@@ -219,6 +219,8 @@ export interface SubscriptionPaymentRow {
   period_key: string;
   confirmed_at: string | null;
   auto_renewed: boolean;
+  /** Online checkout: confirmed only by the verified provider webhook. */
+  is_checkout?: boolean;
   notes: string;
   tenant_name: string | null;
   reference_code: string;
@@ -738,7 +740,7 @@ export const platformApi = {
 
   confirmSubscriptionPayment: (
     paymentId: string,
-    data: { external_transaction_id?: string; payer_phone?: string; notes?: string } = {}
+    data: { external_transaction_id?: string; payer_phone?: string; notes?: string; reason?: string } = {}
   ) =>
     platformCloudRequest<
       ApiResponse<{ payment: SubscriptionPaymentRow; subscription: PlatformSubscriptionRow }>

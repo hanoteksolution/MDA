@@ -52,7 +52,12 @@ export function CustomersPage() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this customer?")) return;
+    const ok = await appDialog.confirm("Delete this customer?", {
+      title: "Delete customer",
+      tone: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     await customersApi.delete(id);
     reload();
   };

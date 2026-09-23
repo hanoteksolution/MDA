@@ -13,10 +13,18 @@ class NotificationListView(APIView):
         is_read = request.query_params.get("is_read")
         if is_read is not None:
             is_read = is_read.lower() in ("1", "true", "yes")
+        branch_ids = None
+        if request.query_params.get("branch_id") or request.headers.get("X-Branch-Id"):
+            from core.branching import resolve_branch_scope
+
+            scope = resolve_branch_scope(request=request)  # 403 for a branch not yours
+            branch_ids = None if scope.is_all else scope.branch_ids
         qs = NotificationService.list(
             user=request.user,
             is_read=is_read,
             notification_type=request.query_params.get("type"),
+            branch_ids=branch_ids,
+            severity=request.query_params.get("severity"),
             request=request,
         )
         return paginate_queryset(

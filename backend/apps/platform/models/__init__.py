@@ -2,6 +2,12 @@ from apps.platform.models.business_preset import BusinessPreset, BusinessPresetM
 from apps.platform.models.business_type import BusinessType
 from apps.platform.models.module import Module, TenantModule
 from apps.platform.models.plan_module import PlanModule
+from apps.platform.models.registration import (
+    AgreementAcceptance,
+    EmailVerification,
+    ProvisioningJob,
+    RegistrationRequest,
+)
 from apps.platform.models.shop_group import ShopGroup
 from apps.platform.models.sync_ingest_receipt import SyncIngestReceipt
 from apps.platform.models.sync_outbox import SyncOutboxEntry
@@ -21,6 +27,10 @@ __all__ = [
     "Module",
     "TenantModule",
     "PlanModule",
+    "RegistrationRequest",
+    "EmailVerification",
+    "AgreementAcceptance",
+    "ProvisioningJob",
     "Tenant",
     "TenantDomain",
     "TenantSettings",

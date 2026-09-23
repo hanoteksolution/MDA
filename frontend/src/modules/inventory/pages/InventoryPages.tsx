@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProductThumbnail } from "@/components/catalog/ProductImage";
+import { CrossBranchAvailability } from "@/modules/inventory/components/CrossBranchAvailability";
 import { inventoryApi } from "@/services/api/catalog";
 import { useScopedPath } from "@/hooks/useScopedPath";
 import { productModuleCode } from "@/utils/productModuleScope";
@@ -385,6 +386,15 @@ export function StockPage() {
         </Badge>
       ),
       exportValue: (r) => (r.is_out_of_stock ? "Out of Stock" : r.is_low_stock ? "Low Stock" : "OK"),
+    },
+    {
+      key: "elsewhere",
+      header: "Elsewhere",
+      cell: (r) =>
+        r.is_out_of_stock || r.is_low_stock ? (
+          <CrossBranchAvailability productId={r.product_id} />
+        ) : null,
+      exportValue: () => "",
     },
     ...(canAdjust
       ? [

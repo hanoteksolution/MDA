@@ -1,7 +1,8 @@
 import secrets
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Prefetch, Sum
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -19,6 +20,8 @@ from apps.platform.services.domain_utils import (
     build_tenant_hostname,
     get_tenant_base_domain,
     is_reserved_tenant_slug,
+    is_subdomain_taken,
+    suggest_subdomains,
     validate_tenant_slug,
 )
 from apps.platform.services.module_service import sync_tenant_modules
@@ -48,6 +51,10 @@ DEFAULT_SUBSCRIPTION_PAYMENT = {
     "dialog_title_override": "",
     "dialog_message_override": "",
     "auto_renew_enabled": True,
+    # Verified online checkout: the Safari house-tenant PaymentProviderConfig that collects
+    # subscription payments, and the billing currency (must match the provider's currency).
+    "payment_provider_id": "",
+    "currency": "USD",
 }
 
 
@@ -64,12 +71,32 @@ def _unique_slug(base: str) -> str:
     return candidate
 
 
+class SubdomainTakenError(ValueError):
+    """Raised when a user-selected workspace URL cannot be claimed."""
+
+    code = "SUBDOMAIN_TAKEN"
+
+    def __init__(self, slug: str, *, message: str | None = None):
+        self.slug = slug
+        self.suggestions = suggest_subdomains(slug)
+        super().__init__(
+            message
+            or "This workspace URL was just taken. Please choose another."
+        )
+
+
 def _resolve_requested_slug(data: dict, *, name: str) -> str:
+    """Resolve slug for shop creation.
+
+    When the caller supplies a slug/subdomain, it is validated and must be free.
+    Never silently rewrite a user-selected slug. Auto-generation only applies
+    when the platform admin omits subdomain entirely.
+    """
     raw = (data.get("slug") or data.get("subdomain") or "").strip()
     if raw:
         slug = validate_tenant_slug(raw)
-        if Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists():
-            raise ValueError(f"Subdomain '{slug}' is already taken.")
+        if is_subdomain_taken(slug):
+            raise SubdomainTakenError(slug)
         return slug
     return _unique_slug(name)
 
@@ -146,6 +173,12 @@ class PlatformService:
                 ["sales", "purchases", "travel_agency"],
                 140,
             ),
+            (
+                "school",
+                "School / Education",
+                ["school", "sales", "inventory"],
+                145,
+            ),
             ("other", "Other", ["pos", "inventory", "sales"], 200),
         ]
         for code, name, modules, sort_order in seeds:
@@ -201,20 +234,28 @@ class PlatformService:
         )
         if not primary:
             hostname = build_tenant_hostname(tenant.slug)
-            # Soft-collide: if domain exists for another tenant, suffix.
-            if TenantDomain.objects.filter(domain=hostname, deleted_at__isnull=True).exclude(tenant=tenant).exists():
-                hostname = build_tenant_hostname(f"{tenant.slug}-{str(tenant.id)[:8]}")
-            primary = TenantDomain.objects.create(
-                tenant=tenant,
-                domain=hostname,
-                subdomain=tenant.slug,
-                is_primary=True,
-                is_custom=False,
-                is_verified=True,
-                verified_at=timezone.now(),
-                is_active=True,
-                created_by=user,
+            # Never silently rewrite the approved hostname (e.g. barista → barista-<uuid>).
+            conflict = (
+                TenantDomain.objects.filter(domain__iexact=hostname, deleted_at__isnull=True)
+                .exclude(tenant=tenant)
+                .exists()
             )
+            if conflict:
+                raise SubdomainTakenError(tenant.slug)
+            try:
+                primary = TenantDomain.objects.create(
+                    tenant=tenant,
+                    domain=hostname,
+                    subdomain=tenant.slug,
+                    is_primary=True,
+                    is_custom=False,
+                    is_verified=True,
+                    verified_at=timezone.now(),
+                    is_active=True,
+                    created_by=user,
+                )
+            except IntegrityError as exc:
+                raise SubdomainTakenError(tenant.slug) from exc
         sync_tenant_modules(tenant=tenant, user=user)
         # Apply business preset snapshot when provided (or default = business type code)
         from apps.platform.services.business_preset_service import BusinessPresetService
@@ -440,7 +481,15 @@ class PlatformService:
         ids = PlatformService.accessible_tenant_ids(user)
         qs = Tenant.objects.filter(id__in=ids, deleted_at__isnull=True).select_related(
             "subscription__plan", "shop_group", "business_type", "settings"
-        ).prefetch_related("companies", "domains")
+        ).prefetch_related(
+            "companies",
+            "domains",
+            "sync_snapshots",
+            Prefetch(
+                "companies__branches",
+                queryset=Branch.active_objects().order_by("-is_default", "name"),
+            ),
+        )
         if active_only:
             qs = qs.filter(is_active=True)
         return qs.order_by("name")
@@ -689,6 +738,66 @@ class PlatformService:
         }
 
     @staticmethod
+    def _tenant_list_kpis(tenant: Tenant, *, period: str = "month") -> dict:
+        """Lightweight KPIs for shop list views — avoids full tenant_overview cost."""
+        snapshot = CloudShopSyncService.latest_kpis(tenant)
+        if snapshot:
+            return {
+                "total_sales": float(snapshot.get("total_sales") or snapshot.get("revenue") or 0),
+                "revenue": float(snapshot.get("revenue") or snapshot.get("total_sales") or 0),
+                "cash_collected": float(snapshot.get("cash_collected") or 0),
+                "profit": float(snapshot.get("profit") or 0),
+            }
+
+        branch_id = None
+        for company in tenant.companies.all():
+            if company.deleted_at is not None:
+                continue
+            for branch in company.branches.all():
+                if branch.deleted_at is not None:
+                    continue
+                branch_id = str(branch.id)
+                break
+            if branch_id:
+                break
+
+        inv_agg = AnalyticsService._invoice_qs(
+            branch_id=branch_id, period=period, tenant=tenant
+        ).aggregate(
+            total_sales=Sum("total_amount"),
+            cash_collected=Sum("amount_paid"),
+        )
+        total_sales = float(inv_agg["total_sales"] or 0)
+        cash_collected = float(inv_agg["cash_collected"] or 0)
+        return {
+            "total_sales": total_sales,
+            "revenue": total_sales,
+            "cash_collected": cash_collected,
+            "profit": 0,
+        }
+
+    @staticmethod
+    def tenant_list_row(tenant: Tenant, *, period: str = "month") -> dict:
+        """Compact tenant payload for platform shop list tables."""
+        group = tenant.shop_group
+        return {
+            "id": str(tenant.id),
+            "name": tenant.name,
+            "slug": tenant.slug,
+            "is_active": tenant.is_active,
+            "status": tenant.status,
+            "contact_email": tenant.contact_email,
+            "currency": tenant.currency,
+            "language": tenant.language,
+            "timezone": tenant.timezone,
+            "shop_group_id": str(group.id) if group else None,
+            "shop_group_name": group.name if group else None,
+            "business_type_code": tenant.business_type.code if tenant.business_type_id else None,
+            "subscription": PlatformService._subscription_payload(tenant),
+            "kpis": PlatformService._tenant_list_kpis(tenant, period=period),
+        }
+
+    @staticmethod
     def tenant_overview(tenant: Tenant, *, period: str = "month"):
         PlatformService.provision_tenant_defaults(tenant=tenant)
         tenant = (
@@ -712,7 +821,9 @@ class PlatformService:
                     or Warehouse.active_objects().filter(branch=branch).first()
                 )
         branch_id = str(branch.id) if branch else None
-        kpis = AnalyticsService.get_kpis(branch_id=branch_id, period=period)
+        kpis = AnalyticsService.get_kpis(
+            branch_id=branch_id, period=period, tenant=tenant
+        )
         snapshot_kpis = CloudShopSyncService.latest_kpis(tenant)
         if snapshot_kpis:
             kpis = {**kpis, **snapshot_kpis, "source": "cloud_sync"}
@@ -733,7 +844,7 @@ class PlatformService:
         if warehouse:
             from apps.inventory.services.inventory_service import InventoryService
 
-            InventoryService.backfill_missing_inventory(warehouse=warehouse)
+            InventoryService.backfill_missing_inventory(warehouse=warehouse, tenant=tenant)
             inv_qs = Inventory.active_objects().filter(warehouse=warehouse)
             agg = inv_qs.aggregate(
                 units=Sum("quantity"),
@@ -1361,7 +1472,7 @@ class PlatformService:
         password = owner.get("password") or ""
         if not username:
             raise ValueError("Shop owner username is required.")
-        if len(password) < 8:
+        if not owner.get("_password_hash") and len(password) < 8:
             raise ValueError("Shop owner password must be at least 8 characters.")
 
         existing = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
@@ -1401,10 +1512,10 @@ class PlatformService:
         if not role:
             raise ValueError(f"Role '{role_slug}' is not available.")
 
-        return User.objects.create_user(
+        user = User.objects.create_user(
             username=username,
             email=(owner.get("email") or tenant.contact_email or "").strip(),
-            password=password,
+            password=None if owner.get("_password_hash") else password,
             first_name=(owner.get("first_name") or "").strip(),
             last_name=(owner.get("last_name") or "").strip(),
             phone=(owner.get("phone") or tenant.contact_phone or "").strip(),
@@ -1414,6 +1525,10 @@ class PlatformService:
             created_by=created_by,
             is_active=True,
         )
+        if owner.get("_password_hash"):
+            user.password = owner["_password_hash"]
+            user.save(update_fields=["password"])
+        return user
 
     @staticmethod
     def owner_payload(user: User) -> dict:
@@ -1459,22 +1574,25 @@ class PlatformService:
         language = str(data.get("language") or "en").lower()[:16]
         tz = (data.get("timezone") or "UTC").strip() or "UTC"
 
-        tenant = Tenant.objects.create(
-            name=data["name"],
-            slug=slug,
-            contact_email=data.get("contact_email", ""),
-            contact_phone=data.get("contact_phone", ""),
-            country=data.get("country", ""),
-            timezone=tz,
-            currency=currency,
-            language=language,
-            status=Tenant.STATUS_TRIAL,
-            business_type=business_type,
-            sync_secret=secrets.token_urlsafe(24),
-            is_active=True,
-            shop_group=shop_group,
-            created_by=user,
-        )
+        try:
+            tenant = Tenant.objects.create(
+                name=data["name"],
+                slug=slug,
+                contact_email=data.get("contact_email", ""),
+                contact_phone=data.get("contact_phone", ""),
+                country=data.get("country", ""),
+                timezone=tz,
+                currency=currency,
+                language=language,
+                status=Tenant.STATUS_TRIAL,
+                business_type=business_type,
+                sync_secret=secrets.token_urlsafe(24),
+                is_active=True,
+                shop_group=shop_group,
+                created_by=user,
+            )
+        except IntegrityError as exc:
+            raise SubdomainTakenError(slug) from exc
         preset_code = (data.get("preset_code") or "").strip().lower() or (
             business_type.code if business_type else None
         )
@@ -1739,6 +1857,7 @@ class PlatformService:
                 subscription=subscription,
                 period_key=period_key,
                 status=SubscriptionPayment.STATUS_PENDING,
+                intent__isnull=True,  # verified checkouts are never re-priced or reused by this legacy flow
             )
             .order_by("-created_at")
             .first()
@@ -1854,6 +1973,8 @@ class PlatformService:
             "period_key": payment.period_key,
             "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
             "auto_renewed": payment.auto_renewed,
+            # Verified online checkout: confirmed only by the provider webhook, never manually.
+            "is_checkout": bool(payment.intent_id),
             "notes": payment.notes,
             "tenant_name": payment.subscription.tenant.name if payment.subscription.tenant_id else None,
             "reference_code": payment.subscription.reference_code,
@@ -1984,4 +2105,3 @@ class PlatformService:
             ids = PlatformService.accessible_tenant_ids(user)
             qs = qs.filter(subscription__tenant_id__in=ids)
         return [PlatformService.serialize_payment(p) for p in qs[:limit]]
-

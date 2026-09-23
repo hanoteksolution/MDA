@@ -7,7 +7,12 @@ from django.db.models import Q
 
 from apps.sales.models import Expense, Invoice, Quotation
 from apps.sales.serializers.sales_serializers import serialize_invoice, serialize_quotation
-from apps.sales.services.sales_service import InvoiceService, _aggregate_item_quantities
+from apps.sales.services.sales_service import (
+    InvoiceService,
+    _aggregate_item_quantities,
+    sale_location_id,
+    sale_warehouse,
+)
 from apps.inventory.services.inventory_service import InventoryService
 import re
 
@@ -151,7 +156,7 @@ class TrashService:
         inv.save(update_fields=["status", "updated_by", "updated_at"])
 
         # Re-apply stock sale (inverse of delete restore)
-        warehouse = InventoryService.resolve_warehouse_for_branch(branch=inv.branch)
+        warehouse = sale_warehouse(inv)
         if warehouse:
             sold = _aggregate_item_quantities(list(inv.items.all()))
             deltas = {pid: -qty for pid, qty in sold.items() if qty}
@@ -161,6 +166,7 @@ class TrashService:
                 reference_id=inv.id,
                 user=user,
                 notes=f"Sale restored {inv.invoice_number}",
+                location_id=sale_location_id(inv),
             )
 
         return InvoiceService.list(user=user).get(pk=inv.pk)

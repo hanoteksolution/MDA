@@ -127,6 +127,10 @@ export interface PosCheckoutPayload {
   /** Open hotel folio — posts F&B to guest room (charge-to-room). */
   hotel_folio_id?: string;
   hotel_reservation_id?: string;
+  tip_amount?: number;
+  service_charge_amount?: number;
+  promotion_code?: string;
+  loyalty_member_id?: string;
   /** Active pharmacy prescription covering Rx-required cart lines. */
   prescription_id?: string;
 }
@@ -146,6 +150,15 @@ export interface CashierSession {
   total_refunds: number;
   status: "open" | "closed";
   notes: string;
+  terminal_id?: string | null;
+  register_id?: string | null;
+  warehouse_id?: string | null;
+  location_id?: string | null;
+  cash_in?: number;
+  cash_out?: number;
+  variance_reason?: string;
+  variance_approved_by_id?: string | null;
+  variance_approved_at?: string | null;
 }
 
 export interface SaleRefundItem {
@@ -360,7 +373,15 @@ export const posApi = {
     );
   },
 
-  openSession: (data: { branch_id?: string; opening_float?: number; notes?: string } = {}) =>
+  openSession: (
+    data: {
+      branch_id?: string;
+      terminal_id?: string;
+      register_id?: string;
+      opening_float?: number;
+      notes?: string;
+    } = {}
+  ) =>
     apiRequest<ApiResponse<CashierSession>>("/pos/sessions/open/", {
       method: "POST",
       body: JSON.stringify(data),

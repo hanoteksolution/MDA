@@ -50,8 +50,8 @@ POS_CAPABILITIES: dict[str, dict[str, bool]] = {
         "waiters": True,
         "tables": True,
         "batches": False,
-        "modifiers": False,
-        "kitchen_ticket": False,
+        "modifiers": True,
+        "kitchen_ticket": True,
         "membership_skus": False,
         "charge_to_room": False,
     },
@@ -99,7 +99,12 @@ def resolve_pos_profile_code(
         return "HOTEL_SERVICE"
     if "hotel" in mods and "pos" in mods:
         return "HOTEL_SERVICE"
+    # Prefer CAFETERIA when explicitly requested via module feature or business type hint.
+    if "cafeteria" in mods:
+        return "CAFETERIA"
     if "restaurant" in mods:
+        # Workspace label cafeteria still enables restaurant module — callers may
+        # pass explicit_code=CAFETERIA from the cafeteria FE shell.
         return "RESTAURANT"
     if "pharmacy" in mods:
         return "PHARMACY"

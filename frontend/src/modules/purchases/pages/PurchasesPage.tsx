@@ -55,9 +55,11 @@ export function PurchasesPage() {
   }, []);
 
   const handleReceiveRemaining = async (po: PurchaseOrder) => {
-    if (!confirm(`Receive remaining goods for ${po.order_number} into the default warehouse?`)) {
-      return;
-    }
+    const ok = await appDialog.confirm(
+      `Receive remaining goods for ${po.order_number} into the default warehouse?`,
+      { title: "Receive goods", confirmLabel: "Receive" }
+    );
+    if (!ok) return;
     setReceivingId(po.id);
     try {
       const [preview, warehouses] = await Promise.all([
@@ -91,7 +93,11 @@ export function PurchasesPage() {
   };
 
   const handleDelete = async (po: PurchaseOrder) => {
-    if (!confirm(`Delete purchase order ${po.order_number}?\n\nThis cannot be undone from here.`)) {
+    const ok = await appDialog.confirm(
+      `Delete purchase order ${po.order_number}?\n\nThis cannot be undone from here.`,
+      { title: "Delete purchase order", tone: "danger", confirmLabel: "Delete" }
+    );
+    if (!ok) {
       return;
     }
     setDeletingId(po.id);

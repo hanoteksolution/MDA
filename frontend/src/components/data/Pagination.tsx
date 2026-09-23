@@ -73,7 +73,7 @@ export function Pagination({
               onPageChange(1);
             }}
           >
-            <SelectTrigger className="h-9 w-[110px] text-xs">
+            <SelectTrigger aria-label="Rows per page" className="h-9 w-[110px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -387,6 +387,43 @@ class JournalReverseView(APIView):
         )
 
 
+def _finance_branch_filter(request):
+    """Branch dimension for a finance report: None (company), ``"unassigned"`` or a branch id.
+
+    A specific branch must be one the caller can actually see (403 otherwise, never an
+    empty success); Unassigned is company-level data, so it needs every-branch access.
+    """
+    from core.branching import resolve_branch_scope
+    from apps.finance.services.branch_finance_service import UNASSIGNED
+
+    raw = (request.query_params.get("branch_id") or "").strip()
+    if not raw or raw.lower() == "all":
+        return None
+    if raw.lower() == UNASSIGNED:
+        scope = resolve_branch_scope(request=request, permission="finance.view", requested="all")
+        if not (scope.unscoped or _covers_all_branches(request, scope)):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Unassigned finance data needs access to every branch.")
+        return UNASSIGNED
+    scope = resolve_branch_scope(request=request, permission="finance.view", requested=raw)
+    return str(scope.branch_ids[0])
+
+
+def _covers_all_branches(request, scope) -> bool:
+    from apps.settings_app.models import Branch
+    from core.tenancy import resolve_acting_tenant
+
+    tenant = resolve_acting_tenant(request=request, user=request.user)
+    all_ids = set(
+        str(pk)
+        for pk in Branch.active_objects()
+        .filter(tenant_id=getattr(tenant, "pk", None))
+        .values_list("pk", flat=True)
+    )
+    return bool(all_ids) and all_ids <= {str(i) for i in scope.branch_ids}
+
+
 class TrialBalanceReportView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("finance.view")]
 
@@ -394,6 +431,31 @@ class TrialBalanceReportView(APIView):
         data = TrialBalanceSelector.run(
             date_from=request.query_params.get("date_from"),
             date_to=request.query_params.get("date_to"),
+            user=request.user,
+            request=request,
+            branch_id=_finance_branch_filter(request),
+        )
+        return success_response(data=data)
+
+
+class BranchTrialBalanceView(APIView):
+    """Per-branch trial balances + Unassigned + consolidated, with a reconciliation flag."""
+
+    permission_classes = [IsAuthenticated, HasPermission("finance.view")]
+
+    def get(self, request):
+        from apps.finance.services.branch_finance_service import BranchFinanceService
+        from core.branching import resolve_branch_scope
+        from core.tenancy import resolve_acting_tenant
+
+        tenant = resolve_acting_tenant(request=request, user=request.user)
+        scope = resolve_branch_scope(request=request, permission="finance.view", requested="all")
+        company_wide = scope.unscoped or _covers_all_branches(request, scope)
+        data = BranchFinanceService.trial_balance_by_branch(
+            tenant_id=getattr(tenant, "pk", None),
+            date_from=request.query_params.get("date_from") or None,
+            date_to=request.query_params.get("date_to") or None,
+            branch_ids=None if company_wide else scope.branch_ids,
             user=request.user,
             request=request,
         )
@@ -445,7 +507,10 @@ class AccountingEquationView(APIView):
 
         as_of = request.query_params.get("as_of") or None
         result = AccountingEquationService.evaluate(
-            as_of=as_of, user=request.user, request=request
+            as_of=as_of,
+            user=request.user,
+            request=request,
+            branch_id=_finance_branch_filter(request),
         )
         return success_response(data=AccountingEquationService.serialize(result))
 

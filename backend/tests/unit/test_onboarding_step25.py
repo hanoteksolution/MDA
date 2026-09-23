@@ -28,7 +28,7 @@ def test_catalog_includes_types_and_plans(onboard_ready):
 def test_reserved_slug_rejected(onboard_ready):
     result = OnboardingService.check_slug("api")
     assert result["available"] is False
-    assert "reserved" in result["reason"].lower()
+    assert result["reason"] == "reserved"
 
 
 @pytest.mark.django_db
@@ -108,7 +108,7 @@ def test_provision_rejects_taken_slug_different_owner(onboard_ready):
                 },
             }
         )
-    assert exc.value.code == "SLUG_TAKEN"
+    assert exc.value.code == "SUBDOMAIN_TAKEN"
 
 
 @pytest.mark.django_db

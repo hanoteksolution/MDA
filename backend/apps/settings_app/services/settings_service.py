@@ -1,5 +1,7 @@
 from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
+from apps.audit.services.audit_write import write_audit
 from apps.settings_app.models import Branch, Company, Setting
 
 
@@ -65,6 +67,49 @@ class BranchService:
         branch.is_default = True
         branch.updated_by = updated_by
         branch.save(update_fields=["is_default", "updated_by", "updated_at"])
+        return branch
+
+    @staticmethod
+    @transaction.atomic
+    def archive_branch(*, branch, user=None, status=None):
+        """Close a branch for trading. Refuses while a cashier session is still open.
+
+        Archiving is reversible (set the status back) and is *not* a delete: the row
+        stays so that every historical invoice, movement and journal line that points
+        at it keeps resolving.
+        """
+        from apps.sales.models import CashierSession
+
+        target_status = status or Branch.STATUS_ARCHIVED
+        if target_status not in Branch.INACTIVE_STATUSES:
+            raise ValidationError({"status": "Use set_default/update to re-activate a branch."})
+
+        open_sessions = CashierSession.objects.filter(
+            branch=branch, status=CashierSession.STATUS_OPEN, deleted_at__isnull=True
+        ).count()
+        if open_sessions:
+            raise ValidationError(
+                {
+                    "detail": (
+                        f"Cannot close this branch: {open_sessions} cashier session(s) are "
+                        "still open. Close the tills first."
+                    )
+                }
+            )
+
+        old_status = branch.status
+        branch.status = target_status
+        branch.updated_by = user
+        branch.save(update_fields=["status", "updated_by", "updated_at"])
+        write_audit(
+            action="update",
+            module="branches",
+            entity=branch,
+            branch=branch,
+            user=user,
+            old_values={"status": old_status},
+            new_values={"status": branch.status},
+        )
         return branch
 
     @staticmethod
@@ -143,9 +188,24 @@ class SettingsService:
         return setting
 
     @staticmethod
-    def get_company_profile():
-        company = Company.active_objects().first()
-        return company
+    def get_company_profile(*, user=None, request=None):
+        from core.tenancy import resolve_acting_tenant
+
+        tenant = resolve_acting_tenant(request=request, user=user)
+        qs = Company.active_objects().all()
+        if tenant is not None:
+            company = qs.filter(tenant_id=tenant.pk).order_by("created_at").first()
+            if company is not None:
+                return company
+        # Prefer the company linked to the user's branch when host/tenant context is thin.
+        branch = getattr(user, "branch", None) if user is not None else None
+        if branch is not None and getattr(branch, "company_id", None):
+            company = qs.filter(pk=branch.company_id).first()
+            if company is not None:
+                return company
+        if tenant is not None:
+            return None
+        return qs.order_by("created_at").first()
 
     ALLOWED_COMPANY_FIELDS = (
         "name",
@@ -159,13 +219,34 @@ class SettingsService:
 
     @staticmethod
     @transaction.atomic
-    def update_company_profile(*, data, user=None):
-        company = Company.active_objects().first()
+    def update_company_profile(*, data, user=None, request=None):
+        from core.tenancy import resolve_acting_tenant
+
+        company = SettingsService.get_company_profile(user=user, request=request)
+        tenant = resolve_acting_tenant(request=request, user=user)
         if not company:
-            company = Company.objects.create(name=data.get("name", "My Company"), created_by=user)
+            company = Company.objects.create(
+                name=(data.get("name") or getattr(tenant, "name", None) or "My Company"),
+                tenant_id=getattr(tenant, "pk", None) if tenant is not None else None,
+                created_by=user,
+            )
+        elif company.tenant_id is None and tenant is not None:
+            company.tenant_id = tenant.pk
         for key in SettingsService.ALLOWED_COMPANY_FIELDS:
             if key in data:
                 setattr(company, key, data[key] if data[key] is not None else "")
         company.updated_by = user
         company.save()
+        # Keep tenant display name aligned with company trading name when updated.
+        if tenant is not None and "name" in data and (data.get("name") or "").strip():
+            new_name = str(data["name"]).strip()
+            if getattr(tenant, "name", None) != new_name:
+                tenant.name = new_name
+                update_fields = ["name"]
+                if hasattr(tenant, "updated_at"):
+                    from django.utils import timezone
+
+                    tenant.updated_at = timezone.now()
+                    update_fields.append("updated_at")
+                tenant.save(update_fields=update_fields)
         return company

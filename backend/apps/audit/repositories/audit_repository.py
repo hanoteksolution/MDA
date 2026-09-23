@@ -14,6 +14,7 @@ class AuditRepository:
         new_values=None,
         request=None,
         tenant=None,
+        branch=None,
     ):
         ip_address = None
         user_agent = ""
@@ -25,6 +26,7 @@ class AuditRepository:
 
         return AuditLog.objects.create(
             tenant=tenant,
+            branch_id=getattr(branch, "pk", branch),
             user=user,
             action=action,
             module=module,

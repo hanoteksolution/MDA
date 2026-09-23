@@ -3,6 +3,8 @@ from decouple import config
 from .base import *  # noqa: F401,F403
 
 DEBUG = False
+# Hard production guard (not env-overridable): MOCK can never be the billing provider.
+PAYMENT_ALLOW_MOCK_PROVIDERS = False
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True

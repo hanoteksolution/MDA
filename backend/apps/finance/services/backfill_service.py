@@ -67,6 +67,7 @@ class AccountingBackfillService:
         invoices = Invoice.active_objects().filter(
             tenant_id=tenant_id,
             status__in=[Invoice.STATUS_PAID, Invoice.STATUS_SENT, Invoice.STATUS_OVERDUE],
+            service_billing__isnull=True,
         )
         expenses = Expense.active_objects().filter(tenant_id=tenant_id)
         pos = PurchaseOrder.active_objects().filter(tenant_id=tenant_id).exclude(

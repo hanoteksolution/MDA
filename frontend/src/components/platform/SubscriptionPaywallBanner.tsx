@@ -2,15 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Lock } from "lucide-react";
 import { platformApi, type TenantEntitlements } from "@/services/api/platform";
 import { useAuthStore } from "@/store/authStore";
+import { isElevatedUser } from "@/navigation/postLogin";
 import { cn } from "@/utils/cn";
 import { Button } from "@/components/ui/button";
 
 export function SubscriptionPaywallBanner() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const exempt = useAuthStore((s) => isElevatedUser(s.user));
   const [entitlements, setEntitlements] = useState<TenantEntitlements | null>(null);
 
   const load = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || exempt) {
       setEntitlements(null);
       return;
     }
@@ -20,13 +22,13 @@ export function SubscriptionPaywallBanner() {
     } catch {
       setEntitlements(null);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, exempt]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!entitlements?.has_subscription) return null;
+  if (exempt || !entitlements?.has_subscription) return null;
 
   const phase = entitlements.phase;
   const show =

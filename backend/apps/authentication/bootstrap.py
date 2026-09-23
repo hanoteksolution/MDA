@@ -12,6 +12,7 @@ PERMISSIONS = [
     ("inventory.view", "View Inventory", "inventory"),
     ("inventory.adjust", "Adjust Inventory", "inventory"),
     ("inventory.transfer", "Transfer Inventory", "inventory"),
+    ("inventory.cross_branch_view", "View Stock Availability In Other Branches", "inventory"),
     ("purchases.view", "View Purchases", "purchases"),
     ("purchases.create", "Create Purchases", "purchases"),
     ("purchases.update", "Update Purchases", "purchases"),
@@ -81,6 +82,19 @@ PERMISSIONS = [
     ("restaurant.orders.cancel", "Cancel Restaurant Orders", "restaurant"),
     ("restaurant.orders.void", "Void Restaurant Orders", "restaurant"),
     ("restaurant.orders.refund", "Refund Restaurant Orders", "restaurant"),
+    ("cafeteria.dashboard.view", "View Cafeteria Dashboard", "restaurant"),
+    ("cafeteria.pos.use", "Use Cafeteria POS", "restaurant"),
+    ("cafeteria.settings.view", "View Cafeteria Settings", "restaurant"),
+    ("cafeteria.settings.update", "Update Cafeteria Settings", "restaurant"),
+    ("cafeteria.barista.queue", "Barista Queue / Board", "restaurant"),
+    ("cafeteria.waste.view", "View Cafeteria Waste", "restaurant"),
+    ("cafeteria.waste.create", "Create Cafeteria Waste", "restaurant"),
+    ("cafeteria.waste.approve", "Approve Cafeteria Waste", "restaurant"),
+    ("cafeteria.recipes.view", "View Cafeteria Recipes", "restaurant"),
+    ("cafeteria.recipes.create", "Create Cafeteria Recipes", "restaurant"),
+    ("cafeteria.recipes.update", "Update Cafeteria Recipes", "restaurant"),
+    ("cafeteria.staff.view", "View Barista Staff", "restaurant"),
+    ("cafeteria.staff.manage", "Manage Barista Staff", "restaurant"),
     ("hotel.view", "View Hotel Module", "hotel"),
     ("hotel.manage", "Manage Hotel Rooms & Rates", "hotel"),
     ("hotel.rooms.create", "Create Hotel Rooms", "hotel"),
@@ -180,8 +194,31 @@ PERMISSIONS = [
             "travel.commission.view",
         }
     ],
+    ("school.view", "View School Workspace", "school"),
+    ("school.manage", "Manage School Module", "school"),
+    ("school.settings.view", "View School Settings", "school"),
+    ("school.settings.update", "Update School Settings", "school"),
+    ("school.academic.view", "View Academic Structure", "school"),
+    ("school.academic.create", "Create Academic Records", "school"),
+    ("school.academic.update", "Update Academic Records", "school"),
+    ("school.academic.archive", "Archive Academic Records", "school"),
+    ("school.academic.activate", "Activate Academic Year", "school"),
     ("trash.view", "View Trash / Deleted Records", "trash"),
     ("trash.restore", "Restore or Permanently Delete Trash", "trash"),
+    ("organization.view", "View Branch Structure", "organization"),
+    ("organization.manage", "Manage Terminals, Registers & Locations", "organization"),
+    ("branch.access.view", "View Branch Access & Profiles", "organization"),
+    ("branch.access.manage", "Grant or Revoke Branch Access", "organization"),
+    ("integrations.view", "View Integrations & SMS Logs", "integrations"),
+    ("integrations.manage", "Manage Integration Credentials, SMS Providers & Templates", "integrations"),
+    ("integrations.sms.send", "Send SMS", "integrations"),
+    ("integrations.sms.billing.view", "View SMS Packages, Balance & Usage", "integrations"),
+    ("integrations.sms.billing.purchase", "Buy SMS Packages", "integrations"),
+    ("billing.subscription.view", "View Plan, Subscription Invoices & Payments", "billing"),
+    ("billing.subscription.pay", "Pay / Renew / Change ERP Subscription", "billing"),
+    ("integrations.payments.view", "View Payment Intents & Reconciliation", "integrations"),
+    ("integrations.payments.collect", "Start Provider Payments on Invoices", "integrations"),
+    ("integrations.payments.reconcile", "Run & Resolve Payment Reconciliation", "integrations"),
 ]
 
 ROLE_PERMISSIONS = {
@@ -190,13 +227,20 @@ ROLE_PERMISSIONS = {
     "admin": [
         "dashboard.view", "pos.access", "products.view", "products.create",
         "products.update", "products.delete", "inventory.view", "inventory.adjust",
-        "inventory.transfer", "purchases.view", "purchases.create", "purchases.update",
+        "inventory.transfer", "inventory.cross_branch_view",
+        "purchases.view", "purchases.create", "purchases.update",
         "sales.view", "sales.create", "sales.update", "sales.delete", "sales.refund",
         "customers.view", "customers.create", "customers.update",
         "suppliers.view", "suppliers.create", "suppliers.update",
         "finance.view", "finance.create", "finance.approve", "reports.view", "reports.export",
         "users.view", "users.create", "users.update", "users.delete",
         "roles.view", "branches.view", "branches.create", "branches.update",
+        "organization.view", "organization.manage",
+        "branch.access.view", "branch.access.manage",
+        "integrations.view", "integrations.manage", "integrations.sms.send",
+        "integrations.sms.billing.view", "integrations.sms.billing.purchase",
+        "billing.subscription.view", "billing.subscription.pay",
+        "integrations.payments.view", "integrations.payments.collect", "integrations.payments.reconcile",
         "settings.view", "settings.update", "audit.view",
         "staff.performance.view", "staff.performance.evaluate",
         "futsal.view", "futsal.manage", "futsal.finance",
@@ -209,6 +253,10 @@ ROLE_PERMISSIONS = {
         "restaurant.kitchen", "restaurant.floor",
         "restaurant.orders.create", "restaurant.orders.update", "restaurant.orders.cancel",
         "restaurant.orders.void", "restaurant.orders.refund",
+        "cafeteria.dashboard.view", "cafeteria.pos.use", "cafeteria.settings.view", "cafeteria.settings.update",
+        "cafeteria.barista.queue", "cafeteria.waste.view", "cafeteria.waste.create", "cafeteria.waste.approve",
+        "cafeteria.recipes.view", "cafeteria.recipes.create", "cafeteria.recipes.update",
+        "cafeteria.staff.view", "cafeteria.staff.manage",
         "hotel.view", "hotel.manage",
         "hotel.rooms.create", "hotel.rooms.update", "hotel.rooms.delete",
         "hotel.guests.create", "hotel.guests.update", "hotel.guests.delete",
@@ -236,16 +284,21 @@ ROLE_PERMISSIONS = {
         "travel.bookings.view", "travel.bookings.create", "travel.bookings.update", "travel.bookings.cancel",
         "travel.payments.create", "travel.refund", "travel.payments.post_accounting", "travel.refunds.post_accounting", "travel.commissions.approve", "travel.commissions.pay",
         "travel.bookings.post_accounting",
+        "school.view", "school.manage", "school.settings.view", "school.settings.update",
+        "school.academic.view", "school.academic.create", "school.academic.update",
+        "school.academic.archive", "school.academic.activate",
         "trash.view", "trash.restore",
     ],
     "branch_manager": [
         "dashboard.view", "pos.access", "products.view", "products.create",
         "products.update", "inventory.view", "inventory.adjust", "inventory.transfer",
+        "inventory.cross_branch_view",
         "purchases.view", "purchases.create", "purchases.update",
         "sales.view", "sales.create", "sales.update",
         "customers.view", "customers.create", "suppliers.view", "reports.view",
         "finance.view", "finance.create", "finance.approve",
         "users.view", "branches.view", "settings.view",
+        "organization.view", "organization.manage", "branch.access.view",
         "staff.performance.view", "staff.performance.evaluate",
         "futsal.view", "futsal.manage", "futsal.finance",
         "pharmacy.view", "pharmacy.manage", "pharmacy.dispense",
@@ -257,6 +310,10 @@ ROLE_PERMISSIONS = {
         "restaurant.kitchen", "restaurant.floor",
         "restaurant.orders.create", "restaurant.orders.update", "restaurant.orders.cancel",
         "restaurant.orders.void", "restaurant.orders.refund",
+        "cafeteria.dashboard.view", "cafeteria.pos.use", "cafeteria.settings.view", "cafeteria.settings.update",
+        "cafeteria.barista.queue", "cafeteria.waste.view", "cafeteria.waste.create", "cafeteria.waste.approve",
+        "cafeteria.recipes.view", "cafeteria.recipes.create", "cafeteria.recipes.update",
+        "cafeteria.staff.view", "cafeteria.staff.manage",
         "hotel.view", "hotel.manage",
         "hotel.rooms.create", "hotel.rooms.update", "hotel.rooms.delete",
         "hotel.guests.create", "hotel.guests.update", "hotel.guests.delete",
@@ -284,6 +341,9 @@ ROLE_PERMISSIONS = {
         "travel.bookings.view", "travel.bookings.create", "travel.bookings.update", "travel.bookings.cancel",
         "travel.payments.create", "travel.payments.post_accounting", "travel.refunds.post_accounting", "travel.commissions.approve",
         "travel.bookings.post_accounting",
+        "school.view", "school.manage", "school.settings.view", "school.settings.update",
+        "school.academic.view", "school.academic.create", "school.academic.update",
+        "school.academic.archive", "school.academic.activate",
         "trash.view",
     ],
     "accountant": [
@@ -292,17 +352,20 @@ ROLE_PERMISSIONS = {
     ],
     "inventory_manager": [
         "dashboard.view", "products.view", "products.create", "products.update",
-        "inventory.view", "inventory.adjust", "inventory.transfer",
+        "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.cross_branch_view",
         "purchases.view", "purchases.create", "suppliers.view", "reports.view",
     ],
-    "cashier": ["pos.access", "products.view", "customers.view", "sales.view", "sales.create", "sales.refund"],
+    "cashier": [
+        "pos.access", "products.view", "customers.view", "sales.view", "sales.create",
+        "sales.refund", "inventory.cross_branch_view",
+    ],
     "sales_staff": [
         "dashboard.view", "pos.access", "sales.view", "sales.create",
-        "customers.view", "customers.create", "products.view",
+        "customers.view", "customers.create", "products.view", "inventory.cross_branch_view",
     ],
     "read_only": [
-        "dashboard.view", "products.view", "inventory.view", "sales.view",
-        "customers.view", "suppliers.view", "finance.view", "reports.view", "projects.view", "project.wbs.view", "travel.bookings.view", "travel.customers.view",
+        "dashboard.view", "products.view", "inventory.view", "inventory.cross_branch_view", "sales.view",
+        "customers.view", "suppliers.view", "finance.view", "reports.view", "projects.view", "project.wbs.view", "travel.bookings.view",
     ],
     "futsal_staff": [
         "dashboard.view", "futsal.view", "futsal.manage",
@@ -313,7 +376,7 @@ ROLE_PERMISSIONS = {
         "customers.view", "customers.create", "reports.view", "finance.view",
     ],
     "pharmacist": [
-        "dashboard.view", "pos.access", "products.view", "inventory.view",
+        "dashboard.view", "pos.access", "products.view", "inventory.view", "inventory.cross_branch_view",
         "pharmacy.view", "pharmacy.manage", "pharmacy.dispense",
         "customers.view", "customers.create", "sales.view", "sales.create",
     ],
@@ -342,10 +405,17 @@ ROLE_PERMISSIONS = {
     ],
     "kitchen": [
         "restaurant.view", "restaurant.kitchen", "restaurant.orders.update", "products.view",
+        "cafeteria.barista.queue",
     ],
     "cafeteria_cashier": [
-        "pos.access", "customers.view", "customers.create", "products.view",
+        "pos.access", "cafeteria.pos.use", "cafeteria.dashboard.view",
+        "customers.view", "customers.create", "products.view",
         "restaurant.view", "restaurant.floor", "restaurant.orders.create", "restaurant.orders.update",
+    ],
+    "barista": [
+        "dashboard.view", "cafeteria.dashboard.view", "cafeteria.barista.queue",
+        "restaurant.view", "restaurant.kitchen", "restaurant.orders.update",
+        "products.view",
     ],
     "front_desk": [
         "dashboard.view", "hotel.view", "hotel.front_desk",
@@ -397,6 +467,36 @@ ROLE_PERMISSIONS = {
     ],
 }
 
+
+from apps.school.permissions import FOUNDATION_PERMISSIONS
+PERMISSIONS.extend(FOUNDATION_PERMISSIONS)
+_school_codes = [c for c, _, _ in FOUNDATION_PERMISSIONS]
+_school_reads = [c for c in _school_codes if c.endswith(".view") and ".campus_access." not in c]
+for _slug in ("school_owner", "school_admin"):
+    ROLE_PERMISSIONS[_slug] = ["school.view", *_school_codes]
+for _slug in ("school_principal", "school_academic_director", "school_registrar"):
+    ROLE_PERMISSIONS[_slug] = ["school.view", *[c for c in _school_codes if ".campus_access." not in c and c != "school.campus.all" and (not c.startswith("school.campus.") or c == "school.campus.view")]]
+ROLE_PERMISSIONS["school_registrar"] = [c for c in ROLE_PERMISSIONS["school_registrar"] if c not in ("school.teacher.assignable", "school.leadership.assignable")]
+ROLE_PERMISSIONS["school_teacher"] = ["school.view", "school.teacher.assignable", *_school_reads]
+
+from apps.school.sis_permissions import SIS_PERMISSIONS
+PERMISSIONS.extend(SIS_PERMISSIONS)
+_sis_codes = [code for code, _, _ in SIS_PERMISSIONS]
+for _slug in ("school_owner", "school_admin", "school_principal", "school_academic_director", "school_registrar"):
+    ROLE_PERMISSIONS[_slug].extend(_sis_codes if _slug in ("school_owner", "school_admin") else [code for code in _sis_codes if "override" not in code and "confidential" not in code and ".admission_policy." not in code])
+ROLE_PERMISSIONS["school_teacher"].extend(["school.student.view", "school.enrollment.view"])
+ROLE_PERMISSIONS["school_teacher"].extend(["school.attendance.view", "school.attendance.take", "school.attendance_record.view", "school.attendance_correction.request", "school.timetable.view", "school.timetable_entry.view", "school.period.view", "school.classroom.view", "school.teacher_assignment.view", "school.staff_profile.view"])
+
+ROLE_PERMISSIONS["school_teacher"].extend([
+    "school.assignment.view", "school.assignment.create", "school.assignment.update", "school.assignment.publish", "school.assignment.close",
+    "school.submission.view", "school.submission.create", "school.submission.update", "school.submission.grade",
+    "school.exam.view", "school.academic_assessment.view", "school.exam_schedule.view", "school.mark.view", "school.mark.enter",
+    "school.grade_scheme.view", "school.grade_band.view",
+])
+
+# Phase 6 financial privileges are explicit; teacher grants remain unchanged.
+for _slug in ('school_owner','school_admin'):
+    ROLE_PERMISSIONS[_slug].extend(['finance.view','finance.create','finance.approve','sales.view','sales.create','customers.view','customers.create','customers.update'])
 
 def bootstrap_roles_and_permissions(stdout=None, *, reset_role_permissions: bool = False) -> dict[str, Permission]:
     """
