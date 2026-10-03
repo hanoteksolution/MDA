@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from apps.inventory.models import Inventory, Warehouse
 from apps.settings_app.models import Branch
@@ -82,7 +82,41 @@ def in_transit_quantity(*, product, branch=None) -> Decimal:
     return _zero_if_none(agg["dispatched"]) - _zero_if_none(agg["received"])
 
 
-def product_availability(*, product, current_branch, tenant, include_other_branches=True) -> dict:
+OPEN_TRANSFER_STATUSES = ("REQUESTED", "APPROVED", "RESERVED", "DISPATCHED", "IN_TRANSIT", "RECEIVED")
+
+
+def _warehouse_rows(branch, product):
+    rows = []
+    for wh in Warehouse.active_objects().filter(branch_id=branch.pk, is_active=True).order_by("-is_default", "name"):
+        row = aggregate_warehouse_stock(warehouse=wh, product=product)
+        rows.append({"warehouse_id": row["warehouse_id"], "warehouse_name": row["warehouse_name"],
+                     "on_hand": row["on_hand"], "reserved": row["reserved"], "available": row["available"]})
+    return rows
+
+
+def open_transfers_for(*, product, branch, limit=10) -> list[dict]:
+    """Unfinished transfer requests for ``product`` that touch ``branch`` (either end)."""
+    from apps.inventory.models import BranchTransferLine
+
+    lines = (
+        BranchTransferLine.objects.filter(product=product, request__deleted_at__isnull=True,
+                                          request__status__in=OPEN_TRANSFER_STATUSES)
+        .filter(Q(request__source_branch=branch) | Q(request__destination_branch=branch))
+        .select_related("request__source_branch", "request__destination_branch")
+        .order_by("-request__created_at")[:limit]
+    )
+    return [{
+        "id": str(l.request_id),
+        "request_number": l.request.request_number,
+        "status": l.request.status,
+        "source_branch_name": l.request.source_branch.name,
+        "destination_branch_name": l.request.destination_branch.name,
+        "quantity_requested": l.quantity_requested,
+        "direction": "incoming" if l.request.destination_branch_id == branch.pk else "outgoing",
+    } for l in lines]
+
+
+def product_availability(*, product, current_branch, tenant, include_other_branches=True, detail_branch_ids=None) -> dict:
     """The shape the availability API returns (BRANCH_INVENTORY.md §7).
 
     ``current_branch`` figures always come first and are always computed regardless of
@@ -90,7 +124,10 @@ def product_availability(*, product, current_branch, tenant, include_other_branc
     ``other_branches`` is populated is entirely the caller's (the view's) decision,
     driven by ``inventory.cross_branch_view`` — this function itself performs no
     authorisation, matching every other Phase 2/3 service (auth is a view concern).
+    ``detail_branch_ids``: branches whose per-warehouse breakdown the caller may see
+    (``inventory.view`` there); other branches show branch totals only.
     """
+    detail = {str(i) for i in (detail_branch_ids or ())}
     current = aggregate_branch_stock(branch=current_branch, product=product)
     other_branches = []
     if include_other_branches:
@@ -99,6 +136,7 @@ def product_availability(*, product, current_branch, tenant, include_other_branc
             .filter(tenant_id=tenant.pk if tenant else None)
             .exclude(pk=current_branch.pk)
             .filter(is_active=True)
+            .order_by("name")
         )
         for branch in others:
             row = aggregate_branch_stock(branch=branch, product=product)
@@ -106,7 +144,12 @@ def product_availability(*, product, current_branch, tenant, include_other_branc
                 {
                     "branch_id": row["branch_id"],
                     "branch_name": row["branch_name"],
+                    "branch_code": branch.code,
+                    "on_hand": row["on_hand"],
+                    "reserved": row["reserved"],
                     "available": row["available"],
+                    "in_transit": in_transit_quantity(product=product, branch=branch),
+                    "warehouses": _warehouse_rows(branch, product) if str(branch.pk) in detail else None,
                 }
             )
     return {
@@ -120,8 +163,10 @@ def product_availability(*, product, current_branch, tenant, include_other_branc
             "reserved": current["reserved"],
             "available": current["available"],
             "in_transit": in_transit_quantity(product=product, branch=current_branch),
+            "warehouses": _warehouse_rows(current_branch, product),
         },
         "other_branches": other_branches,
+        "open_transfers": open_transfers_for(product=product, branch=current_branch),
     }
 
 

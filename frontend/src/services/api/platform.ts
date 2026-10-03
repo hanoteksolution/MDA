@@ -510,7 +510,13 @@ export const platformApi = {
 
   checkSlug: (slug: string) =>
     platformCloudRequest<
-      ApiResponse<{ slug: string; available: boolean; reason: string; hostname: string | null }>
+      ApiResponse<{
+        slug: string | null;
+        available: boolean;
+        reason: string | null;
+        hostname: string | null;
+        suggestions?: string[];
+      }>
     >(`/platform/slug-check/?slug=${encodeURIComponent(slug)}`),
 
   tenantSettings: (tenantId: string) =>

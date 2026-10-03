@@ -1,7 +1,8 @@
-import { Moon, Sun, Search, ChevronDown } from "lucide-react";
+import { Moon, Sun, Search } from "lucide-react";
 import { NotificationBellButton } from "@/components/notifications/NotificationDrawer";
 import { SyncQueueBadge } from "@/components/desktop/SyncQueueBadge";
 import { ModuleSwitcher } from "@/components/navigation/ModuleSwitcher";
+import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { Input } from "@/components/ui/input";
@@ -42,18 +43,7 @@ export function Header({ compact }: HeaderProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {user?.branch && (
-          <button
-            type="button"
-            className="hidden items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors hover:bg-muted/50 md:flex"
-          >
-            <span className="hidden text-muted-foreground xl:inline">Branch</span>
-            <span className="max-w-[120px] truncate font-medium text-foreground xl:max-w-none">
-              {user.branch.name}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-        )}
+        <BranchSwitcher className="hidden md:flex" />
 
         <SyncQueueBadge compact={compact} />
 

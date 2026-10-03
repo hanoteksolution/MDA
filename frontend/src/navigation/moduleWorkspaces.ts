@@ -400,6 +400,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
       { label: "Stock", route: "/inventory", icon: Warehouse },
       { label: "New Product", route: "/products/new", icon: PackagePlus },
       { label: "Adjustments", route: "/inventory/adjustments", icon: Settings },
+      { label: "Branch transfers", route: "/branches/transfers", icon: Warehouse },
     ],
     group: "operations",
   }),

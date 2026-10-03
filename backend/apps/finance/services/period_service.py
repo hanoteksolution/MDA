@@ -58,6 +58,24 @@ class PeriodService:
         )
         if period:
             return period
+        return PeriodService._create_open_period(tenant_id=tenant_id, user=user, on_date=on_date)
+
+    @staticmethod
+    @transaction.atomic
+    def _create_open_period(*, tenant_id, user=None, on_date):
+        """First posting of a month: lock the tenant and re-check, so concurrent first postings
+        share one period instead of each creating a duplicate (no DB constraint prevents it)."""
+        from apps.finance.services.chart_service import ChartService
+
+        ChartService.lock_tenant_finance(tenant_id)
+        period = (
+            FinancialPeriod.active_objects()
+            .filter(tenant_id=tenant_id, start_date__lte=on_date, end_date__gte=on_date)
+            .select_related("fiscal_year")
+            .first()
+        )
+        if period:
+            return period
 
         year = on_date.year
         fy, _ = FiscalYear.objects.get_or_create(

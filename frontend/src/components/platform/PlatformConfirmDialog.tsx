@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,11 @@ interface PlatformConfirmDialogProps {
   confirmLabel?: string;
   loading?: boolean;
   tone?: "danger" | "default";
+  /** Extra inputs (e.g. a required reason) rendered above the buttons. */
+  children?: ReactNode;
+  confirmDisabled?: boolean;
+  /** Wider panel for tabular content. */
+  wide?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -20,6 +26,9 @@ export function PlatformConfirmDialog({
   confirmLabel = "Confirm",
   loading,
   tone = "danger",
+  children,
+  confirmDisabled,
+  wide,
   onConfirm,
   onCancel,
 }: PlatformConfirmDialogProps) {
@@ -45,7 +54,7 @@ export function PlatformConfirmDialog({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_24px_64px_-20px_hsl(var(--foreground)/0.35)]"
+            className={`relative w-full ${wide ? "max-w-2xl" : "max-w-md"} max-h-[90dvh] overflow-y-auto rounded-2xl border border-border/70 bg-card shadow-[0_24px_64px_-20px_hsl(var(--foreground)/0.35)]`}
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
             <div className="space-y-4 p-6">
@@ -64,6 +73,7 @@ export function PlatformConfirmDialog({
                   <p className="mt-1 text-sm text-muted-foreground">{description}</p>
                 </div>
               </div>
+              {children}
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
                   Cancel
@@ -76,6 +86,7 @@ export function PlatformConfirmDialog({
                       : undefined
                   }
                   loading={loading}
+                  disabled={confirmDisabled}
                   onClick={onConfirm}
                 >
                   {confirmLabel}

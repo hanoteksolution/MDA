@@ -188,8 +188,53 @@ class ProductAvailabilityView(APIView):
             current_branch=branch,
             tenant=tenant,
             include_other_branches=include_other,
+            detail_branch_ids=_inventory_view_branch_ids(request),
         )
         return success_response(data=data)
+
+
+def _inventory_view_branch_ids(request):
+    """Branches whose warehouse breakdown this caller may see (``inventory.view`` there)."""
+    from core.branching import accessible_branches
+
+    return set(accessible_branches(request.user, request=request, permission="inventory.view").values_list("pk", flat=True))
+
+
+class CrossBranchSearchView(APIView):
+    """Search the company catalog and show stock per branch — visibility only, never a sale
+    or a stock movement. Same gate as :class:`ProductAvailabilityView`: the caller's own branch
+    is always shown; other branches only with ``inventory.cross_branch_view`` in the acting branch."""
+
+    permission_classes = [IsAuthenticated, HasAnyPermission("inventory.view", "inventory.cross_branch_view")]
+
+    def get(self, request):
+        from django.db.models import Q
+
+        from apps.products.models import Product
+        from apps.settings_app.models import Branch
+
+        term = (request.query_params.get("search") or "").strip()
+        if len(term) < 2:
+            return error_response(message="Enter at least 2 characters to search.", status=status.HTTP_400_BAD_REQUEST)
+        scope = get_branch_scope(request, permission=None)
+        branch = Branch.active_objects().filter(pk=scope.require_single("checking stock availability")).first()
+        if branch is None:
+            return error_response(message="Branch not found.", status=status.HTTP_404_NOT_FOUND)
+        products = (
+            apply_tenant_scope(Product.active_objects(), request=request, user=request.user)
+            .filter(Q(name__icontains=term) | Q(sku__icontains=term) | Q(barcode__icontains=term))
+            .order_by("name")[:20]
+        )
+        tenant = resolve_acting_tenant(request=request, user=request.user)
+        include_other = has_branch_permission(request.user, "inventory.cross_branch_view", branch)
+        detail = _inventory_view_branch_ids(request)
+        results = [
+            product_availability(product=p, current_branch=branch, tenant=tenant,
+                                 include_other_branches=include_other, detail_branch_ids=detail)
+            for p in products
+        ]
+        return success_response(data={"branch_id": str(branch.pk), "branch_name": branch.name,
+                                       "can_view_other_branches": include_other, "results": results})
 
 
 class ProductMovementHistoryView(APIView):
@@ -392,6 +437,7 @@ class BranchTransferListCreateView(APIView):
                 lines=lines,
                 user=request.user,
                 notes=data.get("notes") or "",
+                approve=data.get("approve") is True,
             )
         except BranchTransferError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
@@ -408,7 +454,58 @@ class BranchTransferDetailView(APIView):
         from apps.inventory.services.branch_transfer_service import BranchTransferService
 
         req = get_object_or_404(BranchTransferService.list(user=request.user, request=request), pk=pk)
-        return success_response(data=serialize_branch_transfer(req))
+        data = serialize_branch_transfer(req)
+        data.update(transfer_history(req))
+        return success_response(data=data)
+
+
+def transfer_history(req) -> dict:
+    """Audit trail of a transfer (who did what, when, why) and the cancellation record."""
+    from apps.audit.models import AuditLog
+
+    rows = AuditLog.objects.filter(entity_id=req.pk).select_related("user").order_by("timestamp")
+    history, cancelled = [], None
+    for a in rows:
+        new = a.new_values if isinstance(a.new_values, dict) else {}
+        entry = {"at": a.timestamp.isoformat(), "by": a.user.username if a.user_id else None,
+                 "action": a.action, "status": new.get("status"), "reason": new.get("reason") or ""}
+        history.append(entry)
+        if new.get("status") == "CANCELLED":
+            cancelled = entry
+    return {
+        "history": history,
+        "cancelled_by": cancelled["by"] if cancelled else None,
+        "cancelled_at": cancelled["at"] if cancelled else None,
+        "cancel_reason": cancelled["reason"] if cancelled else "",
+    }
+
+
+class BranchTransferDestinationsView(APIView):
+    """Branches of the caller's company a transfer can go to/come from (names only — no stock).
+
+    Needed by "Send stock to branch": a Hodan manager may push to Bakaaro without holding any
+    access in Bakaaro. Warehouses are listed only for branches where the caller holds
+    ``inventory.view``; otherwise the destination's default warehouse is used.
+    """
+
+    permission_classes = [IsAuthenticated, HasPermission("inventory.transfer")]
+
+    def get(self, request):
+        from apps.inventory.models import Warehouse
+        from apps.settings_app.models import Branch
+
+        tenant = resolve_acting_tenant(request=request, user=request.user)
+        if tenant is None:
+            return success_response(data=[])
+        viewable = {str(i) for i in _inventory_view_branch_ids(request)}
+        rows = []
+        for b in Branch.active_objects().filter(tenant_id=tenant.pk, is_active=True).order_by("name"):
+            warehouses = None
+            if str(b.pk) in viewable:
+                warehouses = [{"id": str(w.pk), "name": w.name, "is_default": w.is_default}
+                              for w in Warehouse.active_objects().filter(branch_id=b.pk, is_active=True).order_by("-is_default", "name")]
+            rows.append({"id": str(b.pk), "name": b.name, "code": b.code, "warehouses": warehouses})
+        return success_response(data=rows)
 
 
 def _branch_transfer_action(request, pk, action, **kwargs):
@@ -479,4 +576,4 @@ class BranchTransferCancelView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("inventory.transfer")]
 
     def post(self, request, pk):
-        return _branch_transfer_action(request, pk, "cancel")
+        return _branch_transfer_action(request, pk, "cancel", reason=request.data.get("reason", ""))

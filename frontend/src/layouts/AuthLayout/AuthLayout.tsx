@@ -1,8 +1,16 @@
 import { Outlet, Navigate } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
 
+/** Public auth/onboarding routes render inside the Safari platform brand scope. */
 export function AuthLayout() {
-  return <Outlet />;
+  return (
+    <MotionConfig reducedMotion="user">
+      <div className="safari-brand min-h-dvh bg-background">
+        <Outlet />
+      </div>
+    </MotionConfig>
+  );
 }
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {

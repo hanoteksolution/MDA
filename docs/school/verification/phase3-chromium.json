@@ -1,0 +1,375 @@
+{
+  "checks": [
+    "guardians create and detail",
+    "applicants create and detail",
+    "applications create and detail",
+    "Submit application",
+    "Review documents",
+    "Complete review",
+    "Record decision",
+    "Enroll student",
+    "Transfer placement",
+    "Preserved enrollment history",
+    "Withdraw student",
+    "Re-enroll student",
+    "Admissions dashboard",
+    "Student list 1366px",
+    "Student list 768px",
+    "Student list 390px"
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "path": "/school/sis/guardians/new",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/guardians/schema/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/guardians/",
+      "status": 201
+    },
+    {
+      "path": "/school/sis/applicants/new",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applicants/schema/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/families/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/families/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applicants/",
+      "status": 201
+    },
+    {
+      "path": "/school/sis/applications/new",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/schema/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applicants/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applicants/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/staff/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applicants/09a250f1-3c59-4f50-af48-b62ef186c47e/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/",
+      "status": 201
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/submit/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/review/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/under-review/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/decide/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/enroll/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/applications/9f242e4e-63df-46ea-a608-5acf679e6ee2/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/enrollments/schema/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/terms/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/terms/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/transfer/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/enrollments/",
+      "status": 200
+    },
+    {
+      "path": "/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/withdraw/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/enrollments/schema/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/terms/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/academic-years/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/terms/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/reenroll/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/686c9383-1ef4-48da-a792-e6219fa0b1d1/",
+      "status": 200
+    },
+    {
+      "path": "/school/admissions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/dashboard/",
+      "status": 200
+    },
+    {
+      "path": "/school/sis/students",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/",
+      "status": 200
+    },
+    {
+      "path": "/school/sis/students",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/",
+      "status": 200
+    },
+    {
+      "path": "/school/sis/students",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/school/sis/students/",
+      "status": 200
+    }
+  ]
+}

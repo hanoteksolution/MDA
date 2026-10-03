@@ -1,0 +1,26 @@
+
+> mda-erp-frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /home/ubuntu/projects/mda/frontend
+
+ ✓ src/modules/settings/integrations/__tests__/lib.test.ts (38 tests) 27ms
+ ✓ src/store/branchStore.test.ts (12 tests) 11ms
+ ✓ src/modules/settings/integrations/__tests__/credentialFlow.test.ts (6 tests) 35ms
+ ✓ src/modules/school/sis/academics.test.ts (7 tests) 38ms
+ ✓ src/navigation/postLogin.test.ts (9 tests) 11ms
+ ✓ src/modules/school/sis/learning.test.ts (4 tests) 13ms
+ ✓ src/modules/school/foundation.test.ts (6 tests) 21ms
+ ✓ src/modules/school/sis/fees.test.ts (5 tests) 7ms
+ ✓ src/modules/school/sis/workflows.test.ts (5 tests) 14ms
+ ✓ src/hooks/useWorkspaceTab.test.ts (3 tests) 3ms
+ ✓ src/navigation/filterVisibleWorkspaces.test.ts (6 tests) 8ms
+ ✓ src/modules/pos/utils/checkoutGuard.test.ts (6 tests) 4ms
+ ✓ src/modules/settings/integrations/__tests__/views.test.tsx (26 tests) 317ms
+
+ Test Files  13 passed (13)
+      Tests  133 passed (133)
+   Start at  05:26:29
+   Duration  3.12s (transform 3.57s, setup 0ms, collect 6.64s, tests 510ms, environment 3ms, prepare 7.15s)
+

@@ -12,6 +12,8 @@ interface PosProductCardProps {
   isFavorite: boolean;
   onAdd: () => void;
   onToggleFavorite: () => void;
+  /** Out of stock in the selling branch: look the product up in other branches instead. */
+  onCheckBranches?: () => void;
   index?: number;
 }
 
@@ -20,6 +22,7 @@ export function PosProductCard({
   isFavorite,
   onAdd,
   onToggleFavorite,
+  onCheckBranches,
   index = 0,
 }: PosProductCardProps) {
   const stock = product.total_stock ?? 0;
@@ -33,12 +36,13 @@ export function PosProductCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.28, delay: Math.min(index * 0.015, 0.15), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3, transition: { duration: 0.18 } }}
-      onClick={() => !outOfStock && onAdd()}
+      onClick={() => (outOfStock ? onCheckBranches?.() : onAdd())}
+      title={outOfStock && onCheckBranches ? "Out of stock in this branch — click to check other branches" : undefined}
       className={cn(
         "pos-product-card group relative flex cursor-pointer flex-col overflow-hidden",
         "ring-1 ring-transparent transition-all duration-300",
         "hover:border-primary/25 hover:shadow-[0_10px_28px_hsl(var(--primary)/0.12)] hover:ring-primary/10",
-        outOfStock && "cursor-not-allowed opacity-45 grayscale"
+        outOfStock && (onCheckBranches ? "opacity-60 grayscale" : "cursor-not-allowed opacity-45 grayscale")
       )}
     >
       <button

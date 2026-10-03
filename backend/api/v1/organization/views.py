@@ -74,11 +74,22 @@ class MyBranchesView(APIView):
                     "permissions": sorted(branch_permissions(request.user, branch)),
                 }
             )
+        # "All branches" (consolidated) is only meaningful to someone who can see every branch of
+        # the tenant — dashboards refuse it otherwise (reports.resolve_view_branch_id).
+        from apps.settings_app.models import Branch
+        from core.tenancy import resolve_acting_tenant
+
+        tenant = resolve_acting_tenant(request=request, user=request.user)
+        mine = {row["id"] for row in payload}
+        tenant_ids = {
+            str(pk) for pk in Branch.active_objects().filter(tenant_id=getattr(tenant, "pk", None)).values_list("pk", flat=True)
+        } if tenant is not None else mine
         return success_response(
             data={
                 "branches": payload,
                 "default_branch_id": str(default_id) if default_id else None,
                 "count": len(payload),
+                "covers_all": len(payload) > 1 and bool(tenant_ids) and tenant_ids <= mine,
             }
         )
 

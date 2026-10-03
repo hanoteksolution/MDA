@@ -124,11 +124,8 @@ class AccountingPostingService:
             AccountingPostingService._mark_posted(existing_event, existing_journal)
             return existing_journal
 
-        ChartService.ensure_default_chart(tenant_id=tenant_id, user=user)
-        MappingService.seed_defaults(tenant_id=tenant_id, user=user)
-        from apps.finance.services.posting_rule_service import PostingRuleService
-
-        PostingRuleService.seed_defaults(tenant_id=tenant_id, user=user)
+        # Chart + mappings + posting rules, serialised per tenant only while any is missing.
+        ChartService.ensure_finance_ready(tenant_id=tenant_id, user=user)
 
         try:
             period = PeriodService.resolve(

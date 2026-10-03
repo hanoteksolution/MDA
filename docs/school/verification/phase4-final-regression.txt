@@ -1,0 +1,677 @@
+...........................................EEE.F..........F............. [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 23%]
+........................................................................ [ 31%]
+F....................................................................... [ 38%]
+........................................................................ [ 46%]
+........................................................................ [ 54%]
+..............................................................EEEEEE.... [ 62%]
+............FF.F........................................................ [ 70%]
+........................................................................ [ 77%]
+........................................................................ [ 85%]
+..............................................................ssssssssss [ 93%]
+sssssssss.s..sssssssssssssssssss.ss.......................F.             [100%]
+==================================== ERRORS ====================================
+______________ ERROR at setup of test_product_list_scoped_via_api ______________
+
+db = None
+
+    @pytest.fixture
+    def two_shops(db):
+>       a = ShopFactory.create(slug="shop-a", username="shop_a_user")
+
+tests/integration/conftest.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/helpers/shop_factory.py:69: in create
+    sync_tenant_modules(
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'purchases', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+__________ ERROR at setup of test_barcode_lookup_blocks_cross_tenant ___________
+
+db = None
+
+    @pytest.fixture
+    def two_shops(db):
+>       a = ShopFactory.create(slug="shop-a", username="shop_a_user")
+
+tests/integration/conftest.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/helpers/shop_factory.py:69: in create
+    sync_tenant_modules(
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'purchases', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+_____ ERROR at setup of test_purchase_order_receive_blocks_cross_tenant_po _____
+
+db = None
+
+    @pytest.fixture
+    def two_shops(db):
+>       a = ShopFactory.create(slug="shop-a", username="shop_a_user")
+
+tests/integration/conftest.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/helpers/shop_factory.py:69: in create
+    sync_tenant_modules(
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'purchases', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+__________ ERROR at setup of test_search_for_pos_exact_barcode_first ___________
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+___ ERROR at setup of test_serialize_products_batch_avoids_n_plus_one_stock ____
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+____________ ERROR at setup of test_product_search_api_query_budget ____________
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+____________ ERROR at setup of test_product_list_page_query_budget _____________
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+_______________ ERROR at setup of test_catalog_categories_cached _______________
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+________________ ERROR at setup of test_pos_profile_short_cache ________________
+
+db = None
+
+    @pytest.fixture
+    def perf_env(db):
+        bootstrap_roles_and_permissions()
+        tenant = Tenant.objects.create(name="Perf Co", slug="perf-co", status=Tenant.STATUS_ACTIVE)
+>       sync_tenant_modules(tenant=tenant, enabled_codes=["pos", "inventory", "sales", "products"])
+
+tests/unit/test_performance_step31.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/contextlib.py:79: in inner
+    return func(*args, **kwds)
+apps/platform/services/module_service.py:292: in sync_tenant_modules
+    wanted = ModuleDependencyService.validate_enable_set(wanted_raw)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+codes = {'inventory', 'pos', 'products', 'sales'}
+
+    @staticmethod
+    def validate_enable_set(codes: Iterable[str]) -> set[str]:
+        """
+        Validate a proposed enabled set.
+    
+        Missing required deps are auto-added (returned set is expanded).
+        Unknown codes raise ModuleDependencyError.
+        """
+        requested = {str(c).strip().lower() for c in codes if c}
+        by_code = {
+            m.code: m
+            for m in Module.active_objects().filter(is_active=True)
+        }
+        unknown = sorted(requested - set(by_code.keys()))
+        if unknown:
+>           raise ModuleDependencyError(
+                f"Unknown module code(s): {', '.join(unknown)}.",
+                missing={"unknown": unknown},
+            )
+E           apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+
+apps/platform/services/module_dependency_service.py:54: ModuleDependencyError
+=================================== FAILURES ===================================
+___________________ test_scan_notifies_on_unbalanced_journal ___________________
+
+alert_env = {'branch': <Branch: HQ>, 'tenant': <Tenant: Alert Co>, 'user': <User: alert_finance>}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f7384dae0b0>
+
+    @pytest.mark.django_db
+    def test_scan_notifies_on_unbalanced_journal(alert_env, monkeypatch):
+        tenant = alert_env["tenant"]
+        user = alert_env["user"]
+    
+        from apps.notifications.services import notification_service as ns
+    
+        monkeypatch.setattr(
+            ns.NotificationService,
+            "tenant_users_with_permission",
+            staticmethod(lambda tenant, permission_codename: [user]),
+        )
+    
+        cash = ChartService.get_by_code(code="1000", tenant_id=tenant.id)
+        entry = JournalEntry.objects.create(
+            tenant_id=tenant.id,
+            entry_number="JE-BAD-1",
+            entry_date=timezone.localdate(),
+            description="Unbalanced test",
+            status=JournalEntry.STATUS_POSTED,
+            source_type=JournalEntry.SOURCE_MANUAL,
+            created_by=user,
+        )
+>       JournalLine.objects.create(
+            entry=entry, account=cash, debit=Decimal("10"), credit=Decimal("0")
+        )
+
+tests/unit/test_accounting_alerts_step35.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.10/dist-packages/django/db/models/manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+/usr/local/lib/python3.10/dist-packages/django/db/models/query.py:665: in create
+    obj.save(force_insert=True, using=self.db)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <JournalLine: e0b1d373-7d0c-4d84-8c62-c90d2e8aa808 D10 C0>, args = ()
+kwargs = {'force_insert': True, 'using': 'default'}, force = False
+entry_status = 'posted'
+
+    def save(self, *args, **kwargs):
+        force = kwargs.pop("force_posted_mutation", False) or getattr(
+            self, "_force_posted_mutation", False
+        )
+        if self.entry_id and not force:
+            entry_status = (
+                JournalEntry.objects.filter(pk=self.entry_id)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if entry_status == JournalEntry.STATUS_POSTED:
+                if self.pk:
+>                   raise ImmutableJournalError(
+                        "Posted journal lines cannot be modified. Use a reversal."
+                    )
+E                   apps.finance.models.journal.ImmutableJournalError: Posted journal lines cannot be modified. Use a reversal.
+
+apps/finance/models/journal.py:211: ImmutableJournalError
+________________ test_backfill_commit_posts_invoice_and_expense ________________
+
+harden_env = {'branch': <Branch: HQ>, 'customer': <Customer: Walk-in Customer>, 'product': <Product: Harden Item>, 'tenant': <Tenant: Harden Co>, ...}
+
+    @pytest.mark.django_db
+    def test_backfill_commit_posts_invoice_and_expense(harden_env):
+        tenant = harden_env["tenant"]
+        branch = harden_env["branch"]
+        product = harden_env["product"]
+        user = harden_env["user"]
+    
+        inv = Invoice.objects.create(
+            tenant=tenant,
+            branch=branch,
+            customer=harden_env["customer"],
+            invoice_number="INV-HIST-2",
+            status=Invoice.STATUS_PAID,
+            issue_date=timezone.localdate() - timedelta(days=5),
+            subtotal=Decimal("10"),
+            tax_amount=Decimal("0"),
+            total_amount=Decimal("10"),
+            amount_paid=Decimal("10"),
+            notes="Payment: cash",
+            created_by=user,
+        )
+        InvoiceItem.objects.create(
+            invoice=inv,
+            product=product,
+            quantity=Decimal("1"),
+            unit_price=Decimal("10"),
+            line_total=Decimal("10"),
+        )
+        exp = Expense.objects.create(
+            tenant=tenant,
+            branch=branch,
+            description="Old rent",
+            category="rent",
+            amount=Decimal("50"),
+            expense_date=timezone.localdate() - timedelta(days=3),
+            created_by=user,
+        )
+    
+        result = AccountingBackfillService.run(
+            tenant_id=tenant.id, dry_run=False, user=user
+        )
+        assert result["dry_run"] is False
+>       assert result["posted"]["invoices"] >= 1
+E       assert 0 >= 1
+
+tests/unit/test_backfill_health_step35.py:151: AssertionError
+__________________ test_create_demo_async_seed_marks_pending ___________________
+
+platform_ready = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f73843a22f0>
+
+    @pytest.mark.django_db
+    def test_create_demo_async_seed_marks_pending(platform_ready, monkeypatch):
+        called = {}
+    
+        class FakeTask:
+            def delay(self, tenant_id, user_id=None):
+                called["tenant_id"] = tenant_id
+                called["user_id"] = user_id
+    
+        monkeypatch.setattr(
+            "apps.platform.tasks.seed_demo_tenant",
+            FakeTask(),
+            raising=False,
+        )
+        # Patch where enqueue imports from
+        import apps.platform.tasks as tasks_mod
+    
+        monkeypatch.setattr(tasks_mod, "seed_demo_tenant", FakeTask())
+    
+        tenant, report = DemoTenantService.create(
+            data={
+                "name": "Async Seed Demo",
+                "business_type_code": "gym",
+                "preset_code": "gym",
+                "duration_days": 7,
+                "generate_data": True,
+                "seed_async": True,
+            }
+        )
+        payload = DemoTenantService.serialize(tenant)
+        assert payload["seed_status"] in {"pending", "done"}  # pending if delay worked, done if fallback
+        if payload["seed_status"] == "pending":
+>           assert called.get("tenant_id") == str(tenant.id)
+E           AssertionError: assert None == 'a62f5249-ac95-4b73-95b6-57d3a128fcfc'
+E            +  where None = <built-in method get of dict object at 0x7f738486fcc0>('tenant_id')
+E            +    where <built-in method get of dict object at 0x7f738486fcc0> = {}.get
+E            +  and   'a62f5249-ac95-4b73-95b6-57d3a128fcfc' = str(UUID('a62f5249-ac95-4b73-95b6-57d3a128fcfc'))
+E            +    where UUID('a62f5249-ac95-4b73-95b6-57d3a128fcfc') = <Tenant: Async Seed Demo>.id
+
+tests/unit/test_demo_tenant_step39.py:201: AssertionError
+_______________ test_manual_dispense_deducts_fefo_and_inventory ________________
+
+fefo_rx_env = {'branch': <Branch: Main>, 'product': <Product: Amoxicillin FEFO>, 'tenant': <Tenant: FEFO Rx>, 'user': <User: fefo_rx_user>, ...}
+
+    @pytest.mark.django_db
+    def test_manual_dispense_deducts_fefo_and_inventory(fefo_rx_env):
+        user = fefo_rx_env["user"]
+        product = fefo_rx_env["product"]
+        wh = fefo_rx_env["warehouse"]
+        rx = PrescriptionService.create(
+            data={
+                "patient_name": "Patient A",
+                "lines": [
+                    {"product_id": str(product.id), "drug_name": product.name, "quantity": 7}
+                ],
+            },
+            user=user,
+        )
+        before = Inventory.active_objects().get(product=product, warehouse=wh).quantity
+        PrescriptionService.dispense(prescription_id=rx.id, user=user, deduct_stock=True)
+        rx.refresh_from_db()
+        assert rx.status == Prescription.STATUS_DISPENSED
+        line = rx.lines.first()
+        assert float(line.quantity_dispensed) == 7
+        after = Inventory.active_objects().get(product=product, warehouse=wh).quantity
+>       assert after == before - Decimal("7")
+E       AssertionError: assert Decimal('0.0000') == (Decimal('0.0000') - Decimal('7'))
+E        +  where Decimal('7') = Decimal('7')
+
+tests/unit/test_pharmacy_rx_fefo_step60.py:109: AssertionError
+_____________________ test_dispense_fails_when_batch_short _____________________
+
+fefo_rx_env = {'branch': <Branch: Main>, 'product': <Product: Amoxicillin FEFO>, 'tenant': <Tenant: FEFO Rx>, 'user': <User: fefo_rx_user>, ...}
+
+    @pytest.mark.django_db
+    def test_dispense_fails_when_batch_short(fefo_rx_env):
+        user = fefo_rx_env["user"]
+        product = fefo_rx_env["product"]
+        rx = PrescriptionService.create(
+            data={
+                "patient_name": "Patient B",
+                "lines": [
+                    {"product_id": str(product.id), "drug_name": product.name, "quantity": 99}
+                ],
+            },
+            user=user,
+        )
+>       with pytest.raises(PrescriptionError, match="Insufficient batch"):
+E       Failed: DID NOT RAISE <class 'apps.pharmacy.services.prescription_service.PrescriptionError'>
+
+tests/unit/test_pharmacy_rx_fefo_step60.py:132: Failed
+__________________ test_pos_fill_without_double_stock_deduct ___________________
+
+fefo_rx_env = {'branch': <Branch: Main>, 'product': <Product: Amoxicillin FEFO>, 'tenant': <Tenant: FEFO Rx>, 'user': <User: fefo_rx_user>, ...}
+
+    @pytest.mark.django_db
+    def test_pos_fill_without_double_stock_deduct(fefo_rx_env):
+        user = fefo_rx_env["user"]
+        product = fefo_rx_env["product"]
+        wh = fefo_rx_env["warehouse"]
+        rx = PrescriptionService.create(
+            data={
+                "patient_name": "Patient D",
+                "lines": [
+                    {"product_id": str(product.id), "drug_name": product.name, "quantity": 4}
+                ],
+            },
+            user=user,
+        )
+        before = Inventory.active_objects().get(product=product, warehouse=wh).quantity
+        InventoryService.apply_sale_delta(
+            product=product,
+            warehouse=wh,
+            quantity_delta=Decimal("-2"),
+            reference_type="invoice",
+            reference_id=uuid4(),
+            user=user,
+        )
+        mid = Inventory.active_objects().get(product=product, warehouse=wh).quantity
+>       assert mid == before - Decimal("2")
+E       AssertionError: assert Decimal('0.0000') == (Decimal('0.0000') - Decimal('2'))
+E        +  where Decimal('2') = Decimal('2')
+
+tests/unit/test_pharmacy_rx_fefo_step60.py:192: AssertionError
+_________________________ test_valid_slug_and_hostname _________________________
+
+    def test_valid_slug_and_hostname():
+>       assert validate_tenant_slug("Arabica Coffee") == "arabica-coffee"
+
+tests/unit/test_tenant_foundation.py:25: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+slug = 'Arabica Coffee'
+
+    def validate_tenant_slug(slug: str) -> str:
+        normalized = normalize_tenant_slug(slug)
+        if not normalized:
+            raise ValueError("Subdomain / slug is required.")
+        if len(normalized) < 2:
+            raise ValueError("Subdomain must be at least 2 characters.")
+        if len(normalized) > 63:
+            raise ValueError("Subdomain must be 63 characters or fewer.")
+        if not normalized.isascii() or not TENANT_SLUG_PATTERN.fullmatch(normalized):
+>           raise ValueError(
+                "Use only lowercase letters, numbers, and hyphens; do not start or end with a hyphen."
+            )
+E           ValueError: Use only lowercase letters, numbers, and hyphens; do not start or end with a hyphen.
+
+apps/platform/services/domain_utils.py:66: ValueError
+=========================== short test summary info ============================
+FAILED tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal
+FAILED tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense
+FAILED tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct
+FAILED tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname - V...
+ERROR tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api
+ERROR tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant
+ERROR tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po
+ERROR tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first
+ERROR tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock
+ERROR tests/unit/test_performance_step31.py::test_product_search_api_query_budget
+ERROR tests/unit/test_performance_step31.py::test_product_list_page_query_budget
+ERROR tests/unit/test_performance_step31.py::test_catalog_categories_cached
+ERROR tests/unit/test_performance_step31.py::test_pos_profile_short_cache - a...
+finished

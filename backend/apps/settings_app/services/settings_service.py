@@ -30,25 +30,36 @@ class BranchService:
 
     @staticmethod
     @transaction.atomic
-    def create_branch(*, data, created_by=None):
+    def create_branch(*, data, created_by=None, request=None):
         from apps.platform.services.entitlement_service import EntitlementError, EntitlementService
+        from core.tenancy import resolve_acting_tenant
 
         if "company_id" not in data or not data.get("company_id"):
             company_id = getattr(getattr(created_by, "branch", None), "company_id", None)
+            if company_id and not Company.active_objects().filter(pk=company_id).exists():
+                company_id = None
             if not company_id:
-                company = Company.active_objects().first()
-                company_id = company.id if company else None
+                acting_tenant = resolve_acting_tenant(request=request, user=created_by)
+                if acting_tenant is not None:
+                    company_id = SettingsService.ensure_company(tenant=acting_tenant, user=created_by).id
+                else:
+                    company = Company.active_objects().first()
+                    company_id = company.id if company else None
             if not company_id:
                 raise ValueError("No company available for this branch.")
             data = {**data, "company_id": company_id}
 
         company = Company.active_objects().filter(pk=data["company_id"]).first()
-        tenant = getattr(company, "tenant", None) if company else None
+        if company is None:
+            raise ValueError("Company profile not found.")
+        tenant = company.tenant
         try:
             EntitlementService.assert_can_add_branch(tenant=tenant, user=created_by)
         except EntitlementError as exc:
             raise ValueError(str(exc)) from exc
 
+        if tenant is not None:
+            data = {**data, "tenant_id": tenant.pk}
         return Branch.objects.create(**data, created_by=created_by)
 
     @staticmethod
@@ -207,6 +218,33 @@ class SettingsService:
             return None
         return qs.order_by("created_at").first()
 
+    @staticmethod
+    @transaction.atomic
+    def ensure_company(*, tenant, user=None, name=None):
+        """Return the tenant's active Company, reviving a soft-deleted one or creating it.
+
+        A tenant's Company can be soft-deleted while its branches still reference it, which
+        leaves the shop with no active profile. Reviving keeps those branches attached to it.
+        """
+        company = (
+            Company.active_objects().filter(tenant_id=tenant.pk).order_by("created_at").first()
+        )
+        if company is not None:
+            return company
+        deleted = (
+            Company.objects.filter(tenant_id=tenant.pk, deleted_at__isnull=False)
+            .order_by("-deleted_at")
+            .first()
+        )
+        if deleted is not None:
+            deleted.restore()
+            return deleted
+        return Company.objects.create(
+            name=name or getattr(tenant, "name", None) or "My Company",
+            tenant_id=tenant.pk,
+            created_by=user,
+        )
+
     ALLOWED_COMPANY_FIELDS = (
         "name",
         "legal_name",
@@ -225,11 +263,14 @@ class SettingsService:
         company = SettingsService.get_company_profile(user=user, request=request)
         tenant = resolve_acting_tenant(request=request, user=user)
         if not company:
-            company = Company.objects.create(
-                name=(data.get("name") or getattr(tenant, "name", None) or "My Company"),
-                tenant_id=getattr(tenant, "pk", None) if tenant is not None else None,
-                created_by=user,
-            )
+            if tenant is not None:
+                company = SettingsService.ensure_company(
+                    tenant=tenant, user=user, name=data.get("name")
+                )
+            else:
+                company = Company.objects.create(
+                    name=(data.get("name") or "My Company"), created_by=user
+                )
         elif company.tenant_id is None and tenant is not None:
             company.tenant_id = tenant.pk
         for key in SettingsService.ALLOWED_COMPANY_FIELDS:

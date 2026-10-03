@@ -15,6 +15,9 @@ import { productsApi } from "@/services/api/catalog";
 import { customersApi } from "@/services/api/partners";
 import { useAuthStore } from "@/store/authStore";
 import { useBranchStore } from "@/store/branchStore";
+import { ALL_BRANCHES } from "@/services/api/branchContext";
+import { setBranchSwitchGuard } from "@/components/branch/branchSwitchGuard";
+import { BranchStockCheckDialog } from "@/modules/branches/components/BranchStockCheckDialog";
 import type { Product } from "@/types/models/catalog";
 import type { Category } from "@/types/models/catalog";
 import { useScopedPath } from "@/hooks/useScopedPath";
@@ -61,13 +64,24 @@ export function PosPage() {
   // Branch + terminal shift guard (Phase 5, FE-5). The backend enforces the same rule;
   // this tells the cashier why before they tender payment.
   const activeBranchId = useBranchStore((s) => s.activeBranchId);
-  const shift = usePosShift(activeBranchId ?? user?.branch?.id ?? null);
+  const branchList = useBranchStore((s) => s.branches);
+  // The POS sells in exactly one branch: the active one (header switcher), else the user's own.
+  // "All branches" is never a selling branch — checkout is blocked until one is chosen.
+  const posBranch = useMemo(() => {
+    if (activeBranchId === ALL_BRANCHES) return null;
+    const selected = branchList.find((b) => b.id === activeBranchId);
+    if (selected) return { id: selected.id, name: selected.name, code: selected.code };
+    return user?.branch ? { id: user.branch.id, name: user.branch.name, code: user.branch.code } : null;
+  }, [activeBranchId, branchList, user?.branch]);
+  const shift = usePosShift(posBranch?.id ?? (activeBranchId === ALL_BRANCHES ? ALL_BRANCHES : null));
   const [shiftFloat, setShiftFloat] = useState("0");
   const [shiftTerminalId, setShiftTerminalId] = useState("");
   const requestCheckout = useCallback(() => {
     if (!shift.blockReason) setCheckoutOpen(true);
   }, [shift.blockReason]);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  // Out of stock here → look it up in other branches (visibility + transfer request, never a sale).
+  const [branchCheck, setBranchCheck] = useState<{ id: string; name: string } | null>(null);
   const [waiterSalesOpen, setWaiterSalesOpen] = useState(false);
   const [waiters, setWaiters] = useState<PosWaiter[]>([]);
   const [posProfile, setPosProfile] = useState<PosProfile | null>(null);
@@ -96,6 +110,16 @@ export function PosPage() {
     setActiveHoldId,
   } = usePosCart();
 
+  // A cart belongs to the branch it was rung up in: confirm before switching branch clears it.
+  useEffect(() => {
+    setBranchSwitchGuard({
+      warning: () =>
+        cart.length ? `The cart has ${cart.length} line(s) for ${posBranch?.name ?? "this branch"}. Switching branch clears it.` : null,
+      discard: clearCart,
+    });
+    return () => setBranchSwitchGuard(null);
+  }, [cart.length, posBranch?.name, clearCart]);
+
   // A resumed hold stays on the server until checkout — hide it from the held list.
   const visibleHeldSales = useMemo(
     () => heldSales.filter((h) => h.id !== activeHoldId),
@@ -104,7 +128,7 @@ export function PosPage() {
 
   const syncHoldsFromServer = useCallback(async () => {
     try {
-      const res = await posApi.listHolds({ branch_id: user?.branch?.id });
+      const res = await posApi.listHolds({ branch_id: posBranch?.id });
       const server = (res.data || []).map(invoiceToHeldSale);
       // Keep offline holds (no server number yet) until they reach the server
       replaceHeldSales((prev) => [
@@ -114,7 +138,7 @@ export function PosPage() {
     } catch {
       /* keep local cache if offline */
     }
-  }, [user?.branch?.id, replaceHeldSales]);
+  }, [posBranch?.id, replaceHeldSales]);
 
   useEffect(() => {
     void syncHoldsFromServer();
@@ -317,11 +341,11 @@ export function PosPage() {
   );
 
   const openFloorPicker = useCallback(async () => {
-    if (!user?.branch?.id) return;
+    if (!posBranch?.id) return;
     setFloorOpen(true);
     setFloorLoading(true);
     try {
-      const res = await restaurantApi.orders(1, user.branch.id);
+      const res = await restaurantApi.orders(1, posBranch.id);
       const open = (res.data.results || []).filter((o) =>
         ["open", "sent", "ready", "served"].includes(o.status)
       );
@@ -331,21 +355,21 @@ export function PosPage() {
     } finally {
       setFloorLoading(false);
     }
-  }, [user?.branch?.id]);
+  }, [posBranch?.id]);
 
   const openRoomPicker = useCallback(async () => {
-    if (!user?.branch?.id) return;
+    if (!posBranch?.id) return;
     setRoomsOpen(true);
     setRoomsLoading(true);
     try {
-      const res = await hotelApi.openFolios(user.branch.id);
+      const res = await hotelApi.openFolios(posBranch.id);
       setOpenFolios(res.data.results || []);
     } catch {
       setOpenFolios([]);
     } finally {
       setRoomsLoading(false);
     }
-  }, [user?.branch?.id]);
+  }, [posBranch?.id]);
 
   const selectHotelFolio = useCallback((folio: HotelOpenFolio) => {
     setHotelFolioId(folio.folio_id);
@@ -407,7 +431,7 @@ export function PosPage() {
         email: "",
         customer_type: "retail",
         credit_limit: 0,
-        branch_id: user?.branch?.id,
+        branch_id: posBranch?.id,
         is_active: true,
       });
       const entry = { id: res.data.id, name: res.data.full_name };
@@ -416,7 +440,7 @@ export function PosPage() {
       setCheckoutMsg(`Customer ${entry.name} added`);
       setTimeout(() => setCheckoutMsg(null), 2500);
     },
-    [user?.branch?.id]
+    [posBranch?.id]
   );
 
   const handleCreateWaiter = useCallback(async (name: string) => {
@@ -465,7 +489,7 @@ export function PosPage() {
     try {
       const res = await posApi.createHold({
         customer_id: customerId !== "walkin" ? customerId : undefined,
-        branch_id: user?.branch?.id,
+        branch_id: posBranch?.id,
         items: cart.map((line) => ({
           product_id: line.id,
           quantity: line.qty,
@@ -508,9 +532,9 @@ export function PosPage() {
         label: snapshot.label,
         customerName: cust,
         waiterName: snapshot.waiterName,
-        branchName: user?.branch?.name,
-        branchCode: user?.branch?.code,
-        branchId: user?.branch?.id,
+        branchName: posBranch?.name,
+        branchCode: posBranch?.code,
+        branchId: posBranch?.id,
         cart: snapshot.cart,
         subtotal: snapshot.subtotal,
         discount: disc,
@@ -538,7 +562,7 @@ export function PosPage() {
     discountPct,
     taxRate,
     customers,
-    user?.branch,
+    posBranch,
     clearPosCart,
     holdSale,
     syncHoldsFromServer,
@@ -768,10 +792,18 @@ export function PosPage() {
               {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
               {isOnline ? "Online" : "Offline"}
             </span>
-            {user?.branch && (
-              <span className="flex items-center gap-1.5 rounded-full bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground ring-1 ring-border/60">
-                <MapPin className="h-3.5 w-3.5 text-primary" />
-                {user.branch.name}
+            {posBranch ? (
+              <span
+                data-testid="pos-active-branch"
+                className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary ring-1 ring-primary/25"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Selling in {posBranch.name}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 rounded-full bg-warning/10 px-2.5 py-1 text-[11px] font-semibold text-warning ring-1 ring-warning/25">
+                <MapPin className="h-3.5 w-3.5" />
+                Select a branch to sell
               </span>
             )}
           </div>
@@ -902,6 +934,7 @@ export function PosPage() {
                     isFavorite={favorites.includes(p.id)}
                     onAdd={() => handleAdd(p)}
                     onToggleFavorite={() => toggleFavorite(p.id)}
+                    onCheckBranches={() => setBranchCheck({ id: p.id, name: p.name })}
                   />
                 ))}
               </AnimatePresence>
@@ -914,8 +947,8 @@ export function PosPage() {
           heldSales={visibleHeldSales}
           customers={customers}
           taxRate={taxRate}
-          branchName={user?.branch?.name}
-          branchId={user?.branch?.id}
+          branchName={posBranch?.name}
+          branchId={posBranch?.id}
           onClose={() => setDraftsOpen(false)}
           onResume={handleResumeHeld}
           onDelete={handleDeleteHeld}
@@ -925,7 +958,7 @@ export function PosPage() {
           open={waiterSalesOpen}
           waiterId={waiterId}
           waiterName={waiterName}
-          branchId={user?.branch?.id}
+          branchId={posBranch?.id}
           onClose={() => setWaiterSalesOpen(false)}
         />
 
@@ -1020,9 +1053,9 @@ export function PosPage() {
             waiters={waiters}
             waiterId={waiterId}
             onWaiterChange={setWaiterId}
-            branchName={user?.branch?.name}
-            branchCode={user?.branch?.code}
-            branchId={user?.branch?.id}
+            branchName={posBranch?.name}
+            branchCode={posBranch?.code}
+            branchId={posBranch?.id}
             onCreateCustomer={handleCreateCustomer}
             onCreateWaiter={handleCreateWaiter}
             onUpdateQty={updateQty}
@@ -1050,9 +1083,9 @@ export function PosPage() {
         taxRate={taxRate}
         grandTotal={totals.grandTotal}
         orderNotes={orderNotes}
-        branchId={user?.branch?.id}
-        branchName={user?.branch?.name ?? "Main Branch"}
-        branchCode={user?.branch?.code}
+        branchId={posBranch?.id}
+        branchName={posBranch?.name ?? "Main Branch"}
+        branchCode={posBranch?.code}
         waiterId={waiterId}
         waiterName={waiterName}
         waiters={waiters}
@@ -1173,6 +1206,7 @@ export function PosPage() {
           </div>
         </div>
       ) : null}
+      <BranchStockCheckDialog product={branchCheck} requested={1} onClose={() => setBranchCheck(null)} />
     </div>
   );
 }

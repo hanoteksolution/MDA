@@ -1,3 +1,4 @@
+import { clearActiveBranchId } from "@/services/api/branchContext";
 import { create } from "zustand";
 import { api } from "@/services/api/client";
 import { clearAuthTokens, forceLogout, isJwtExpired, refreshAccessToken } from "@/services/api/http";
@@ -88,6 +89,12 @@ function hasValidToken(): boolean {
   return !!token && !isJwtExpired(token);
 }
 
+/** The next user on this browser must not inherit the previous user's branch. */
+function resetBranchContext() {
+  clearActiveBranchId();
+  void import("@/store/branchStore").then((m) => m.useBranchStore.getState().reset()).catch(() => undefined);
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: hasValidToken(),
@@ -158,6 +165,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } finally {
       clearAuthTokens();
       clearCloudSession();
+      resetBranchContext();
       set({ user: null, isAuthenticated: false });
     }
   },
@@ -165,6 +173,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   sessionExpired: () => {
     authSessionGen += 1;
     clearAuthTokens();
+    resetBranchContext();
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
     forceLogout();
   },

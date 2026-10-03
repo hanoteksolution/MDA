@@ -1,0 +1,810 @@
+{
+  "version": "153.0.8010.12",
+  "checks": [
+    {
+      "path": "/school",
+      "dark": false,
+      "violations": []
+    },
+    {
+      "path": "/school/academics/subjects",
+      "dark": false,
+      "violations": []
+    },
+    {
+      "path": "/school/academics/classes/new",
+      "dark": false,
+      "violations": []
+    },
+    {
+      "path": "/school/settings",
+      "dark": false,
+      "violations": []
+    },
+    {
+      "path": "/school",
+      "dark": true,
+      "violations": []
+    },
+    {
+      "path": "/school/academics/subjects",
+      "dark": true,
+      "violations": []
+    },
+    {
+      "path": "/school/academics/classes/new",
+      "dark": true,
+      "violations": []
+    },
+    {
+      "path": "/school/settings",
+      "dark": true,
+      "violations": []
+    },
+    "browser back and Cancel preserve/discard unsaved edits",
+    "subjects create/detail",
+    "subjects edit",
+    "dialog focus trap Escape focus return",
+    "search sort empty row-menu keyboard",
+    "server page size and next page",
+    "column visibility",
+    "Save & new reset and duplicate-submit protection",
+    "profile logo upload",
+    "backend validation visible",
+    "network error Retry recovers",
+    "A1_principal campus and action UI",
+    "A1_teacher campus and action UI"
+  ],
+  "errors": [],
+  "network": [
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/4783f8b0-6d91-484e-9dde-a6d23eb31939/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/4783f8b0-6d91-484e-9dde-a6d23eb31939/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/4783f8b0-6d91-484e-9dde-a6d23eb31939/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/4783f8b0-6d91-484e-9dde-a6d23eb31939/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/profile/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/principals/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/profile/logo/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 400,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 503,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    }
+  ],
+  "responsive": []
+}

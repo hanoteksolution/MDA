@@ -21,7 +21,7 @@ from core.branching import (
 )
 
 ZERO = Decimal("0")
-REPORTS = ("sales", "stock-value", "profit-loss", "cash")
+REPORTS = ("sales", "stock-value", "profit-loss", "cash", "purchases", "inventory", "expenses", "transfers")
 
 
 class ReportScopeError(ValidationError):
@@ -225,6 +225,64 @@ def _pnl(ids, date_from, date_to, *, include_unassigned):
     return _agg(qs, "branch_id", revenue=rev, expenses=exp)
 
 
+def _purchases(ids, date_from, date_to):
+    from django.db.models import Count, Q
+    from apps.purchases.models import PurchaseOrder
+
+    qs = PurchaseOrder.active_objects().filter(branch_id__in=ids).exclude(status=PurchaseOrder.STATUS_CANCELLED)
+    qs = _date_filter(qs, "order_date", date_from, date_to)
+    received = Q(status=PurchaseOrder.STATUS_RECEIVED)
+    open_q = Q(status__in=[PurchaseOrder.STATUS_DRAFT, PurchaseOrder.STATUS_ORDERED])
+    return _agg(
+        qs, "branch_id", orders=Count("id"), ordered_total=Sum("total_amount"),
+        received_orders=Count("id", filter=received), received_total=Sum("total_amount", filter=received),
+        open_orders=Count("id", filter=open_q), open_total=Sum("total_amount", filter=open_q),
+    )
+
+
+def _inventory(ids, date_from, date_to):
+    """Current stock health per branch (a snapshot: date filters do not apply)."""
+    from django.db.models import Count, Q
+    from apps.inventory.models import Inventory
+
+    qs = Inventory.objects.filter(
+        warehouse__branch_id__in=ids, deleted_at__isnull=True, warehouse__deleted_at__isnull=True,
+        product__deleted_at__isnull=True,
+    ).annotate(_branch=F("warehouse__branch_id"))
+    low = Q(quantity__gt=0, quantity__lte=F("product__minimum_stock"))
+    return _agg(
+        qs, "_branch", stock_lines=Count("id"), units=Sum("quantity"), reserved=Sum("reserved_quantity"),
+        low_stock=Count("id", filter=low), out_of_stock=Count("id", filter=Q(quantity__lte=0)),
+    )
+
+
+def _expenses(ids, date_from, date_to):
+    from django.db.models import Count
+    from apps.sales.models import Expense
+
+    qs = _date_filter(Expense.active_objects().filter(branch_id__in=ids), "expense_date", date_from, date_to)
+    return _agg(qs, "branch_id", entries=Count("id"), amount=Sum("amount"))
+
+
+def _transfers(ids, date_from, date_to):
+    """Transfer counts per branch. Outgoing = branch is the source; incoming = the destination."""
+    from django.db.models import Count, Q
+    from apps.inventory.models import BranchTransferRequest as T
+
+    open_statuses = [T.STATUS_REQUESTED, T.STATUS_APPROVED, T.STATUS_RESERVED, T.STATUS_DISPATCHED,
+                     T.STATUS_IN_TRANSIT, T.STATUS_RECEIVED]
+    base = _date_filter(T.active_objects(), "created_at__date", date_from, date_to)
+    aggs_out = {"outgoing": Count("id"), "outgoing_open": Count("id", filter=Q(status__in=open_statuses)),
+                "awaiting_approval": Count("id", filter=Q(status=T.STATUS_REQUESTED))}
+    aggs_in = {"incoming": Count("id"), "incoming_open": Count("id", filter=Q(status__in=open_statuses)),
+               "in_transit": Count("id", filter=Q(status=T.STATUS_IN_TRANSIT))}
+    g_out, t_out = _agg(base.filter(source_branch_id__in=ids), "source_branch_id", **aggs_out)
+    g_in, t_in = _agg(base.filter(destination_branch_id__in=ids), "destination_branch_id", **aggs_in)
+    zero_out, zero_in = {k: ZERO for k in aggs_out}, {k: ZERO for k in aggs_in}
+    grouped = {bid: {**g_out.get(bid, zero_out), **g_in.get(bid, zero_in)} for bid in set(g_out) | set(g_in)}
+    return grouped, {**t_out, **t_in}
+
+
 def _derive(report, figures):
     f = dict(figures)
     if report == "sales":
@@ -258,6 +316,14 @@ class BranchReportService:
             grouped, total = _stock_value(ids, date_from, date_to)
         elif report == "cash":
             grouped, total = _cash(ids, date_from, date_to)
+        elif report == "purchases":
+            grouped, total = _purchases(ids, date_from, date_to)
+        elif report == "inventory":
+            grouped, total = _inventory(ids, date_from, date_to)
+        elif report == "expenses":
+            grouped, total = _expenses(ids, date_from, date_to)
+        elif report == "transfers":
+            grouped, total = _transfers(ids, date_from, date_to)
         else:
             grouped, total = _pnl(ids, date_from, date_to, include_unassigned=unassigned_ok)
 
@@ -293,3 +359,66 @@ class BranchReportService:
             abs(summed.get(k, ZERO) - total.get(k, ZERO)) < Decimal("0.0001") for k in total
         )
         return result
+
+
+def branch_overview(*, scope: ReportScope, date_from=None, date_to=None) -> dict:
+    """One row per branch in ``scope`` for the Branch Management list: status, manager, structure
+    counts and headline figures. Figures come from :class:`BranchReportService` (never recomputed
+    here), so the list, the dashboard and the reports always agree."""
+    from datetime import date
+
+    from django.db.models import Count, Q
+    from django.utils import timezone
+
+    from apps.inventory.models import Warehouse
+    from apps.organization.models import CashRegister, PosTerminal, UserBranchAccess
+    from apps.sales.models import CashierSession
+    from apps.settings_app.models import Branch
+
+    ids = list(scope.branch_ids)
+    today = timezone.localdate()
+    reports = {
+        name: {r["branch_id"]: r for r in BranchReportService.run(report=name, scope=scope, date_from=date_from, date_to=date_to)["branches"]}
+        for name in ("sales", "stock-value", "inventory", "transfers")
+    }
+
+    def counts(qs, field):
+        return dict(qs.filter(**{f"{field}__in": ids}).order_by().values_list(field).annotate(n=Count("id")))
+
+    effective = Q(status=UserBranchAccess.STATUS_ACTIVE) & (Q(starts_on__isnull=True) | Q(starts_on__lte=today)) & (
+        Q(ends_on__isnull=True) | Q(ends_on__gte=today))
+    access = UserBranchAccess.active_objects().filter(effective, branch_id__in=ids)
+    users = dict(access.order_by().values_list("branch_id").annotate(n=Count("user_id", distinct=True)))
+    managers = {}
+    for row in access.filter(access_profile__is_manager=True).select_related("user"):
+        managers.setdefault(row.branch_id, []).append(row.user.get_full_name() or row.user.username)
+    warehouses = counts(Warehouse.active_objects(), "branch_id")
+    terminals = counts(PosTerminal.active_objects().filter(status="ACTIVE"), "branch_id")
+    registers = counts(CashRegister.active_objects().filter(status="ACTIVE"), "branch_id")
+    shifts = counts(CashierSession.active_objects().filter(status=CashierSession.STATUS_OPEN), "branch_id")
+
+    rows = []
+    for b in Branch.active_objects().filter(pk__in=ids).select_related("manager", "company").order_by("-is_default", "name"):
+        key = str(b.pk)
+        sales, stock, inv, tr = (reports[n].get(key, {}) for n in ("sales", "stock-value", "inventory", "transfers"))
+        manager_names = managers.get(b.pk, [])
+        if b.manager_id:
+            manager_names = [b.manager.get_full_name() or b.manager.username] + [m for m in manager_names if m != (b.manager.get_full_name() or b.manager.username)]
+        rows.append({
+            "branch_id": key, "code": b.code, "name": b.name, "status": b.status, "is_active": b.is_active,
+            "is_default": b.is_default, "branch_type": getattr(b, "branch_type", ""), "phone": b.phone,
+            "address": b.address,
+            "company_id": str(b.company_id) if b.company_id else None,
+            "company_name": b.company.name if b.company_id else "",
+            "managers": manager_names,
+            "users": users.get(b.pk, 0), "warehouses": warehouses.get(b.pk, 0),
+            "pos_terminals": terminals.get(b.pk, 0), "cash_registers": registers.get(b.pk, 0),
+            "open_shifts": shifts.get(b.pk, 0),
+            "sales_net": sales.get("net", 0.0), "sales_invoices": sales.get("invoices", 0.0),
+            "stock_value": stock.get("value", 0.0), "low_stock": inv.get("low_stock", 0.0),
+            "out_of_stock": inv.get("out_of_stock", 0.0),
+            "transfers_open": tr.get("outgoing_open", 0.0) + tr.get("incoming_open", 0.0),
+            "transfers_awaiting_approval": tr.get("awaiting_approval", 0.0),
+        })
+    return {"mode": scope.mode, "date_from": str(date_from) if date_from else None,
+            "date_to": str(date_to) if date_to else None, "branches": rows}

@@ -15,3 +15,16 @@ describe("Platform Admin → Integrations navigation", () => {
     expect(links(overviewNavSections([], { hasPermission: has, includePlatform: true }))).not.toContain("/platform/integrations");
   });
 });
+
+describe("Platform Admin → Billing navigation", () => {
+  it("is shown to elevated platform users", () => {
+    expect(links(platformNavSections("platform", { elevated: true }))).toContain("/platform/billing");
+    expect(links(overviewNavSections([], { elevated: true, includePlatform: true }))).toContain("/platform/billing");
+  });
+
+  it("is hidden from tenant users, even with platform.view or subscriptions.manage", () => {
+    const has = (c: string) => ["platform.view", "subscriptions.manage"].includes(c);
+    expect(links(platformNavSections("platform", { hasPermission: has }))).not.toContain("/platform/billing");
+    expect(links(overviewNavSections([], { hasPermission: has, includePlatform: true }))).not.toContain("/platform/billing");
+  });
+});

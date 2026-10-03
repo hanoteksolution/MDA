@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Assignment created and published through UI",
+    "Assigned teacher recorded and graded submission",
+    "Teacher saved draft marks",
+    "Moderation, publication and immutable printable PDF report",
+    "Published marks locked; responsive marks at 1366/768/390",
+    "Preview and commit promotion through UI; linked history preserved; responsive at all widths",
+    "Unassigned teacher receives visible denial and no marks"
+  ],
+  "pageErrors": [],
+  "unexpectedResponses": [],
+  "result": "PASS"
+}

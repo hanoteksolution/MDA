@@ -282,3 +282,64 @@ Any payment activity recorded after the backup must be reconciled by hand. A bac
 ### 12.2 Reproducibility
 
 The deployed images were built from a working tree with 283 dirty paths on top of `3a90c8e`. That exact tree is captured by the release commit tagged `production-2026-09-23`. Intentionally excluded from that commit: `frontend/tsconfig.tsbuildinfo` (generated build cache) and `docs/school/verification/` (1.5 MB of test evidence — screenshots, regression logs, JSON). Neither affects the built images. Secrets (`backend/.env.cloud`) and `backups/` are gitignored and were never staged.
+
+### 12.3 Rollback images for the next release (2026-09-24)
+
+The original pre-release rollback images `mda-api:rollback-20260923T163830Z` (`c31be14d7211`) and `mda-web:rollback-20260923T163830Z` (`e654b3d08a79`) **no longer exist on the host**. They were found missing during the 2026-09-24 release precheck, and it is not known what removed them. The DB dump `backups/mda_erp_pre_release_20260923T163830Z.dump` and `backups/env.cloud.20260923T163830Z` are still present.
+
+The currently running `production-2026-09-23` release was therefore tagged (tag only: no rebuild, pull, restart or `:latest` change) as the rollback target for the next release:
+
+| Tag | Image ID | Running as |
+|---|---|---|
+| `mda-api:rollback-pre-20260924` | `sha256:8156dd21a027643d2895f46d7c2e726265e0c9e46dac566f7104b8dbf0d7e92e` | `mda_api`, `mda_celery`, `mda_celery_beat` |
+| `mda-web:rollback-pre-20260924` | `sha256:e3c08480d09fa63a51994b70de245349ed765b18e98990d39fbc815dca78a7c2` | `mda_web` |
+
+These images already include `integrations.0003_sms_billing` and `platform.0019_subscription_checkout`. The pending release adds no migrations, so rolling back to these tags needs no DB restore. **Do not delete these tags or run `docker image prune -a`** until the next release is formally accepted.
+
+## 13. Deployed — 2026-09-24 (Branch completion, Branch final gaps, Platform Billing, Safari branding)
+
+**Status: DEPLOYED AND VERIFIED.** Deployed with `make deploy` (see `SYSTEMD_OPERATIONS.md`). No migrations and no permission bootstrap were needed.
+
+| Item | Value |
+|---|---|
+| Backend deploy | manifest `/var/lib/mda/releases/20260924T063728Z-backend-deploy.env`, `STATUS=deployed`, `PENDING_MIGRATIONS=none` |
+| Frontend deploy | manifest `/var/lib/mda/releases/20260924T063804Z-frontend-deploy.env`, `STATUS=deployed` |
+| API/Celery/Beat image | `sha256:6a8c6d31af276c845c844a34675ba5ed56a0951c55743dfd4ebcfdf8c2653e5a` |
+| Web image | `sha256:4e5256a5ac6c8777ac0d70c34432b70ebd3e1d996bfffb12f249305fb1979b33` |
+| Rollback target (recorded) | api `8156dd21a027` (`mda-api:rollback-20260924T063728Z`, also `rollback-pre-20260924`); web `e3c08480d09f` (`mda-web:rollback-20260924T063804Z`, also `rollback-pre-20260924`). Use `make rollback-backend` / `make rollback-frontend`. |
+| Source | Live `/app` Python matches the working tree exactly (773 files, 0 differences); git HEAD `752e6bc` plus 75 uncommitted paths. **This release is not yet captured in a git commit.** |
+
+### 13.1 Post-deploy functional verification (read-only)
+
+The API checks ran in-process in `mda_api` inside a single transaction that was **always rolled back**. A synthetic two-tenant, three-branch fixture was used for flows that write. Row counts for subscription payments, payments, invoices, stock movements, transfers, tenants, users and providers were identical before and after, and no synthetic tenant or user remains. No recovery was executed and no containers were restarted.
+
+- **Branch (61/61 checks overall):**
+  - my-branches, per-branch dashboards (the dashboard refuses "all" by design; the consolidated view is `/reports/branch-overview/`), and the branch reports sales/inventory/purchases/expenses/transfers;
+  - branch-scoped inventory, cross-branch search and availability, POS profile;
+  - transfer destinations, list and detail;
+  - pull request → cancel by the requesting (destination) branch;
+  - push with `approve:true` → `APPROVED` → cancel by the destination;
+  - no stock moved or reserved;
+  - on a real tenant, read-only GETs of my-branches, branch dashboard and branch overview.
+- **RBAC/isolation:**
+  - an ungranted branch gets 403;
+  - a viewer without `inventory.cross_branch_view` sees no other branches;
+  - another tenant gets 404 on availability and transfers;
+  - an uninvolved branch cancelling gets 404; a user without `inventory.transfer` cancelling gets 403;
+  - a POS checkout with a foreign `branch_id` gets 400 and no invoice is created.
+- **Platform Billing:**
+  - Super Admin gets 200 on overview, subscriptions, plans, invoices, payments, reconciliation and tenant detail;
+  - a tenant admin and the synthetic owner get 403, and anonymous gets 401;
+  - `recover` was **not** executed.
+- **Safari branding:**
+  - `/login`, `/forgot-password`, `/onboard`, `/register`, `/setup`, `/branches` and `/platform/billing` return 200 publicly;
+  - the served logo is byte-identical to `frontend/src/assets/brand/safari-logo.png`;
+  - `--brand-primary: 260 34% 47%` and `.safari-brand` are in the CSS;
+  - the review, provisioning and success strings are in the bundle;
+  - subdomain availability works (an existing slug is taken, an unused one is available with the correct hostname).
+- **Security:**
+  - `PAYMENT_ALLOW_MOCK_PROVIDERS=False` and `SMS_CREDITS_ENFORCED=True`;
+  - 0 payment providers, 0 SMS providers and 0 SMS packages, so no MOCK or Hormuud provider is configured;
+  - the Waafi callback returns 410.
+- **Health:** `make health` all OK; systemd units active; Postgres and Redis healthy.
+- **Logs:** no 5xx and no tracebacks in api, celery, beat or web since 06:37Z.

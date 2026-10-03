@@ -39,6 +39,19 @@
     --chart-3: 262 83% 58%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
+
+    /* Safari Technology Solutions brand — sampled from src/assets/brand/safari-logo.png.
+       Applied to public auth/onboarding pages through the .safari-brand scope only. */
+    --brand-primary: 260 34% 47%; /* violet #6B4FA1 — 6.4:1 on white */
+    --brand-primary-hover: 258 37% 41%;
+    --brand-primary-foreground: 0 0% 100%;
+    --brand-secondary: 191 92% 43%; /* cyan #09ABD1 — decorative only */
+    --brand-accent: 326 65% 57%; /* magenta #D94C9B — gradients/highlights */
+    --brand-deep: 213 62% 43%; /* deep blue #2A68B2 — 5.6:1 on white */
+    --brand-ink: 255 41% 21%;
+    --brand-soft: 260 45% 96%;
+    --brand-soft-foreground: 258 37% 36%;
+    --brand-surface: 0 0% 100%;
   }
 
   .dark {
@@ -58,6 +71,15 @@
     --sidebar-foreground: 215 20% 65%;
     --sidebar-accent: 160 50% 12%;
     --sidebar-border: 217 28% 16%;
+
+    --brand-primary: 261 53% 72%;
+    --brand-primary-hover: 261 53% 78%;
+    --brand-primary-foreground: 255 41% 12%;
+    --brand-deep: 213 70% 68%;
+    --brand-ink: 260 40% 94%;
+    --brand-soft: 258 28% 13%;
+    --brand-soft-foreground: 261 60% 84%;
+    --brand-surface: 222 40% 8.5%;
   }
 
   * {
@@ -79,6 +101,40 @@
 }
 
 @layer components {
+  /* Public auth + onboarding: map the shared UI primitives (Button, Input, Checkbox,
+     focus rings) onto the Safari brand without touching the ERP workspace theme. */
+  .safari-brand {
+    --primary: var(--brand-primary);
+    --primary-hover: var(--brand-primary-hover);
+    --primary-foreground: var(--brand-primary-foreground);
+    --ring: var(--brand-primary);
+    --accent: var(--brand-soft);
+    --accent-foreground: var(--brand-soft-foreground);
+  }
+
+  /* Hairline brand rule: violet leads, magenta and cyan stay secondary. */
+  .safari-brand-rule {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--brand-primary)) 0%,
+      hsl(var(--brand-primary)) 55%,
+      hsl(var(--brand-accent)) 80%,
+      hsl(var(--brand-secondary)) 100%
+    );
+  }
+
+  /* Landing page: gentle float for the hero feature cards. */
+  .landing-float {
+    animation: landing-float 7s ease-in-out infinite;
+  }
+  @keyframes landing-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .landing-float { animation: none; }
+  }
+
   .ds-page {
     @apply space-y-4 xl:space-y-6;
   }

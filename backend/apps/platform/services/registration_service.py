@@ -139,6 +139,7 @@ class TenantProvisioningService:
         owner = dict(payload.get("owner") or {})
         owner["_password_hash"] = registration.owner_password_hash
         payload["owner"] = owner
+        payload["_registration_id"] = str(registration.pk)  # its own slug hold must not block it
         try:
             tenant, owner_user = PlatformService.create_shop(data=payload, user=None)
             registration.tenant = tenant

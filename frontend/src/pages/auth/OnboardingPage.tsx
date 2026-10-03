@@ -8,6 +8,8 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  Circle,
+  ClipboardCheck,
   Coffee,
   Dumbbell,
   FlaskConical,
@@ -23,7 +25,6 @@ import {
   Plane,
   Search,
   ShoppingBag,
-  Sparkles,
   Store,
   Truck,
   User,
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/forms/FormField";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
+import { SafariLogo } from "@/components/brand/SafariLogo";
 import {
   onboardingApi,
   type OnboardingBusinessType,
@@ -53,16 +55,23 @@ import {
   deriveWorkspaceUiState,
   nextSlugFromCompanyName,
   normalizeWorkspaceSlug,
+  workspaceHttpsUrl,
   type WorkspaceAvailability,
 } from "@/pages/auth/workspaceUrl";
+import {
+  PROVISIONING_STAGES,
+  summarizeProvisioningStages,
+  type ProvisioningStageSummary,
+} from "@/pages/auth/provisioningStages";
 
 const STEPS = [
-  { id: "business", label: "Business", icon: Building2 },
+  { id: "business", label: "Company", icon: Building2 },
   { id: "type", label: "Industry", icon: Store },
   { id: "modules", label: "Modules", icon: LayoutGrid },
   { id: "plan", label: "Plan", icon: Layers },
-  { id: "subdomain", label: "Workspace", icon: Globe },
-  { id: "owner", label: "Account", icon: User },
+  { id: "subdomain", label: "Workspace URL", icon: Globe },
+  { id: "owner", label: "Owner & branch", icon: User },
+  { id: "review", label: "Review", icon: ClipboardCheck },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -130,6 +139,8 @@ export function OnboardingPage() {
     name: string;
     url: string;
     loginUrl: string;
+    tlsReady: boolean;
+    stages: ProvisioningStageSummary[];
   } | null>(null);
   const [branchName, setBranchName] = useState("Main Branch");
   const [username, setUsername] = useState("");
@@ -433,6 +444,12 @@ export function OnboardingPage() {
     if (stepIndex > 0) setStep(STEPS[stepIndex - 1].id);
   };
 
+  const goTo = (target: StepId) => {
+    setError(null);
+    setFieldErrors({});
+    setStep(target);
+  };
+
   const submit = async () => {
     const message = validate();
     if (message) return setError(message);
@@ -466,6 +483,8 @@ export function OnboardingPage() {
           name: name.trim(),
           url: workspaceUrl,
           loginUrl: `${workspaceUrl}/login?welcome=1`,
+          tlsReady: response.data.tls_ready !== false,
+          stages: summarizeProvisioningStages(response.data.stages),
         });
         return;
       } else {
@@ -512,89 +531,134 @@ export function OnboardingPage() {
 
   if (createdWorkspace) {
     return (
-      <div className="grid min-h-dvh bg-slate-50 lg:grid-cols-[.86fr_1.14fr] dark:bg-slate-950">
+      <div className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <LoginBrandingPanel
-          productName="Safari ERP"
-          productTagline="Your business, intelligently connected"
           headline="Your workspace is ready"
-          description="Open the address you approved. The hostname never changes unless you start a dedicated domain-change workflow."
+          description="Open the address below and sign in with the owner account you just created. The address stays the same if you rename the company."
         />
-        <section className="relative flex flex-col justify-center px-5 py-10 sm:px-10">
-          <div className="mx-auto w-full max-w-lg rounded-[1.75rem] border border-slate-200/80 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" /> Workspace created successfully
+        <main className="flex min-w-0 flex-col bg-background">
+          <div className="safari-brand-rule h-1 w-full lg:hidden" aria-hidden />
+          <div className="flex flex-1 flex-col justify-center px-4 py-10 sm:px-8 xl:px-14">
+            <div className="mx-auto w-full max-w-lg">
+              <SafariLogo size="sm" className="mb-8 lg:hidden" />
+              <section
+                aria-labelledby="workspace-created-title"
+                className="rounded-2xl border border-border bg-brand-surface p-6 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_12px_32px_-12px_hsl(var(--brand-primary)/0.18)] sm:p-8"
+              >
+                <p className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-soft-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />
+                  Workspace created successfully
+                </p>
+                <h1
+                  id="workspace-created-title"
+                  className="mt-4 break-words text-2xl font-bold tracking-tight text-foreground"
+                >
+                  {createdWorkspace.name}
+                </h1>
+
+                <div className="mt-6 rounded-xl border border-border bg-muted/40 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Workspace URL
+                  </p>
+                  <a
+                    href={createdWorkspace.loginUrl}
+                    className="mt-1 block break-all rounded font-mono text-sm font-semibold text-brand-deep hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {createdWorkspace.url}
+                  </a>
+                </div>
+
+                {createdWorkspace.stages.length ? (
+                  <ul className="mt-6 grid gap-2 sm:grid-cols-2" aria-label="Completed setup steps">
+                    {createdWorkspace.stages.map((stage) => (
+                      <StageRow key={stage.id} label={stage.label} status={stage.status} />
+                    ))}
+                  </ul>
+                ) : null}
+
+                {!createdWorkspace.tlsReady ? (
+                  <p className="mt-6 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground">
+                    The secure certificate for this address is still being issued. If the workspace
+                    doesn&apos;t open yet, wait a minute and try again.
+                  </p>
+                ) : null}
+
+                <Button
+                  type="button"
+                  size="lg"
+                  className="mt-6 w-full"
+                  onClick={() => window.location.assign(createdWorkspace.loginUrl)}
+                >
+                  Open Workspace <ArrowRight className="h-4 w-4" aria-hidden />
+                </Button>
+              </section>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">{createdWorkspace.name}</h1>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Your workspace
-            </p>
-            <p className="mt-1 break-all font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-              {createdWorkspace.url}
-            </p>
-            <Button
-              type="button"
-              className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500"
-              onClick={() => window.location.assign(createdWorkspace.loginUrl)}
-            >
-              Open Workspace <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </section>
+        </main>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-slate-950">
-        <div className="h-9 w-9 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background" role="status">
+        <SafariLogo size="md" />
+        <div
+          className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent motion-reduce:animate-none"
+          aria-hidden
+        />
+        <span className="sr-only">Loading setup options…</span>
       </div>
     );
   }
 
   return (
-    <div className="grid min-h-dvh bg-slate-50 lg:grid-cols-[.86fr_1.14fr] dark:bg-slate-950">
+    <div className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <LoginBrandingPanel
-        productName="Safari ERP"
-        productTagline="Your business, intelligently connected"
         headline="Build the workspace your business deserves"
-        description="Choose your industry, combine the modules you need, and launch a secure tenant workspace in minutes."
+        description="Choose your industry, combine the modules you need, and launch a secure workspace on its own address in minutes."
       />
-      <section className="relative flex flex-col justify-center overflow-hidden px-5 py-10 sm:px-10 xl:px-16">
-        <div className="pointer-events-none absolute -right-24 top-0 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl dark:bg-emerald-900/10" />
-        <div className="pointer-events-none absolute -left-16 bottom-10 h-56 w-56 rounded-full bg-teal-200/30 blur-3xl dark:bg-teal-900/10" />
-        <div className="relative mx-auto w-full max-w-3xl">
-          <header className="mb-7 flex items-start justify-between gap-5">
+      <main className="flex min-w-0 flex-col bg-background">
+        <div className="safari-brand-rule h-1 w-full lg:hidden" aria-hidden />
+        <div className="flex flex-1 flex-col justify-center px-4 py-8 sm:px-8 xl:px-14">
+        <div className="mx-auto w-full max-w-3xl">
+          <SafariLogo size="sm" className="mb-6 lg:hidden" />
+          <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                <Sparkles className="h-3.5 w-3.5" /> Guided setup
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Create your workspace
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Already registered?{" "}
-                <Link to="/login" className="font-semibold text-emerald-600 hover:underline">
+                <Link
+                  to="/login"
+                  className="rounded font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   Sign in
                 </Link>
               </p>
             </div>
-            <div className="hidden rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-right shadow-sm backdrop-blur sm:block dark:border-slate-800 dark:bg-slate-900">
-              <p className="text-xs text-muted-foreground">Setup progress</p>
-              <p className="text-lg font-bold text-emerald-600">
-                {Math.round(((stepIndex + 1) / STEPS.length) * 100)}%
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              Step <strong className="text-foreground">{stepIndex + 1}</strong> of {STEPS.length}
+              <span className="sm:hidden"> · {STEPS[stepIndex].label}</span>
+            </p>
           </header>
 
-          <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+          <div
+            className="mb-5 h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Setup progress"
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-valuenow={stepIndex + 1}
+          >
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 transition-all duration-500"
+              className="h-full rounded-full bg-brand-primary transition-all duration-500 motion-reduce:transition-none"
               style={{ width: `${((stepIndex + 1) / STEPS.length) * 100}%` }}
             />
           </div>
 
-          <ol className="mb-6 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <ol aria-label="Setup steps" className="mb-6 hidden grid-cols-7 gap-2 sm:grid">
             {STEPS.map((item, index) => {
               const Icon = item.icon;
               const active = item.id === step;
@@ -602,24 +666,28 @@ export function OnboardingPage() {
               return (
                 <li
                   key={item.id}
+                  aria-current={active ? "step" : undefined}
                   className={cn(
-                    "flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[10px] font-semibold transition-all",
-                    active &&
-                      "border-emerald-400 bg-emerald-50 text-emerald-700 shadow-sm dark:bg-emerald-950",
-                    done &&
-                      "border-emerald-200 bg-white text-emerald-700 dark:border-emerald-900 dark:bg-slate-900",
-                    !active &&
-                      !done &&
-                      "border-transparent bg-slate-100 text-muted-foreground dark:bg-slate-900"
+                    "flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-center text-[10px] font-semibold leading-tight transition-colors",
+                    active && "border-brand-primary bg-brand-soft text-brand-soft-foreground",
+                    done && "border-border bg-brand-surface text-brand-soft-foreground",
+                    !active && !done && "border-transparent bg-muted text-muted-foreground"
                   )}
                 >
-                  {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                  {done ? <Check className="h-4 w-4" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
                   {item.label}
+                  {done ? <span className="sr-only"> (completed)</span> : null}
                 </li>
               );
             })}
           </ol>
 
+          {saving ? (
+            <ProvisioningPanel
+              name={name.trim()}
+              hostname={slug ? `${slug}.${baseDomain}` : baseDomain}
+            />
+          ) : (
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -627,15 +695,17 @@ export function OnboardingPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22 }}
-              className="min-h-[420px] rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-5 shadow-xl shadow-slate-200/40 backdrop-blur sm:p-7 dark:border-slate-800 dark:bg-slate-900/95 dark:shadow-none"
+              className="min-h-[420px] rounded-2xl border border-border bg-brand-surface p-5 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_12px_32px_-12px_hsl(var(--brand-primary)/0.16)] sm:p-7"
             >
               {step === "business" && (
                 <Step
                   title="Tell us about your business"
                   subtitle="We'll tailor your workspace around these details."
                 >
-                  <FormField label="Business or trading name" required>
+                  <FormField label="Business or trading name" htmlFor="onb-company-name" required>
                     <Input
+                      id="onb-company-name"
+                      autoComplete="organization"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. Fresh Market"
@@ -643,8 +713,10 @@ export function OnboardingPage() {
                     />
                   </FormField>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Contact email" required>
+                    <FormField label="Contact email" htmlFor="onb-contact-email" required>
                       <Input
+                        id="onb-contact-email"
+                        autoComplete="email"
                         type="email"
                         value={contactEmail}
                         onChange={(e) => {
@@ -654,8 +726,11 @@ export function OnboardingPage() {
                         placeholder="owner@company.com"
                       />
                     </FormField>
-                    <FormField label="Phone number">
+                    <FormField label="Phone number" htmlFor="onb-contact-phone">
                       <Input
+                        id="onb-contact-phone"
+                        type="tel"
+                        autoComplete="tel"
                         value={contactPhone}
                         onChange={(e) => setContactPhone(e.target.value)}
                         placeholder="Your business number"
@@ -680,11 +755,12 @@ export function OnboardingPage() {
                           key={type.code}
                           type="button"
                           onClick={() => chooseType(type)}
+                          aria-pressed={selected}
                           className={cn(
-                            "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200",
+                            "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             selected
-                              ? "border-emerald-400 bg-gradient-to-br from-emerald-50 via-white to-teal-50 shadow-lg shadow-emerald-100/70 dark:from-emerald-950 dark:via-slate-900 dark:to-slate-900 dark:shadow-none"
-                              : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-950"
+                              ? "border-brand-primary bg-brand-soft ring-1 ring-brand-primary/30"
+                              : "border-border bg-brand-surface hover:-translate-y-0.5 hover:border-brand-primary/50 hover:shadow-md motion-reduce:hover:translate-y-0"
                           )}
                         >
                           <div className="flex items-start gap-3">
@@ -692,8 +768,8 @@ export function OnboardingPage() {
                               className={cn(
                                 "grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-colors",
                                 selected
-                                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30"
-                                  : "bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-700 dark:bg-slate-800"
+                                  ? "bg-brand-primary text-brand-primary-foreground"
+                                  : "bg-muted text-muted-foreground group-hover:bg-brand-soft group-hover:text-brand-soft-foreground"
                               )}
                             >
                               <Icon className="h-5 w-5" />
@@ -702,7 +778,7 @@ export function OnboardingPage() {
                               <span className="flex items-center justify-between gap-2">
                                 <strong className="text-[15px] tracking-tight">{type.name}</strong>
                                 {selected ? (
-                                  <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
+                                  <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-primary" aria-hidden />
                                 ) : null}
                               </span>
                               <span className="mt-1 block text-xs leading-5 text-muted-foreground">
@@ -719,8 +795,8 @@ export function OnboardingPage() {
                                   className={cn(
                                     "rounded-full px-2 py-0.5 text-[10px] font-semibold",
                                     selected
-                                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200"
-                                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                      ? "bg-brand-surface text-brand-soft-foreground"
+                                      : "bg-muted text-muted-foreground"
                                   )}
                                 >
                                   {label}
@@ -732,7 +808,7 @@ export function OnboardingPage() {
                               </span>
                             )}
                             {modNames.length > 5 ? (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800">
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                                 +{modNames.length - 5} more
                               </span>
                             ) : null}
@@ -750,11 +826,11 @@ export function OnboardingPage() {
                   subtitle={`Recommended for ${selectedType?.name || "your industry"} — tap any modules you need. You can select as many as you like.`}
                 >
                   <div className="mb-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:from-emerald-950 dark:to-slate-900 dark:text-emerald-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-brand-primary/20 bg-brand-soft px-4 py-3 text-sm text-brand-soft-foreground">
                       <span className="flex items-center gap-2">
-                        <PackageCheck className="h-4 w-4" />
+                        <PackageCheck className="h-4 w-4" aria-hidden />
                         <strong>{selectedModules.length}</strong> selected
-                        <span className="text-emerald-700/80 dark:text-emerald-300/80">
+                        <span className="text-muted-foreground">
                           · {recommendedSet.size} recommended
                           {selectedPlan ? ` · fits ${selectedPlan.name}` : ""}
                         </span>
@@ -763,14 +839,14 @@ export function OnboardingPage() {
                         <button
                           type="button"
                           onClick={applyRecommended}
-                          className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-white/60 dark:hover:bg-slate-800/60"
+                          className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-brand-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           Use recommended
                         </button>
                         <button
                           type="button"
                           onClick={selectAllModules}
-                          className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-white/60 dark:hover:bg-slate-800/60"
+                          className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-brand-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           Select all
                         </button>
@@ -779,15 +855,16 @@ export function OnboardingPage() {
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <div className="relative flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                         <Input
                           value={moduleQuery}
                           onChange={(e) => setModuleQuery(e.target.value)}
                           placeholder="Search modules…"
+                          aria-label="Search modules"
                           className="h-11 rounded-xl pl-9"
                         />
                       </div>
-                      <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950">
+                      <div className="flex rounded-xl border border-border bg-muted p-1" role="group" aria-label="Filter modules">
                         {(
                           [
                             ["all", "All"],
@@ -799,10 +876,11 @@ export function OnboardingPage() {
                             key={id}
                             type="button"
                             onClick={() => setModuleFilter(id)}
+                            aria-pressed={moduleFilter === id}
                             className={cn(
-                              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               moduleFilter === id
-                                ? "bg-white text-emerald-700 shadow-sm dark:bg-slate-800 dark:text-emerald-300"
+                                ? "bg-brand-surface text-brand-soft-foreground shadow-sm"
                                 : "text-muted-foreground hover:text-foreground"
                             )}
                           >
@@ -822,10 +900,11 @@ export function OnboardingPage() {
                               const mod = moduleByCode.get(code);
                               if (mod) toggleModule(mod);
                             }}
-                            className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                            aria-label={`Remove ${resolveModuleName(code)}`}
+                            className="inline-flex items-center gap-1 rounded-full border border-brand-primary/25 bg-brand-soft px-2.5 py-1 text-[11px] font-semibold text-brand-soft-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {resolveModuleName(code)}
-                            <span className="text-emerald-500">×</span>
+                            <span aria-hidden>×</span>
                           </button>
                         ))}
                       </div>
@@ -852,7 +931,7 @@ export function OnboardingPage() {
                       </div>
                     ))}
                     {!modulesByCategory.length ? (
-                      <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-muted-foreground dark:border-slate-700">
+                      <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                         No modules match your filters.
                       </p>
                     ) : null}
@@ -888,20 +967,21 @@ export function OnboardingPage() {
                             setPlanCode(plan.code);
                             setError(null);
                           }}
+                          aria-pressed={selected}
                           className={cn(
-                            "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition-all",
+                            "flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             selected
-                              ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-md dark:from-emerald-950 dark:to-slate-900"
+                              ? "border-brand-primary bg-brand-soft ring-1 ring-brand-primary/30"
                               : covers
-                                ? "border-slate-200 hover:shadow-md dark:border-slate-700"
-                                : "border-slate-200 opacity-55 dark:border-slate-700"
+                                ? "border-border bg-brand-surface hover:border-brand-primary/50 hover:shadow-md"
+                                : "border-border bg-brand-surface opacity-60"
                           )}
                         >
                           <span>
                             <span className="flex flex-wrap items-center gap-2">
                               <strong className="block text-[15px]">{plan.name}</strong>
                               {suggested ? (
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                <span className="rounded-full bg-brand-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-primary-foreground">
                                   Best match
                                 </span>
                               ) : null}
@@ -954,15 +1034,17 @@ export function OnboardingPage() {
                   subtitle="These credentials control your new tenant workspace."
                 >
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="First branch">
-                      <Input value={branchName} onChange={(e) => setBranchName(e.target.value)} />
+                    <FormField label="First branch" htmlFor="onb-branch" hint="Your default branch. You can add more later.">
+                      <Input id="onb-branch" value={branchName} onChange={(e) => setBranchName(e.target.value)} />
                     </FormField>
                     <FormField
                       label="Owner username"
+                      htmlFor="onb-owner-username"
                       required
                       error={fieldError("owner.username")}
                     >
                       <Input
+                        id="onb-owner-username"
                         value={username}
                         onChange={(e) => {
                           clearFieldError("owner.username");
@@ -972,12 +1054,13 @@ export function OnboardingPage() {
                         aria-invalid={Boolean(fieldError("owner.username"))}
                         className={cn(
                           fieldError("owner.username") &&
-                            "border-red-400 focus-visible:ring-red-400"
+                            "border-destructive focus-visible:ring-destructive"
                         )}
                       />
                     </FormField>
-                    <FormField label="Owner email" required error={fieldError("owner.email")}>
+                    <FormField label="Owner email" htmlFor="onb-owner-email" required error={fieldError("owner.email")}>
                       <Input
+                        id="onb-owner-email"
                         type="email"
                         value={email}
                         onChange={(e) => {
@@ -987,18 +1070,20 @@ export function OnboardingPage() {
                         autoComplete="email"
                         aria-invalid={Boolean(fieldError("owner.email"))}
                         className={cn(
-                          fieldError("owner.email") && "border-red-400 focus-visible:ring-red-400"
+                          fieldError("owner.email") && "border-destructive focus-visible:ring-destructive"
                         )}
                       />
                     </FormField>
                     <div />
                     <FormField
                       label="Password"
+                      htmlFor="onb-owner-password"
                       required
                       hint="At least 8 characters"
                       error={fieldError("owner.password")}
                     >
                       <Input
+                        id="onb-owner-password"
                         type="password"
                         value={password}
                         onChange={(e) => {
@@ -1009,12 +1094,13 @@ export function OnboardingPage() {
                         aria-invalid={Boolean(fieldError("owner.password"))}
                         className={cn(
                           fieldError("owner.password") &&
-                            "border-red-400 focus-visible:ring-red-400"
+                            "border-destructive focus-visible:ring-destructive"
                         )}
                       />
                     </FormField>
-                    <FormField label="Confirm password" required>
+                    <FormField label="Confirm password" htmlFor="onb-owner-password-confirm" required>
                       <Input
+                        id="onb-owner-password-confirm"
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -1022,53 +1108,94 @@ export function OnboardingPage() {
                       />
                     </FormField>
                   </div>
-                  <label className="mt-2 flex items-start gap-3 rounded-xl border bg-slate-50 p-3 text-sm text-muted-foreground dark:bg-slate-950">
+                  <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                     <input
                       type="checkbox"
                       checked={agreementsAccepted}
                       onChange={(e) => setAgreementsAccepted(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-emerald-600"
+                      className="mt-0.5 h-4 w-4 accent-brand-primary"
                     />
                     I agree to the Terms of Service and Privacy Policy.
                   </label>
                 </Step>
               )}
+
+              {step === "review" && (
+                <Step
+                  title="Review and create"
+                  subtitle="Check the details below. Nothing is created until you press Create workspace."
+                >
+                  <dl className="divide-y divide-border rounded-2xl border border-border">
+                    <ReviewRow label="Company" onEdit={() => goTo("business")}>
+                      <span className="font-semibold text-foreground">{name.trim()}</span>
+                      <span className="block text-muted-foreground">
+                        {[contactEmail.trim(), contactPhone.trim()].filter(Boolean).join(" · ")}
+                      </span>
+                    </ReviewRow>
+                    <ReviewRow label="Industry" onEdit={() => goTo("type")}>
+                      {selectedType?.name || "—"}
+                    </ReviewRow>
+                    <ReviewRow label="Modules" onEdit={() => goTo("modules")}>
+                      <span className="font-semibold text-foreground">{selectedModules.length} selected</span>
+                      <span className="block text-muted-foreground">
+                        {selectedModules.map(resolveModuleName).join(", ")}
+                      </span>
+                    </ReviewRow>
+                    <ReviewRow label="Plan" onEdit={() => goTo("plan")}>
+                      {selectedPlan ? `${selectedPlan.name} · $${selectedPlan.monthly_price}/month` : "—"}
+                    </ReviewRow>
+                    <ReviewRow label="Workspace URL" onEdit={() => goTo("subdomain")}>
+                      <span className="break-all font-mono text-brand-deep">
+                        {workspaceHttpsUrl(slug, baseDomain)}
+                      </span>
+                    </ReviewRow>
+                    <ReviewRow label="First branch" onEdit={() => goTo("owner")}>
+                      {branchName.trim() || "Main Branch"}
+                    </ReviewRow>
+                    <ReviewRow label="Owner" onEdit={() => goTo("owner")}>
+                      <span className="font-semibold text-foreground">{username.trim()}</span>
+                      <span className="block text-muted-foreground">{email.trim()}</span>
+                    </ReviewRow>
+                  </dl>
+                </Step>
+              )}
             </motion.div>
           </AnimatePresence>
+          )}
 
           {error ? (
-            <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            >
               {error}
             </p>
           ) : null}
 
-          <div className="mt-5 flex items-center justify-between">
-            <Button type="button" variant="secondary" onClick={back} disabled={stepIndex === 0 || saving}>
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Button>
-            {step === "owner" ? (
-              <Button
-                type="button"
-                onClick={() => void submit()}
-                disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-500"
-              >
-                {saving ? "Creating workspace…" : "Create workspace"}
-                <ArrowRight className="h-4 w-4" />
+          {!saving ? (
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <Button type="button" variant="secondary" onClick={back} disabled={stepIndex === 0}>
+                <ArrowLeft className="h-4 w-4" aria-hidden /> Back
               </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={next}
-                disabled={step === "subdomain" && !canContinueWorkspaceUrl(workspaceUrlState)}
-                className="bg-emerald-600 hover:bg-emerald-500"
-              >
-                Continue <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+              {step === "review" ? (
+                <Button type="button" onClick={() => void submit()}>
+                  Create workspace
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={next}
+                  disabled={step === "subdomain" && !canContinueWorkspaceUrl(workspaceUrlState)}
+                >
+                  Continue <ArrowRight className="h-4 w-4" aria-hidden />
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
-      </section>
+        </div>
+      </main>
     </div>
   );
 }
@@ -1111,14 +1238,14 @@ function ModuleCard({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        "relative rounded-2xl border p-4 text-left transition-all duration-200",
+        "relative rounded-2xl border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         selected
-          ? "border-emerald-400 bg-gradient-to-br from-emerald-50 to-teal-50 shadow-md shadow-emerald-100 ring-1 ring-emerald-300/60 dark:from-emerald-950 dark:to-slate-900 dark:shadow-none dark:ring-emerald-700"
-          : "border-slate-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-slate-700"
+          ? "border-brand-primary bg-brand-soft ring-1 ring-brand-primary/30"
+          : "border-border bg-brand-surface hover:-translate-y-0.5 hover:border-brand-primary/50 hover:shadow-md motion-reduce:hover:translate-y-0"
       )}
     >
       {recommended ? (
-        <span className="absolute right-3 top-3 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <span className="absolute right-3 top-3 rounded-full bg-brand-deep/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-deep">
           Recommended
         </span>
       ) : null}
@@ -1126,7 +1253,7 @@ function ModuleCard({
         <span
           className={cn(
             "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
-            selected ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-slate-800"
+            selected ? "bg-brand-primary text-brand-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
           <Icon className="h-5 w-5" />
@@ -1138,8 +1265,8 @@ function ModuleCard({
               className={cn(
                 "grid h-5 w-5 shrink-0 place-items-center rounded-md border",
                 selected
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900"
+                  ? "border-brand-primary bg-brand-primary text-brand-primary-foreground"
+                  : "border-input bg-brand-surface"
               )}
             >
               {selected ? <Check className="h-3.5 w-3.5" /> : null}
@@ -1165,11 +1292,105 @@ function Tag({ children, blue = false }: { children: React.ReactNode; blue?: boo
       className={cn(
         "rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide",
         blue
-          ? "bg-blue-50 text-blue-600 dark:bg-blue-950"
-          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          ? "bg-brand-deep/10 text-brand-deep"
+          : "bg-muted text-muted-foreground"
       )}
     >
       {children}
     </span>
+  );
+}
+
+function ReviewRow({
+  label,
+  onEdit,
+  children,
+}: {
+  label: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3 text-sm">
+      <div className="min-w-0 flex-1 sm:flex sm:gap-4">
+        <dt className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:w-32 sm:pt-0.5">
+          {label}
+        </dt>
+        <dd className="mt-1 min-w-0 break-words sm:mt-0">{children}</dd>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${label.toLowerCase()}`}
+        className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Edit
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Shown while the registration request is in flight. Provisioning runs inside
+ * that request, so there is no per-stage progress to report yet: the list says
+ * what the server will do, and completion is shown only from its response.
+ */
+function ProvisioningPanel({ name, hostname }: { name: string; hostname: string }) {
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="rounded-2xl border border-border bg-brand-surface p-6 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_12px_32px_-12px_hsl(var(--brand-primary)/0.16)] sm:p-8"
+    >
+      <div className="flex items-start gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-soft">
+          <span
+            className="h-6 w-6 animate-spin rounded-full border-2 border-brand-primary border-t-transparent motion-reduce:animate-none"
+            aria-hidden
+          />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            Creating {name || "your workspace"}
+          </h2>
+          <p className="mt-1 break-words text-sm text-muted-foreground">
+            Setting up <span className="font-mono text-brand-deep">{hostname}</span>. This usually
+            takes a few seconds — please keep this page open.
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        What we&apos;re setting up
+      </p>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {PROVISIONING_STAGES.map((stage) => (
+          <StageRow key={stage.id} label={stage.label} status="pending" />
+        ))}
+      </ul>
+      <p className="mt-6 text-xs text-muted-foreground">
+        Each step is confirmed by the server when your workspace is ready.
+      </p>
+    </section>
+  );
+}
+
+function StageRow({ label, status }: { label: string; status: string }) {
+  const done = status === "succeeded";
+  const failed = status === "failed";
+  return (
+    <li className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm">
+      {done ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+      ) : (
+        <Circle
+          className={cn("h-4 w-4 shrink-0", failed ? "text-destructive" : "text-muted-foreground/60")}
+          aria-hidden
+        />
+      )}
+      <span className={done ? "text-foreground" : "text-muted-foreground"}>{label}</span>
+      <span className="sr-only">{done ? " — done" : failed ? " — failed" : " — pending"}</span>
+    </li>
   );
 }

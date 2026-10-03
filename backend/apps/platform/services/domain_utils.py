@@ -138,14 +138,23 @@ def build_tenant_hostname(slug: str, *, base_domain: str | None = None) -> str:
     return f"{validate_tenant_slug(slug)}.{base}"
 
 
-def is_subdomain_taken(slug: str) -> bool:
-    """True when the slug cannot be claimed (DB uniqueness or live registration hold)."""
+def is_subdomain_taken(slug: str, *, ignore_registration_id=None) -> bool:
+    """True when the slug cannot be claimed (live tenant/domain or live registration hold).
+
+    Soft-deleted shops do not hold their name: it is released on claim
+    (see ``release_deleted_subdomain``). ``ignore_registration_id`` lets a registration
+    that is being provisioned claim the name it already holds.
+    """
     from apps.platform.models import RegistrationRequest, Tenant, TenantDomain
 
-    if Tenant.objects.filter(slug=slug).exists():
+    if Tenant.objects.filter(slug=slug, deleted_at__isnull=True).exists():
         return True
     hostname = f"{slug}.{get_tenant_base_domain()}".lower()
-    if TenantDomain.objects.filter(domain__iexact=hostname, deleted_at__isnull=True).exists():
+    if TenantDomain.objects.filter(
+        domain__iexact=hostname,
+        deleted_at__isnull=True,
+        tenant__deleted_at__isnull=True,
+    ).exists():
         return True
     live = {
         RegistrationRequest.STATUS_PENDING_EMAIL,
@@ -153,7 +162,39 @@ def is_subdomain_taken(slug: str) -> bool:
         RegistrationRequest.STATUS_PROVISIONING,
         RegistrationRequest.STATUS_READY,
     }
-    return RegistrationRequest.active_objects().filter(subdomain=slug, status__in=live).exists()
+    holds = RegistrationRequest.active_objects().filter(subdomain=slug, status__in=live)
+    if ignore_registration_id:
+        holds = holds.exclude(pk=ignore_registration_id)
+    return holds.exists()
+
+
+def release_deleted_subdomain(slug: str) -> None:
+    """Free a slug/hostname still held by soft-deleted shops.
+
+    Tenant.slug and TenantDomain.domain are unique even for soft-deleted rows, so a
+    deleted shop would otherwise block its name forever. The old rows are renamed
+    (data is kept) and their hostname is deactivated.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from apps.platform.models import Tenant, TenantDomain
+
+    base = get_tenant_base_domain().lstrip(".")
+    with transaction.atomic():
+        for tenant in Tenant.objects.filter(slug=slug, deleted_at__isnull=False):
+            tenant.slug = f"{slug}-deleted-{tenant.id.hex[:8]}"[:100]
+            tenant.save(update_fields=["slug", "updated_at"])
+        for row in TenantDomain.objects.filter(
+            domain__iexact=f"{slug}.{base}", tenant__deleted_at__isnull=False
+        ):
+            renamed = f"{slug}-deleted-{row.id.hex[:8]}"
+            row.domain = f"{renamed}.{base}"[:255]
+            row.subdomain = renamed[:100]
+            row.is_active = False
+            row.is_primary = False
+            row.deleted_at = row.deleted_at or timezone.now()
+            row.save(update_fields=["domain", "subdomain", "is_active", "is_primary", "deleted_at", "updated_at"])
 
 
 def suggest_subdomains(base: str, *, limit: int = 3) -> list[str]:

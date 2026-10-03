@@ -1,0 +1,15 @@
+
+> mda-erp-frontend@0.1.0 test
+> vitest run --run src/modules/school/sis/workflows.test.ts src/modules/school/foundation.test.ts
+
+
+ RUN  v3.2.7 /home/ubuntu/projects/mda/frontend
+
+ ✓ src/modules/school/sis/workflows.test.ts (5 tests) 6ms
+ ✓ src/modules/school/foundation.test.ts (6 tests) 21ms
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+   Start at  00:42:52
+   Duration  612ms (transform 182ms, setup 0ms, collect 287ms, tests 27ms, environment 0ms, prepare 268ms)
+

@@ -95,6 +95,8 @@ export interface RegistrationResult {
   tls_ready?: boolean;
   tenant_id: string | null;
   message: string;
+  failure_category?: string;
+  stages?: { stage: string; status: string; message?: string }[];
 }
 
 export const onboardingApi = {

@@ -1,0 +1,10 @@
+Migrations for 'sales':
+  apps/sales/migrations/0013_alter_cashiersession_created_at_and_more.py
+    ~ Alter field created_at on cashiersession
+    ~ Alter field id on cashiersession
+    ~ Alter field tenant on cashiersession
+    ~ Alter field created_at on salerefund
+    ~ Alter field id on salerefund
+    ~ Alter field tenant on salerefund
+    ~ Alter field created_at on salerefunditem
+    ~ Alter field id on salerefunditem

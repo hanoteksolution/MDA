@@ -171,6 +171,15 @@ export interface BranchStockDashboard {
   recent_movements_count: number;
 }
 
+/** Quantities may arrive as decimal strings; render them with Number(). */
+export interface WarehouseAvailability {
+  warehouse_id: string;
+  warehouse_name: string;
+  on_hand: number | string;
+  reserved: number | string;
+  available: number | string;
+}
+
 export interface BranchAvailability {
   branch_id: string;
   branch_name: string;
@@ -178,12 +187,29 @@ export interface BranchAvailability {
   reserved: number;
   available: number;
   in_transit: number;
+  warehouses?: WarehouseAvailability[];
 }
 
 export interface OtherBranchAvailability {
   branch_id: string;
   branch_name: string;
   available: number;
+  branch_code?: string;
+  on_hand?: number;
+  reserved?: number;
+  in_transit?: number;
+  /** null when the caller may not see that branch's warehouses. */
+  warehouses?: WarehouseAvailability[] | null;
+}
+
+export interface OpenTransferSummary {
+  id: string;
+  request_number: string;
+  status: string;
+  source_branch_name: string;
+  destination_branch_name: string;
+  quantity_requested: number | string;
+  direction: "incoming" | "outgoing";
 }
 
 export interface ProductAvailability {
@@ -193,6 +219,7 @@ export interface ProductAvailability {
   current_branch: BranchAvailability;
   /** Empty when the caller lacks inventory.cross_branch_view — not an error. */
   other_branches: OtherBranchAvailability[];
+  open_transfers?: OpenTransferSummary[];
 }
 
 export interface StockMovementRecord {

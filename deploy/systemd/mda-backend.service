@@ -1,0 +1,21 @@
+# MDA ERP — backend API (gunicorn)
+# Controls the EXISTING Compose container mda_api (project "mda"); never creates a second copy.
+# Source: deploy/systemd/mda-backend.service — install with: make install-systemd
+[Unit]
+Description=MDA ERP backend API (gunicorn) (Compose service "api")
+Documentation=file:///home/ubuntu/projects/mda/docs/deployment/SYSTEMD_OPERATIONS.md
+Wants=docker.service
+After=docker.service network-online.target 
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=HOME=/root
+WorkingDirectory=/home/ubuntu/projects/mda
+ExecStart=/home/ubuntu/projects/mda/scripts/ops/mda-service.sh start api
+ExecStop=/home/ubuntu/projects/mda/scripts/ops/mda-service.sh stop api
+TimeoutStartSec=120
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

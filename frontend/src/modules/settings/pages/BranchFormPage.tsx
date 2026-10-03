@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Store } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,16 @@ export function BranchFormPage({ editId }: { editId?: string }) {
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [companyId, setCompanyId] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [form, setForm] = useState({
     name: "", code: "", address: "", phone: "", email: "", is_active: true,
   });
 
   useEffect(() => {
     settingsApi.company().then((res) => {
+      const name = res.data?.name;
       if (res.data?.id) setCompanyId(res.data.id);
+      if (name) setCompanyName((current) => current || name);
     });
   }, []);
 
@@ -35,6 +39,10 @@ export function BranchFormPage({ editId }: { editId?: string }) {
           address: branch.address || "", phone: branch.phone || "",
           email: branch.email || "", is_active: branch.is_active,
         });
+        // The branch's own company always wins over the caller's default profile,
+        // so an elevated admin editing another company's branch still sees the truth.
+        if (branch.company_name) setCompanyName(branch.company_name);
+        if (branch.company_id) setCompanyId(branch.company_id);
       }
       setLoading(false);
     });
@@ -73,6 +81,20 @@ export function BranchFormPage({ editId }: { editId?: string }) {
       breadcrumbs={["Home", "Settings", editId ? "Edit Branch" : "New Branch"]}
     >
       <form onSubmit={handleSubmit}>
+        <FormSection title="Shop / Company" description="Every branch belongs to one shop. This is set automatically and cannot be changed here.">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Store className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-medium text-foreground">{companyName || "—"}</p>
+              <p className="text-xs text-muted-foreground">
+                This branch operates under {companyName || "this shop"}.{" "}
+                <Link to={scoped("/settings")} className="text-primary hover:underline">Manage Shop / Company</Link>
+              </p>
+            </div>
+          </div>
+        </FormSection>
         <FormSection title="Branch Information">
           <FormGrid>
             <FormField label="Branch Name" required>

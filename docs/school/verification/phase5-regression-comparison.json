@@ -1,0 +1,58 @@
+{
+  "baseline_source": "docs/school/verification/phase4-final-regression.txt",
+  "final_source": "docs/school/verification/phase5-full-regression.txt",
+  "baseline": {
+    "FAILED": [
+      "tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal",
+      "tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense",
+      "tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct",
+      "tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname"
+    ],
+    "ERROR": [
+      "tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant",
+      "tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api",
+      "tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po",
+      "tests/unit/test_performance_step31.py::test_catalog_categories_cached",
+      "tests/unit/test_performance_step31.py::test_pos_profile_short_cache",
+      "tests/unit/test_performance_step31.py::test_product_list_page_query_budget",
+      "tests/unit/test_performance_step31.py::test_product_search_api_query_budget",
+      "tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first",
+      "tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock"
+    ]
+  },
+  "final": {
+    "FAILED": [
+      "tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal",
+      "tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense",
+      "tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct",
+      "tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname"
+    ],
+    "ERROR": [
+      "tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant",
+      "tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api",
+      "tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po",
+      "tests/unit/test_performance_step31.py::test_catalog_categories_cached",
+      "tests/unit/test_performance_step31.py::test_pos_profile_short_cache",
+      "tests/unit/test_performance_step31.py::test_product_list_page_query_budget",
+      "tests/unit/test_performance_step31.py::test_product_search_api_query_budget",
+      "tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first",
+      "tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock"
+    ]
+  },
+  "new": {
+    "FAILED": [],
+    "ERROR": []
+  },
+  "resolved": {
+    "FAILED": [],
+    "ERROR": []
+  },
+  "new_regressions": 0,
+  "result": "7 failed, 889 passed, 43 skipped, 9 errors in 2923.78s (0:48:43)"
+}

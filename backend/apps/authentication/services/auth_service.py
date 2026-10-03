@@ -314,6 +314,7 @@ class UserService:
             "hotel": {"hotel"},
             "pharmacy": {"pharmacy"},
             "futsal": {"futsal"},
+            "school": {"school"},
             "property_management": {"property_management"},
             "housing_rental": {"housing_rental"},
             "office_rental": {"office_rental"},

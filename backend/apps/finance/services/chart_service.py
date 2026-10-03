@@ -114,10 +114,59 @@ class ChartService:
         }
 
     @staticmethod
+    def lock_tenant_finance(tenant_id) -> None:
+        """Serialise first-use finance seeding for one tenant.
+
+        Seeding is check-then-create; without this, concurrent first sales each saw "no chart"
+        and raced on ``uniq_fin_account_tenant_code``. Callers take it only while something is
+        missing, so steady-state postings never contend on it. Must run inside a transaction.
+
+        A transaction-scoped PostgreSQL advisory lock, not ``SELECT ... FOR UPDATE`` on the tenant
+        row: every tenant-scoped insert holds ``FOR KEY SHARE`` on that row (FK check), so a row
+        lock deadlocked sales that had already inserted invoices. Released at commit/rollback.
+        SQLite (tests, desktop) is single-writer and needs no lock.
+        """
+        from django.db import connection
+
+        if connection.vendor != "postgresql" or not tenant_id:
+            return
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [f"finance-seed:{tenant_id}"])
+
+    @staticmethod
+    def _chart_complete(tenant_id) -> bool:
+        codes = set(Account.active_objects().filter(tenant_id=tenant_id).values_list("code", flat=True))
+        return all(code in codes for code, *_ in DEFAULT_ACCOUNTS)
+
+    @staticmethod
+    @transaction.atomic
+    def ensure_finance_ready(*, tenant_id, user=None) -> None:
+        """Chart, account mappings and posting rules for a posting — concurrency-safe and idempotent."""
+        from apps.finance.models import AccountMapping, PostingRule
+        from apps.finance.services.mapping_service import MappingService
+        from apps.finance.services.posting_rule_service import PostingRuleService
+
+        if not tenant_id:
+            return
+        ready = (
+            ChartService._chart_complete(tenant_id)
+            and AccountMapping.active_objects().filter(tenant_id=tenant_id).exists()
+            and PostingRule.active_objects().filter(tenant_id=tenant_id).exists()
+        )
+        if not ready:
+            ChartService.lock_tenant_finance(tenant_id)
+        # After the lock the checks below re-read committed rows, so a waiter creates nothing twice.
+        ChartService.ensure_default_chart(tenant_id=tenant_id, user=user)
+        MappingService.seed_defaults(tenant_id=tenant_id, user=user)
+        PostingRuleService.seed_defaults(tenant_id=tenant_id, user=user)
+
+    @staticmethod
     @transaction.atomic
     def ensure_default_chart(*, tenant_id, user=None, request=None):
         if not tenant_id:
             return []
+        if not ChartService._chart_complete(tenant_id):
+            ChartService.lock_tenant_finance(tenant_id)
         existing = Account.active_objects().filter(tenant_id=tenant_id).count()
         if existing:
             ChartService._ensure_control_flags(tenant_id=tenant_id)
@@ -159,7 +208,11 @@ class ChartService:
 
     @staticmethod
     def _ensure_control_flags(*, tenant_id):
-        Account.active_objects().filter(tenant_id=tenant_id, code__in=CONTROL_ACCOUNT_CODES).update(
+        # Touch only rows that still need fixing: an unconditional UPDATE row-locked every control
+        # account on each posting until commit, and concurrent sales deadlocked on those locks.
+        Account.active_objects().filter(tenant_id=tenant_id, code__in=CONTROL_ACCOUNT_CODES).filter(
+            Q(is_control_account=False) | Q(allow_manual_posting=True)
+        ).update(
             is_control_account=True,
             allow_manual_posting=False,
         )

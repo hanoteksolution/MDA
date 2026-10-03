@@ -150,6 +150,11 @@ export function PlatformShopsPage() {
   const [formError, setFormError] = useState("");
   const [dnsWarning, setDnsWarning] = useState<PlatformDnsWildcardCheck | null>(null);
   const [dnsChecking, setDnsChecking] = useState(false);
+  const [slugCheck, setSlugCheck] = useState<{
+    state: "idle" | "checking" | "available" | "taken" | "reserved" | "invalid" | "error";
+    hostname?: string | null;
+    suggestions?: string[];
+  }>({ state: "idle" });
   const [shopSyncInfo, setShopSyncInfo] = useState({
     slug: "",
     sync_secret: "",
@@ -248,6 +253,40 @@ export function PlatformShopsPage() {
         .finally(() => setDnsChecking(false));
     }, 450);
     return () => window.clearTimeout(timer);
+  }, [showForm, form.subdomain]);
+
+  // Authoritative availability (DB + reserved list). DNS cannot answer this: wildcard DNS
+  // resolves every name, so a resolving host says nothing about whether the name is used.
+  useEffect(() => {
+    if (!showForm) return;
+    const slug = form.subdomain.trim();
+    if (!slug) {
+      setSlugCheck({ state: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setSlugCheck({ state: "checking" });
+    const timer = window.setTimeout(() => {
+      platformApi
+        .checkSlug(slug)
+        .then((res) => {
+          if (cancelled) return;
+          const d = res.data;
+          if (d.available) {
+            setSlugCheck({ state: "available", hostname: d.hostname });
+          } else {
+            const reason = d.reason === "reserved" || d.reason === "invalid" ? d.reason : "taken";
+            setSlugCheck({ state: reason, suggestions: d.suggestions ?? [] });
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setSlugCheck({ state: "error" });
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [showForm, form.subdomain]);
 
 
@@ -376,6 +415,14 @@ export function PlatformShopsPage() {
     }
     if (form.subscription_mode === "existing" && !form.subscription_id) {
       setFormError("Select an existing subscription license.");
+      return;
+    }
+    if (form.subdomain.trim() && ["taken", "reserved", "invalid", "checking"].includes(slugCheck.state)) {
+      setFormError(
+        slugCheck.state === "checking"
+          ? "Still checking the subdomain — try again in a moment."
+          : "Choose an available subdomain before creating the shop."
+      );
       return;
     }
     if (!form.owner_username.trim()) {
@@ -977,6 +1024,43 @@ export function PlatformShopsPage() {
                   value={form.subdomain}
                   onChange={(e) => setForm({ ...form, subdomain: e.target.value })}
                 />
+                {slugCheck.state === "checking" && (
+                  <p className="mt-2 text-xs text-muted-foreground">Checking availability…</p>
+                )}
+                {slugCheck.state === "available" && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                    {slugCheck.hostname} is available
+                  </p>
+                )}
+                {(slugCheck.state === "taken" || slugCheck.state === "reserved" || slugCheck.state === "invalid") && (
+                  <div className="mt-2 text-xs text-destructive">
+                    <p className="font-medium">
+                      {slugCheck.state === "taken"
+                        ? "This subdomain is already taken."
+                        : slugCheck.state === "reserved"
+                          ? "This subdomain is reserved."
+                          : "Use 2–63 lowercase letters, numbers, and hyphens (no leading/trailing hyphen)."}
+                    </p>
+                    {slugCheck.suggestions && slugCheck.suggestions.length > 0 && (
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-foreground">
+                        Try:
+                        {slugCheck.suggestions.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className="rounded-full border px-2 py-0.5 font-mono"
+                            onClick={() => setForm({ ...form, subdomain: item })}
+                          >
+                            {item}
+                          </button>
+                        ))}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {slugCheck.state === "error" && (
+                  <p className="mt-2 text-xs text-muted-foreground">Could not check availability; the server will verify on create.</p>
+                )}
                 {dnsChecking && (
                   <p className="mt-2 text-xs text-muted-foreground">Checking wildcard DNS…</p>
                 )}

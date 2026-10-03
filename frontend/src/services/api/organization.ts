@@ -16,6 +16,8 @@ export interface MyBranchesResponse {
     branches: BranchSummary[];
     default_branch_id: string | null;
     count: number;
+    /** The caller can see every branch of the tenant, so "All branches" is a valid selection. */
+    covers_all?: boolean;
   };
 }
 

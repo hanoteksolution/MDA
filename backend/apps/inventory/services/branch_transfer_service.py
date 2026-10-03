@@ -59,6 +59,13 @@ def _visible_to(qs, *, user, request=None):
     return qs.filter(Q(source_branch_id__in=ids) | Q(destination_branch_id__in=ids))
 
 
+CANCELLABLE_STATUSES = (
+    BranchTransferRequest.STATUS_REQUESTED,
+    BranchTransferRequest.STATUS_APPROVED,
+    BranchTransferRequest.STATUS_RESERVED,
+)
+
+
 def _require_permission(user, codename, branch, action):
     if user is not None and not has_branch_permission(user, codename, branch):
         raise PermissionDenied(f"You cannot {action} for this branch.")
@@ -139,7 +146,10 @@ class BranchTransferService:
     def list(*, status=None, branch_id=None, user=None, request=None):
         qs = (
             BranchTransferRequest.active_objects()
-            .select_related("source_branch", "destination_branch", "source_warehouse", "destination_warehouse")
+            .select_related(
+                "source_branch", "destination_branch", "source_warehouse", "destination_warehouse",
+                "requested_by", "approved_by", "dispatched_by", "received_by",
+            )
             .prefetch_related("lines__product")
         )
         qs = apply_tenant_scope(qs, user=user, request=request)
@@ -151,6 +161,16 @@ class BranchTransferService:
         return qs.order_by("-created_at")
 
     @staticmethod
+    def _warehouse_for(branch, warehouse_id):
+        if warehouse_id:
+            return Warehouse.active_objects().get(pk=warehouse_id)
+        qs = Warehouse.active_objects().filter(branch_id=branch.pk)
+        warehouse = qs.filter(is_default=True).first() or qs.order_by("created_at").first()
+        if warehouse is None:
+            raise BranchTransferError(f"{branch.name} has no warehouse.")
+        return warehouse
+
+    @staticmethod
     def _next_number(*, tenant_id) -> str:
         count = BranchTransferRequest.objects.filter(tenant_id=tenant_id).count() + 1
         return f"BTR-{count:06d}"
@@ -159,7 +179,7 @@ class BranchTransferService:
     @transaction.atomic
     def request_transfer(
         *, source_branch_id, destination_branch_id, source_warehouse_id, destination_warehouse_id,
-        lines: Sequence[TransferLineInput], user=None, notes="",
+        lines: Sequence[TransferLineInput], user=None, notes="", approve=False,
     ):
         if str(source_branch_id) == str(destination_branch_id):
             raise BranchTransferError(
@@ -169,13 +189,21 @@ class BranchTransferService:
         destination_branch = Branch.active_objects().get(pk=destination_branch_id)
         if source_branch.tenant_id != destination_branch.tenant_id:
             raise BranchTransferError("Branches must belong to the same tenant.")
-        source_wh = Warehouse.active_objects().get(pk=source_warehouse_id)
-        destination_wh = Warehouse.active_objects().get(pk=destination_warehouse_id)
+        # A warehouse left blank means that branch's default warehouse (a requesting branch
+        # does not need to know the other branch's warehouse ids).
+        source_wh = BranchTransferService._warehouse_for(source_branch, source_warehouse_id)
+        destination_wh = BranchTransferService._warehouse_for(destination_branch, destination_warehouse_id)
         if source_wh.branch_id != source_branch.pk:
             raise BranchTransferError("Source warehouse does not belong to the source branch.")
         if destination_wh.branch_id != destination_branch.pk:
             raise BranchTransferError("Destination warehouse does not belong to the destination branch.")
-        _require_permission(user, "inventory.transfer", source_branch, "request a transfer")
+        # Either end may raise the request: the destination pulls ("Hodan asks Bakaaro") or the
+        # source pushes. A request moves no stock; approval and reservation stay with the source.
+        if user is not None and not (
+            has_branch_permission(user, "inventory.transfer", source_branch)
+            or has_branch_permission(user, "inventory.transfer", destination_branch)
+        ):
+            raise PermissionDenied("You cannot request a transfer for these branches.")
         if not lines:
             raise BranchTransferError("At least one transfer line is required.")
 
@@ -199,12 +227,19 @@ class BranchTransferService:
             if qty <= 0:
                 raise BranchTransferError("Transfer quantity must be positive.")
             product = Product.active_objects().get(pk=line.product_id)
+            if product.tenant_id and product.tenant_id != source_branch.tenant_id:
+                raise BranchTransferError("Product not found.")
             BranchTransferLine.objects.create(
                 request=req, product=product, quantity_requested=qty, created_by=user,
             )
         write_audit(action="create", module=MODULE, entity=req, branch=source_branch, user=user,
                     new_values={"request_number": req.request_number, "lines": len(lines)})
         _notify_transfer_event(req, event="requested", actor=user)
+        if approve:
+            # Push ("send stock to a branch"): the source approves its own outgoing transfer in the
+            # same step. Same state machine and the same approve() rule (source permission); stock
+            # still moves only at reserve/dispatch, and the destination still receives.
+            BranchTransferService.approve(request_id=req.pk, user=user)
         return BranchTransferService.list(user=user).get(pk=req.pk)
 
     @staticmethod
@@ -402,15 +437,25 @@ class BranchTransferService:
 
     @staticmethod
     @transaction.atomic
-    def cancel(*, request_id, user=None):
-        """Cancels an open (not yet dispatched) transfer, releasing any reservation."""
+    def cancel(*, request_id, user=None, reason=""):
+        """Cancels an open (not yet dispatched) transfer, releasing any reservation.
+
+        Cancellable states are the pre-dispatch ones (``CANCELLABLE_STATUSES``): nothing has left
+        the source warehouse, so only a reservation (if any) needs releasing. Either end may
+        cancel — the source (it owns the stock) or the requesting destination (it no longer needs
+        it). Idempotent: cancelling a cancelled transfer returns it unchanged.
+        """
         req = BranchTransferService._locked(request_id, user)
         if req.status == BranchTransferRequest.STATUS_CANCELLED:
             return req
-        if req.status not in (BranchTransferRequest.STATUS_REQUESTED, BranchTransferRequest.STATUS_APPROVED,
-                               BranchTransferRequest.STATUS_RESERVED):
+        if req.status not in CANCELLABLE_STATUSES:
             raise BranchTransferError("Only a requested, approved or reserved transfer can be cancelled.")
-        _require_permission(user, "inventory.transfer", req.source_branch, "cancel this transfer")
+        if user is not None and not (
+            has_branch_permission(user, "inventory.transfer", req.source_branch)
+            or has_branch_permission(user, "inventory.transfer", req.destination_branch)
+        ):
+            raise PermissionDenied("You cannot cancel this transfer.")
+        previous_status = req.status
 
         if req.status == BranchTransferRequest.STATUS_RESERVED:
             for line in req.lines.select_related("product").order_by("product_id"):
@@ -425,8 +470,11 @@ class BranchTransferService:
         req.status = BranchTransferRequest.STATUS_CANCELLED
         req.updated_by = user
         req.save(update_fields=["status", "updated_by", "updated_at"])
+        # The audit row is the cancellation record (who / when / why / from which state): the
+        # model has no cancelled_* columns and this deliberately avoids a migration.
         write_audit(action="update", module=MODULE, entity=req, branch=req.source_branch, user=user,
-                    new_values={"status": req.status})
+                    old_values={"status": previous_status},
+                    new_values={"status": req.status, "event": "transfer_cancelled", "reason": (reason or "")[:250]})
         _notify_transfer_event(req, event="cancelled", actor=user)
         return req
 

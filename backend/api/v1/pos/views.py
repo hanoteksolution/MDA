@@ -3,6 +3,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -11,8 +12,30 @@ from apps.sales.models import DocumentSequence
 from apps.sales.services.sequence_service import DocumentSequenceService
 from apps.sales.services.sales_service import _resolve_branch
 from apps.platform.services.sync_service import ShopSyncService
+from core.branching import BRANCH_HEADER, get_branch_scope
 from core.responses.api_response import error_response, success_response
 from permissions.base import HasPermission
+
+
+def _checkout_data(request):
+    """Pin the sale to one branch the caller may sell in (POS never deducts another branch's stock).
+
+    The body ``branch_id`` / ``X-Branch-Id`` are untrusted: they are intersected with the branches
+    where the caller holds ``pos.access``; "all" and a body/header mismatch are refused. With neither
+    given, the caller's default branch is used; unscoped platform actors keep the legacy default.
+    """
+    data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+    body_branch = str(data.get("branch_id") or "").strip()
+    header = (request.headers.get(BRANCH_HEADER) or "").strip()
+    if body_branch and header and header.lower() != "all" and body_branch != header:
+        raise ValidationError({"branch_id": "The sale's branch does not match the active branch. Switch branch and retry."})
+    scope = get_branch_scope(
+        request, permission="pos.access", allow_all=False, use_default=True, requested=body_branch or None
+    )
+    if scope.unscoped and not body_branch and not header:
+        return data
+    data["branch_id"] = str(scope.require_single("POS checkout"))
+    return data
 
 
 class PosCheckoutView(APIView):
@@ -25,8 +48,9 @@ class PosCheckoutView(APIView):
             ShopSyncService.assert_subscription_usable()
         except ValueError as e:
             return error_response(message=str(e), status=status.HTTP_402_PAYMENT_REQUIRED)
+        data = _checkout_data(request)
         try:
-            result = PosService.checkout(data=request.data, user=request.user)
+            result = PosService.checkout(data=data, user=request.user)
         except ValueError as e:
             return error_response(message=str(e), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:

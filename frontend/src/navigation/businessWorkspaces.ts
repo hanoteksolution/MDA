@@ -7,6 +7,7 @@ import {
   Truck,
   Receipt,
   Users,
+  ArrowLeftRight,
   Building2,
   Wallet,
   BarChart3,
@@ -720,6 +721,13 @@ export function overviewNavSections(
     if (financeItems.length) sections.push({ label: "Central Finance", items: financeItems });
   }
 
+  // Multi-branch operations: company-wide branch dashboard/reports and inter-branch transfers.
+  const branchItems: WorkspaceNavItem[] = [
+    { to: "/branches", label: "Branches", icon: Building2, permission: "reports.view", end: true },
+    { to: "/branches/transfers", label: "Branch transfers", icon: ArrowLeftRight, permission: "inventory.transfer" },
+  ].filter((item) => permOk(item.permission, hasPermission, elevated));
+  if (branchItems.length) sections.push({ label: "Branches", items: branchItems });
+
   const systemItems: WorkspaceNavItem[] = [];
   // Administration workspace only when the user can manage users or roles.
   if (opts.includeAdmin !== false && permOk(["users.view", "roles.view"], hasPermission, elevated)) {
@@ -735,6 +743,8 @@ export function overviewNavSections(
     if (elevated) {
       // Provider infrastructure (SMS / payments) is Super Admin only; the API enforces the same.
       systemItems.push({ to: "/platform/integrations", label: "Integrations", icon: Plug });
+      // Cross-tenant subscription billing is elevated-only too.
+      systemItems.push({ to: "/platform/billing", label: "Billing", icon: Receipt });
     }
     if (permOk("subscriptions.manage", hasPermission, elevated)) {
       systemItems.push({
@@ -801,7 +811,12 @@ export function platformNavSections(
           { to: "/platform", label: "Shops", icon: Globe2, permission: "platform.view", end: true },
           { to: "/platform/demos", label: "Demo Accounts", icon: FlaskConical, permission: "platform.view" },
           { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard, permission: "subscriptions.manage" },
-          ...(elevated ? [{ to: "/platform/integrations", label: "Integrations", icon: Plug }] : []),
+          ...(elevated
+            ? [
+                { to: "/platform/billing", label: "Billing", icon: Receipt },
+                { to: "/platform/integrations", label: "Integrations", icon: Plug },
+              ]
+            : []),
           { to: "/modules", label: "All workspaces", icon: LayoutGrid },
         ].filter((i) => can(i.permission)),
       },

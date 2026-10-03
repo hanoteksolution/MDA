@@ -1,0 +1,14 @@
+
+> mda-erp-frontend@0.1.0 test
+> vitest run --run src/modules/school/sis/fees.test.ts
+
+
+ RUN  v3.2.7 /home/ubuntu/projects/mda/frontend
+
+ ✓ src/modules/school/sis/fees.test.ts (5 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  05:43:12
+   Duration  547ms (transform 129ms, setup 0ms, collect 158ms, tests 6ms, environment 0ms, prepare 143ms)
+

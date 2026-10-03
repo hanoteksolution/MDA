@@ -259,3 +259,89 @@ def test_concurrent_duplicate_creation_returns_conflict(onboard_ready):
     assert not Tenant.objects.filter(slug__regex=r"^coffee\d+$").exists()
     conflict = next(r for r in results if r.status_code == 409)
     assert conflict.json()["code"] == "SUBDOMAIN_TAKEN"
+
+
+@pytest.mark.django_db
+def test_deleted_shop_releases_its_workspace_url(onboard_ready):
+    from apps.platform.models import TenantDomain
+
+    def _create(name, owner):
+        return PlatformService.create_shop(
+            data={
+                "name": name,
+                "slug": "reuse",
+                "business_type_code": "retail",
+                "owner": {"username": owner, "email": f"{owner}@reuse.test", "password": "pass12345"},
+            },
+            user=None,
+        )[0]
+
+    old = _create("Reuse One", "reuse_a")
+    assert check_subdomain_availability("reuse")["available"] is False
+    PlatformService.delete_shop(tenant=old, user=None)
+
+    assert check_subdomain_availability("reuse")["available"] is True
+    new = _create("Reuse Two", "reuse_b")
+    assert new.slug == "reuse" and new.pk != old.pk
+    old.refresh_from_db()
+    assert old.deleted_at is not None and old.slug.startswith("reuse-deleted-")
+    live = TenantDomain.objects.filter(domain="reuse.erp.safaritechno.com", deleted_at__isnull=True)
+    assert [d.tenant_id for d in live] == [new.pk]
+
+
+@pytest.mark.django_db
+def test_soft_deleted_legacy_slug_is_reclaimable(onboard_ready):
+    """Rows deleted before slugs were released on delete are freed on claim."""
+    from django.utils import timezone
+
+    Tenant.objects.create(name="Old", slug="legacyname", is_active=False, deleted_at=timezone.now())
+    assert check_subdomain_availability("legacyname")["available"] is True
+    tenant, _ = PlatformService.create_shop(
+        data={
+            "name": "New",
+            "slug": "legacyname",
+            "business_type_code": "retail",
+            "owner": {"username": "legacy_o", "email": "o@legacy.test", "password": "pass12345"},
+        },
+        user=None,
+    )
+    assert tenant.slug == "legacyname"
+
+
+@pytest.mark.django_db
+def test_public_registration_can_claim_its_own_slug_hold(onboard_ready):
+    """The registration being provisioned holds its slug; that hold must not block create_shop."""
+    from apps.platform.models import RegistrationRequest
+    from apps.platform.services.registration_service import RegistrationService
+
+    registration = RegistrationService.create(
+        data={
+            "name": "Kaafi School",
+            "slug": "kaafi-school",
+            "business_type_code": "retail",
+            "plan_code": "starter",
+            "contact_email": "owner@kaafi.test",
+            "owner": {"username": "kaafi_owner", "email": "owner@kaafi.test", "password": "Str0ng-Pass-9271"},
+            "agreements": {"terms_accepted": True, "privacy_accepted": True},
+        },
+        idempotency_key="k" * 24,
+    )
+    assert registration.status == RegistrationRequest.STATUS_READY
+    assert Tenant.objects.filter(slug="kaafi-school", deleted_at__isnull=True).count() == 1
+    assert check_subdomain_availability("kaafi-school")["available"] is False
+
+
+def test_school_permissions_are_assignable_only_for_school_tenants(monkeypatch):
+    """The user-form permission matrix must include the school group for school workspaces."""
+    from apps.authentication.services.auth_service import UserService
+
+    monkeypatch.setattr(
+        "apps.platform.services.module_service.usable_module_codes",
+        lambda **_: {"school", "sales"},
+    )
+    assert "school" in UserService._permission_modules_for_tenant(object())
+    monkeypatch.setattr(
+        "apps.platform.services.module_service.usable_module_codes",
+        lambda **_: {"sales"},
+    )
+    assert "school" not in UserService._permission_modules_for_tenant(object())

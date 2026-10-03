@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Scholarship requested and approved through UI",
+    "Cross-campus billing customer rejected with visible error",
+    "Fee preview net 75, issue and atomic ledger posting",
+    "Receipt collected once and printable receipt exported to PDF",
+    "Partial allocation and excess allocation rejection",
+    "Refund, reasoned reversal and approved credit through UI",
+    "Operational AR 10 equals posted GL; unallocated advance 40",
+    "Responsive at 1366/768/390; teacher controls hidden and API denied"
+  ],
+  "pageErrors": [],
+  "result": "PASS"
+}

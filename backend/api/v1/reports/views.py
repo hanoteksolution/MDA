@@ -122,6 +122,22 @@ class BranchReportView(APIView):
         return success_response(data=data)
 
 
+class BranchOverviewView(APIView):
+    """Branch Management list: status, manager, structure counts and headline figures per branch."""
+
+    permission_classes = [IsAuthenticated, HasPermission("reports.view")]
+
+    def get(self, request):
+        from apps.reports.services.branch_report_service import branch_overview
+
+        scope = resolve_report_scope(request=request)
+        return success_response(data=branch_overview(
+            scope=scope,
+            date_from=request.query_params.get("date_from") or None,
+            date_to=request.query_params.get("date_to") or None,
+        ))
+
+
 class StaffPerformanceView(APIView):
     permission_classes = [IsAuthenticated, HasPermission("staff.performance.view")]
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField, FormGrid, FormSection } from "@/components/forms/FormField";
 import { LoginBrandingPanel } from "@/components/auth/LoginBrandingPanel";
+import { SafariLogo } from "@/components/brand/SafariLogo";
 import { setupApi } from "@/services/api/setup";
 import { useAuthStore } from "@/store/authStore";
 import { postLoginPath } from "@/navigation/postLogin";
@@ -105,7 +106,7 @@ export function SetupPage() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <div className="lg:w-[45%] order-2 lg:order-1">
+      <div className="lg:w-[45%]">
         <LoginBrandingPanel />
       </div>
 
@@ -115,6 +116,7 @@ export function SetupPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mx-auto w-full max-w-xl"
         >
+          <SafariLogo size="sm" className="mb-6 lg:hidden" />
           <div className="mb-8">
             <h1 className="text-2xl font-bold tracking-tight">Offline-only setup</h1>
             <p className="mt-2 text-sm text-muted-foreground">

@@ -40,7 +40,8 @@ Key conventions: tenant-owned models use `TenantScopedModel`; query scoping goes
 
 Commands come from the `Makefile` (run `make help`):
 
-- `make migrate`, `make bootstrap`, `make seed-demo`, `make run-backend` (:8000), `make run-frontend` (:5173), `make dev`
+- Local dev: `make local-migrate`, `make local-bootstrap`, `make seed-demo`, `make run-backend` (:8000), `make run-frontend` (:5173), `make dev`, `make local-build`
+- Production ops (`make status|health|restart-*|build-*|rebuild-*|deploy-*|rollback-*|migrate|bootstrap`) act on the LIVE Compose project via systemd units — see `docs/deployment/SYSTEMD_OPERATIONS.md`. Never run build/rebuild/deploy/migrate without explicit authorization.
 - Frontend: `cd frontend && npm run dev | build | test` (`build` = `tsc -b && vite build`, `test` = `vitest run`)
 - Backend env template: `backend/.env.example`. Environment has no `python` alias; use `python3`.
 

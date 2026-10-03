@@ -1,0 +1,93 @@
+...........................................EEE.F..........F............. [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 23%]
+........................................................................ [ 31%]
+F....................................................................... [ 38%]
+........................................................................ [ 46%]
+........................................................................ [ 54%]
+..............................................................EEEEEE.... [ 62%]
+............FF.F........................................................ [ 70%]
+........................................................................ [ 77%]
+........F.........F..................................................... [ 85%]
+..............................................................ssssssssss [ 93%]
+sssssssss.s..sssssssssssssssssss.ss.......................F.             [100%]
+==================================== ERRORS ====================================
+______________ ERROR at setup of test_product_list_scoped_via_api ______________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+__________ ERROR at setup of test_barcode_lookup_blocks_cross_tenant ___________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+_____ ERROR at setup of test_purchase_order_receive_blocks_cross_tenant_po _____
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+__________ ERROR at setup of test_search_for_pos_exact_barcode_first ___________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+___ ERROR at setup of test_serialize_products_batch_avoids_n_plus_one_stock ____
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+____________ ERROR at setup of test_product_search_api_query_budget ____________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+____________ ERROR at setup of test_product_list_page_query_budget _____________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+_______________ ERROR at setup of test_catalog_categories_cached _______________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+________________ ERROR at setup of test_pos_profile_short_cache ________________
+E   apps.platform.services.module_dependency_service.ModuleDependencyError: Unknown module code(s): products.
+=================================== FAILURES ===================================
+/home/ubuntu/projects/mda/backend/apps/finance/models/journal.py:211: apps.finance.models.journal.ImmutableJournalError: Posted journal lines cannot be modified. Use a reversal.
+/home/ubuntu/projects/mda/backend/tests/unit/test_backfill_health_step35.py:151: assert 0 >= 1
+/home/ubuntu/projects/mda/backend/tests/unit/test_demo_tenant_step39.py:201: AssertionError: assert None == 'adc11773-fcf4-4a32-88e0-3a95f9f316f6'
+/home/ubuntu/projects/mda/backend/tests/unit/test_pharmacy_rx_fefo_step60.py:109: AssertionError: assert Decimal('0.0000') == (Decimal('0.0000') - Decimal('7'))
+/home/ubuntu/projects/mda/backend/tests/unit/test_pharmacy_rx_fefo_step60.py:132: Failed: DID NOT RAISE <class 'apps.pharmacy.services.prescription_service.PrescriptionError'>
+/home/ubuntu/projects/mda/backend/tests/unit/test_pharmacy_rx_fefo_step60.py:192: AssertionError: assert Decimal('0.0000') == (Decimal('0.0000') - Decimal('2'))
+/home/ubuntu/projects/mda/backend/apps/school/services/sis_common.py:13: rest_framework.exceptions.ValidationError: {'student_id': ErrorDetail(string='Related record belongs to another campus.', code='invalid')}
+/home/ubuntu/projects/mda/backend/apps/school/services/sis_common.py:13: rest_framework.exceptions.ValidationError: {'document_type_id': ErrorDetail(string='Related record belongs to another campus.', code='invalid')}
+/home/ubuntu/projects/mda/backend/apps/platform/services/domain_utils.py:66: ValueError: Use only lowercase letters, numbers, and hyphens; do not start or end with a hyphen.
+=========================== short test summary info ============================
+SKIPPED [1] tests/unit/test_branch_postgresql.py:46: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:55: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:66: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:77: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:115: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:146: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:185: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:215: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:260: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:310: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:341: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:399: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:437: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:482: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:526: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:557: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:648: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:664: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_branch_postgresql.py:682: Requires real PostgreSQL transactions, locking and partial indexes.
+SKIPPED [1] tests/unit/test_school_foundation.py:291: PostgreSQL is required to exercise row-level locking.
+SKIPPED [1] tests/unit/test_school_ops_postgresql.py:43: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_ops_postgresql.py:52: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_ops_postgresql.py:62: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_ops_postgresql.py:74: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_postgresql.py:55: Requires real PostgreSQL transactions and catalog.
+SKIPPED [6] tests/unit/test_school_postgresql.py:66: Requires real PostgreSQL transactions and catalog.
+SKIPPED [6] tests/unit/test_school_postgresql.py:88: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_postgresql.py:113: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_postgresql.py:134: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_sis_postgresql.py:23: Requires real PostgreSQL transactions and catalog.
+SKIPPED [1] tests/unit/test_school_sis_postgresql.py:36: Requires real PostgreSQL transactions and catalog.
+ERROR tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api
+ERROR tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant
+ERROR tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po
+ERROR tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first
+ERROR tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock
+ERROR tests/unit/test_performance_step31.py::test_product_search_api_query_budget
+ERROR tests/unit/test_performance_step31.py::test_product_list_page_query_budget
+ERROR tests/unit/test_performance_step31.py::test_catalog_categories_cached
+ERROR tests/unit/test_performance_step31.py::test_pos_profile_short_cache - a...
+FAILED tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal
+FAILED tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense
+FAILED tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short
+FAILED tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct
+FAILED tests/unit/test_school_sis.py::test_cross_campus_transfer_preserves_private_identity_and_history
+FAILED tests/unit/test_school_sis.py::test_file_cannot_be_relinked_to_bypass_its_read_permission
+FAILED tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname - V...
+finished

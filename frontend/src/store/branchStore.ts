@@ -18,6 +18,8 @@ import { organizationApi, type BranchSummary } from "@/services/api/organization
 
 export interface BranchState {
   branches: BranchSummary[];
+  /** True when the user may select the consolidated "All branches" view. */
+  coversAll: boolean;
   activeBranchId: string | null;
   loading: boolean;
   loaded: boolean;
@@ -35,6 +37,7 @@ export interface BranchState {
 
 export const useBranchStore = create<BranchState>((set, get) => ({
   branches: [],
+  coversAll: false,
   activeBranchId: getActiveBranchId(),
   loading: false,
   loaded: false,
@@ -46,9 +49,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const response = await organizationApi.myBranches();
       const branches = response.data.branches ?? [];
+      const coversAll = Boolean(response.data.covers_all);
       const current = get().activeBranchId;
       const stillValid =
-        current === ALL_BRANCHES || branches.some((b) => b.id === current);
+        (current === ALL_BRANCHES && coversAll) || branches.some((b) => b.id === current);
       const next = stillValid
         ? current
         : response.data.default_branch_id ?? branches[0]?.id ?? null;
@@ -56,6 +60,7 @@ export const useBranchStore = create<BranchState>((set, get) => ({
       if (next !== current) setActiveBranchId(next);
       set((state) => ({
         branches,
+        coversAll,
         activeBranchId: next,
         loading: false,
         loaded: true,
@@ -75,6 +80,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
       clearActiveBranchId();
       set((state) => ({ activeBranchId: null, scopeVersion: state.scopeVersion + 1 }));
       return true;
+    }
+    if (branchId === ALL_BRANCHES && !get().coversAll) {
+      set({ error: "You do not have access to every branch." });
+      return false;
     }
     if (branchId !== ALL_BRANCHES && !get().branches.some((b) => b.id === branchId)) {
       // A branch the user has no access to never enters the store.
@@ -99,6 +108,7 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     clearActiveBranchId();
     set({
       branches: [],
+      coversAll: false,
       activeBranchId: null,
       loading: false,
       loaded: false,

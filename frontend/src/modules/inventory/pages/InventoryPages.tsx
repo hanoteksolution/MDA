@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProductThumbnail } from "@/components/catalog/ProductImage";
 import { CrossBranchAvailability } from "@/modules/inventory/components/CrossBranchAvailability";
+import { SendStockDialog, type SendLine } from "@/modules/branches/components/SendStockDialog";
+import { useBranchStore } from "@/store/branchStore";
 import { inventoryApi } from "@/services/api/catalog";
 import { useScopedPath } from "@/hooks/useScopedPath";
 import { productModuleCode } from "@/utils/productModuleScope";
@@ -358,8 +360,11 @@ export function StockPage() {
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState("");
   const [restockTarget, setRestockTarget] = useState<RestockTarget | null>(null);
+  const [sendLine, setSendLine] = useState<SendLine | null>(null);
   const { hasPermission } = usePermissions();
   const canAdjust = hasPermission("inventory.adjust");
+  // "Send to branch" needs transfer rights in the acting branch (the API re-checks).
+  const canSendStock = useBranchStore((s) => Boolean(s.activeBranchId && s.activeBranchId !== "all" && s.canInBranch("inventory.transfer")));
 
   const { data: items, loading, page, setPage, pageSize, setPageSize, total, reload } = usePaginatedList(
     inventoryApi.list,
@@ -390,10 +395,17 @@ export function StockPage() {
     {
       key: "elsewhere",
       header: "Elsewhere",
-      cell: (r) =>
-        r.is_out_of_stock || r.is_low_stock ? (
-          <CrossBranchAvailability productId={r.product_id} />
-        ) : null,
+      cell: (r) => (
+        <div className="flex flex-wrap items-start gap-1">
+          {(r.is_out_of_stock || r.is_low_stock) && <CrossBranchAvailability productId={r.product_id} />}
+          {canSendStock && Number(r.available_quantity) > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSendLine({ productId: r.product_id, productName: r.product_name,
+              available: Number(r.available_quantity), quantity: "1" })}>
+              Send to branch
+            </Button>
+          )}
+        </div>
+      ),
       exportValue: () => "",
     },
     ...(canAdjust
@@ -450,6 +462,7 @@ export function StockPage() {
         onClose={() => setRestockTarget(null)}
         onDone={reload}
       />
+      <SendStockDialog open={Boolean(sendLine)} initial={sendLine} onClose={() => setSendLine(null)} onCreated={() => reload()} />
     </PageLayout>
   );
 }

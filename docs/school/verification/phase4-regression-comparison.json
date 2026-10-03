@@ -1,0 +1,76 @@
+{
+  "baseline_source": "/tmp/claude-0/-home-ubuntu-projects-mda/051f953f-d61b-4f86-9abb-388b71ff9109/scratchpad/full_sqlite.log",
+  "final_source": "/tmp/claude-0/-home-ubuntu-projects-mda/6df56ffd-82ea-4900-a4a3-8755ea93ee20/scratchpad/full.txt",
+  "baseline_note": "Recorded pre-Phase-4 Branch full regression: 12 failures/9 errors. Its five original SIS failures were fixed and verified in Phase 3 (phase3-sis-final.txt); effective known debt entering Phase 4 was 7 failures/9 errors. Both newly failing SIS tests passed in the final Phase 3 suite.",
+  "baseline": {
+    "FAILED": [
+      "tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal",
+      "tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense",
+      "tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct",
+      "tests/unit/test_school_sis.py::test_conversion_atomic_and_duplicate",
+      "tests/unit/test_school_sis.py::test_direct_and_current",
+      "tests/unit/test_school_sis.py::test_guardian_required_roll_capacity",
+      "tests/unit/test_school_sis.py::test_scope_and_status_patch",
+      "tests/unit/test_school_sis.py::test_transfer_withdraw_reenroll",
+      "tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname"
+    ],
+    "ERROR": [
+      "tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant",
+      "tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api",
+      "tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po",
+      "tests/unit/test_performance_step31.py::test_catalog_categories_cached",
+      "tests/unit/test_performance_step31.py::test_pos_profile_short_cache",
+      "tests/unit/test_performance_step31.py::test_product_list_page_query_budget",
+      "tests/unit/test_performance_step31.py::test_product_search_api_query_budget",
+      "tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first",
+      "tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock"
+    ]
+  },
+  "final": {
+    "FAILED": [
+      "tests/unit/test_accounting_alerts_step35.py::test_scan_notifies_on_unbalanced_journal",
+      "tests/unit/test_backfill_health_step35.py::test_backfill_commit_posts_invoice_and_expense",
+      "tests/unit/test_demo_tenant_step39.py::test_create_demo_async_seed_marks_pending",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_dispense_fails_when_batch_short",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_manual_dispense_deducts_fefo_and_inventory",
+      "tests/unit/test_pharmacy_rx_fefo_step60.py::test_pos_fill_without_double_stock_deduct",
+      "tests/unit/test_school_sis.py::test_cross_campus_transfer_preserves_private_identity_and_history",
+      "tests/unit/test_school_sis.py::test_file_cannot_be_relinked_to_bypass_its_read_permission",
+      "tests/unit/test_tenant_foundation.py::test_valid_slug_and_hostname"
+    ],
+    "ERROR": [
+      "tests/integration/test_tenant_isolation_api.py::test_barcode_lookup_blocks_cross_tenant",
+      "tests/integration/test_tenant_isolation_api.py::test_product_list_scoped_via_api",
+      "tests/integration/test_tenant_isolation_api.py::test_purchase_order_receive_blocks_cross_tenant_po",
+      "tests/unit/test_performance_step31.py::test_catalog_categories_cached",
+      "tests/unit/test_performance_step31.py::test_pos_profile_short_cache",
+      "tests/unit/test_performance_step31.py::test_product_list_page_query_budget",
+      "tests/unit/test_performance_step31.py::test_product_search_api_query_budget",
+      "tests/unit/test_performance_step31.py::test_search_for_pos_exact_barcode_first",
+      "tests/unit/test_performance_step31.py::test_serialize_products_batch_avoids_n_plus_one_stock"
+    ]
+  },
+  "new": {
+    "FAILED": [
+      "tests/unit/test_school_sis.py::test_cross_campus_transfer_preserves_private_identity_and_history",
+      "tests/unit/test_school_sis.py::test_file_cannot_be_relinked_to_bypass_its_read_permission"
+    ],
+    "ERROR": []
+  },
+  "resolved_before_phase4": {
+    "FAILED": [
+      "tests/unit/test_school_sis.py::test_conversion_atomic_and_duplicate",
+      "tests/unit/test_school_sis.py::test_direct_and_current",
+      "tests/unit/test_school_sis.py::test_guardian_required_roll_capacity",
+      "tests/unit/test_school_sis.py::test_scope_and_status_patch",
+      "tests/unit/test_school_sis.py::test_transfer_withdraw_reenroll"
+    ],
+    "ERROR": []
+  },
+  "gate": "FAIL",
+  "new_regressions": 2,
+  "tests_rerun_for_finalization": false
+}

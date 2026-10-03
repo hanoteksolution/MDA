@@ -106,6 +106,30 @@ class JournalService:
         n = JournalEntry.objects.filter(tenant_id=tenant_id).count() + 1
         return f"JE-{n:05d}"
 
+    NUMBER_RETRIES = 10
+
+    @staticmethod
+    def _create_numbered(*, tenant_id, **fields) -> JournalEntry:
+        """Create an entry with the next ``JE-`` number, safe under concurrent postings.
+
+        The number is count-based, so two concurrent postings can pick the same one. PostgreSQL
+        makes the second insert wait for the first and then raise on ``uniq_fin_je_tenant_number``;
+        the savepoint keeps the outer (sale) transaction usable and the recount then sees the
+        committed row. Only that constraint is retried — every other error propagates.
+        """
+        from django.db import IntegrityError
+
+        for attempt in range(JournalService.NUMBER_RETRIES):
+            try:
+                with transaction.atomic():
+                    return JournalEntry.objects.create(
+                        tenant_id=tenant_id, entry_number=JournalService._next_number(tenant_id=tenant_id), **fields
+                    )
+            except IntegrityError as exc:
+                if "uniq_fin_je_tenant_number" not in str(exc) or attempt == JournalService.NUMBER_RETRIES - 1:
+                    raise
+        raise AssertionError("unreachable")
+
     @staticmethod
     def _validate_lines(lines) -> tuple[Decimal, Decimal]:
         try:
@@ -232,9 +256,8 @@ class JournalService:
 
         # Create as draft so lines can attach; then promote to posted.
         try:
-            entry = JournalEntry.objects.create(
+            entry = JournalService._create_numbered(
                 tenant_id=tenant_id,
-                entry_number=JournalService._next_number(tenant_id=tenant_id),
                 entry_date=entry_date,
                 description=(data.get("description") or "Manual entry").strip(),
                 status=JournalEntry.STATUS_DRAFT,

@@ -45,6 +45,11 @@ import {
   PlatformShopsPage,
   PlatformSubscriptionsPage,
   PlatformIntegrationsPage,
+  PlatformBillingPage,
+  BranchesPage,
+  BranchDetailPage,
+  BranchTransfersPage,
+  PlatformBillingTenantPage,
   PlatformTenantsPage,
   PlatformTenantDetailPage,
   PlatformShopDetailPage,
@@ -491,6 +496,46 @@ export function AppRouter() {
             element={
               <PermissionGuard permission="platform.view" elevatedOnly>
                 <PlatformIntegrationsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/branches"
+            element={
+              <PermissionGuard permission="reports.view">
+                <BranchesPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/branches/transfers"
+            element={
+              <PermissionGuard permission="inventory.transfer">
+                <BranchTransfersPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/branches/:branchId"
+            element={
+              <PermissionGuard permission="reports.view">
+                <BranchDetailPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/billing"
+            element={
+              <PermissionGuard permission="platform.view" elevatedOnly>
+                <PlatformBillingPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/platform/billing/tenants/:tenantId"
+            element={
+              <PermissionGuard permission="platform.view" elevatedOnly>
+                <PlatformBillingTenantPage />
               </PermissionGuard>
             }
           />

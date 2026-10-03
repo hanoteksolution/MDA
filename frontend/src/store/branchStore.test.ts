@@ -52,9 +52,9 @@ const BAKAARO = {
 };
 const FORBIDDEN_ID = "99999999-9999-9999-9999-999999999999";
 
-function respond(branches = [HODAN, BAKAARO], defaultId: string | null = HODAN.id) {
+function respond(branches = [HODAN, BAKAARO], defaultId: string | null = HODAN.id, coversAll = true) {
   myBranches.mockResolvedValue({
-    data: { branches, default_branch_id: defaultId, count: branches.length },
+    data: { branches, default_branch_id: defaultId, count: branches.length, covers_all: coversAll },
   });
 }
 
@@ -148,6 +148,13 @@ describe("branchStore", () => {
     useBranchStore.getState().selectAllBranches();
     expect(useBranchStore.getState().activeBranchId).toBe(ALL_BRANCHES);
     expect(useBranchStore.getState().activeBranch()).toBeNull();
+  });
+
+  it("refuses 'all branches' when the user cannot see every branch of the tenant", async () => {
+    respond([HODAN, BAKAARO], HODAN.id, false);
+    await useBranchStore.getState().loadBranches();
+    expect(useBranchStore.getState().setActiveBranch(ALL_BRANCHES)).toBe(false);
+    expect(useBranchStore.getState().activeBranchId).toBe(HODAN.id);
   });
 
   it("handles a user with no branches without selecting one", async () => {

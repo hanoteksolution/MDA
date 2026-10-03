@@ -10,7 +10,7 @@ const FEEDBACK: Record<
 > = {
   empty: null,
   checking: {
-    tone: "text-slate-600 dark:text-slate-300",
+    tone: "text-muted-foreground",
     message: () => "Checking availability…",
   },
   available: {
@@ -62,13 +62,13 @@ export function WorkspaceUrlField({
     <div className="space-y-4">
       <div>
         <label htmlFor="workspace-slug" className="mb-1.5 block text-sm font-medium">
-          Workspace URL <span className="text-red-500">*</span>
+          Workspace URL <span className="text-destructive" aria-hidden>*</span>
         </label>
         <div
           className={cn(
-            "flex flex-col overflow-hidden rounded-xl border bg-slate-50 focus-within:ring-2 focus-within:ring-emerald-400 sm:flex-row sm:items-stretch dark:bg-slate-950",
-            invalid || fieldError ? "border-red-400" : "border-slate-200 dark:border-slate-700",
-            state === "available" && "border-emerald-400"
+            "flex flex-col overflow-hidden rounded-xl border bg-brand-surface focus-within:ring-2 focus-within:ring-ring sm:flex-row sm:items-stretch",
+            invalid || fieldError ? "border-destructive" : "border-input",
+            state === "available" && "border-brand-primary"
           )}
         >
           <Input
@@ -82,7 +82,7 @@ export function WorkspaceUrlField({
             className="border-0 bg-transparent font-mono text-sm focus-visible:ring-0"
             placeholder="barista"
           />
-          <span className="shrink-0 border-t px-3 py-2 text-xs text-muted-foreground sm:flex sm:items-center sm:border-l sm:border-t-0 dark:border-slate-800">
+          <span className="shrink-0 border-t border-border bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground sm:flex sm:items-center sm:border-l sm:border-t-0">
             .{baseDomain}
           </span>
         </div>
@@ -112,7 +112,7 @@ export function WorkspaceUrlField({
                 key={item}
                 type="button"
                 onClick={() => onSelectSuggestion(item)}
-                className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-slate-900 dark:text-emerald-300"
+                className="rounded-full border border-brand-primary/25 bg-brand-surface px-3 py-1.5 font-mono text-xs font-semibold text-brand-soft-foreground shadow-sm transition hover:border-brand-primary hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {item}
               </button>
@@ -123,12 +123,12 @@ export function WorkspaceUrlField({
 
       <div
         id="workspace-url-preview"
-        className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950"
+        className="rounded-2xl border border-border bg-brand-soft p-4"
       >
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Your workspace will be available at
         </p>
-        <p className="mt-1 break-all font-mono text-sm font-semibold text-slate-900 dark:text-white">
+        <p className="mt-1 break-all font-mono text-sm font-semibold text-brand-deep">
           {httpsUrl || `https://your-company.${baseDomain}`}
         </p>
       </div>

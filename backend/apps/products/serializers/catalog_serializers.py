@@ -2,17 +2,37 @@ from apps.products.models import Brand, Category, Product, Unit
 from apps.products.services.attribute_service import AttributeService
 
 
-def stock_totals_for_products(product_ids) -> dict[str, dict]:
-    """Aggregate inventory in one query for a batch of products."""
+def stock_branch_ids(request):
+    """Branches whose stock a product listing may show, or None for "no branch filter".
+
+    Stock is per branch (Inventory(product, warehouse) → warehouse.branch): a Hodan user must see
+    Hodan's stock, never the tenant-wide sum. One selected branch → that branch; no selection →
+    the caller's accessible branches; unscoped platform actors → unfiltered. A caller with no
+    branch access at all keeps the legacy unfiltered figure rather than breaking single-shop users.
+    """
+    if request is None or not getattr(getattr(request, "user", None), "is_authenticated", False):
+        return None
+    from core.branching import get_branch_scope
+
+    scope = get_branch_scope(request, permission=None)
+    if scope.unscoped or not scope.branch_ids:
+        return None
+    return list(scope.branch_ids)
+
+
+def stock_totals_for_products(product_ids, branch_ids=None) -> dict[str, dict]:
+    """Aggregate inventory in one query for a batch of products (optionally for some branches)."""
     if not product_ids:
         return {}
     from django.db.models import Sum
 
     from apps.inventory.models import Inventory
 
+    qs = Inventory.active_objects().filter(product_id__in=product_ids)
+    if branch_ids is not None:
+        qs = qs.filter(warehouse__branch_id__in=branch_ids)
     rows = (
-        Inventory.active_objects()
-        .filter(product_id__in=product_ids)
+        qs
         .values("product_id")
         .annotate(on_hand=Sum("quantity"), reserved=Sum("reserved_quantity"))
     )
@@ -98,14 +118,17 @@ def serialize_product(
         data["attributes"] = AttributeService.values_for_product(p)
     if include_stock:
         stock_row = (stock_map or {}).get(str(p.id))
-        if stock_row is not None:
-            _apply_stock_fields(data, stock_row)
+        if stock_map is not None:
+            _apply_stock_fields(data, stock_row)  # absent from the batch = no stock in scope
         else:
             from apps.inventory.models import Inventory
 
+            inv_qs = Inventory.active_objects().filter(product=p)
+            branch_ids = stock_branch_ids(request)
+            if branch_ids is not None:
+                inv_qs = inv_qs.filter(warehouse__branch_id__in=branch_ids)
             inv_rows = list(
-                Inventory.active_objects()
-                .filter(product=p)
+                inv_qs
                 .select_related("warehouse")
                 .order_by("-quantity")
             )
@@ -133,7 +156,7 @@ def serialize_products_batch(
     include_attributes=True,
 ) -> list[dict]:
     items = list(products)
-    stock_map = stock_totals_for_products([p.id for p in items]) if include_stock else None
+    stock_map = stock_totals_for_products([p.id for p in items], stock_branch_ids(request)) if include_stock else None
     return [
         serialize_product(
             p,

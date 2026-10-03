@@ -65,8 +65,9 @@ owner, user, email, or tenant id — verified by
 `WorkspaceUrlField.tsx`: `empty`, `checking`, `available`, `taken`, `reserved`,
 `invalid`, `error` (network failure). The workspace step in `OnboardingPage.tsx`
 debounces the availability call by `WORKSPACE_CHECK_DEBOUNCE_MS` (400ms) after
-each keystroke, shows inline feedback (no toasts), and disables **Create
-Workspace** unless the state is `available`. Company-name-derived suggestions
+each keystroke, shows inline feedback (no toasts), and disables **Continue**
+on the URL step unless the state is `available` (the workspace is created later,
+from the **Review** step). Company-name-derived suggestions
 only pre-fill the slug field until the user edits it manually
 (`nextSlugFromCompanyName`); after that, changing the company name never
 overwrites the chosen slug. Clicking a suggestion re-populates the field and
@@ -74,6 +75,10 @@ re-runs the same debounced check. The final URL preview
 (`https://<slug>.erp.safaritechno.com`) always renders from the same
 `normalizeWorkspaceSlug` the backend uses, so the preview matches what
 submission will request.
+
+Visual branding of these screens (Safari logo, `brand-*` tokens, step layout,
+provisioning and success states) is described in
+[`SAFARI_AUTH_BRANDING.md`](SAFARI_AUTH_BRANDING.md).
 
 ## Create-time (authoritative) validation
 

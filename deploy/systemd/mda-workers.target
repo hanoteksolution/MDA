@@ -1,0 +1,10 @@
+# MDA ERP — Celery worker + beat as one unit: `systemctl restart mda-workers.target`
+# restarts both (beat stops first, worker starts first) without touching API or frontend.
+[Unit]
+Description=MDA ERP background workers (Celery worker + beat)
+Documentation=file:///home/ubuntu/projects/mda/docs/deployment/SYSTEMD_OPERATIONS.md
+Wants=mda-celery.service mda-celery-beat.service
+After=mda-celery.service mda-celery-beat.service
+
+[Install]
+WantedBy=multi-user.target

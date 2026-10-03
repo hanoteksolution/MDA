@@ -16,6 +16,11 @@ export { StaffPerformancePage } from "@/modules/platform/pages/StaffPerformanceP
 export { PlatformShopsPage } from "@/modules/platform/pages/PlatformShopsPage";
 export { PlatformSubscriptionsPage } from "@/modules/platform/pages/PlatformSubscriptionsPage";
 export { PlatformIntegrationsPage } from "@/modules/platform/pages/PlatformIntegrationsPage";
+export { BranchesPage } from "@/modules/branches/pages/BranchesPage";
+export { BranchDetailPage } from "@/modules/branches/pages/BranchDetailPage";
+export { BranchTransfersPage } from "@/modules/branches/pages/BranchTransfersPage";
+export { PlatformBillingPage } from "@/modules/platform/pages/billing/PlatformBillingPage";
+export { PlatformBillingTenantPage } from "@/modules/platform/pages/billing/PlatformBillingTenantPage";
 export { PlatformTenantsPage } from "@/modules/platform/pages/PlatformTenantsPage";
 export { PlatformTenantDetailPage } from "@/modules/platform/pages/PlatformTenantDetailPage";
 export { PlatformShopDetailPage } from "@/modules/platform/pages/PlatformShopDetailPage";

@@ -70,6 +70,7 @@ const MODULE_META: Record<
   hotel: { label: "Hotel", category: "industry", icon: Hotel },
   pharmacy: { label: "Pharmacy", category: "industry", icon: Pill },
   futsal: { label: "Futsal", category: "industry", icon: Landmark },
+  school: { label: "School", category: "industry", icon: Landmark },
   property_management: { label: "Property", category: "industry", icon: Building2 },
   housing_rental: { label: "Housing", category: "industry", icon: Building2 },
   office_rental: { label: "Office", category: "industry", icon: Building2 },

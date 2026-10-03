@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Save, Plus, Pencil, Upload, X, Loader2, Trash2 } from "lucide-react";
+import { Save, Plus, Pencil, Upload, X, Loader2, Trash2, Eye, Store, Warehouse, Monitor, MapPin } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { TabNav } from "@/components/layout/TabNav";
 import { ContentSection } from "@/components/layout/ContentSection";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { FormField, FormSection, FormGrid } from "@/components/forms/FormField";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { resolveMediaUrl } from "@/config/api";
 import { settingsApi } from "@/services/api/admin";
+import { branchOpsApi, type BranchOverviewRow } from "@/services/api/branchOps";
+import { branchesForCompany, overviewFor } from "@/modules/settings/lib";
 import { PosProfileSettings } from "@/modules/settings/components/PosProfileSettings";
 import { ConnectionSettings } from "@/modules/settings/components/ConnectionSettings";
 import { clearBrandingCache } from "@/documents/branding";
@@ -30,6 +34,7 @@ export function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
+  const [overview, setOverview] = useState<BranchOverviewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,12 +43,17 @@ export function SettingsPage() {
   const load = async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     try {
-      const [c, b] = await Promise.all([settingsApi.company(), settingsApi.branches()]);
+      const [c, b, o] = await Promise.all([
+        settingsApi.company(),
+        settingsApi.branches(),
+        branchOpsApi.overview().catch(() => ({ data: { branches: [] } })),
+      ]);
       if (c.data) {
         setCompany(c.data);
         setLogoPreview(null);
       }
       setBranches(b.data);
+      setOverview(o.data.branches);
     } finally {
       setLoading(false);
     }
@@ -229,6 +239,7 @@ export function SettingsPage() {
       />
 
       {tab === "company" && !loading && (
+        <>
         <form onSubmit={saveCompany}>
           <FormSection title="Company Information" description="Legal and contact details for your organization.">
             <FormGrid>
@@ -336,6 +347,14 @@ export function SettingsPage() {
             </div>
           </FormSection>
         </form>
+
+        <CompanyBranchesSection
+          companyName={company.name || "this shop"}
+          branches={branchesForCompany(branches, company.id)}
+          overview={overview}
+          onAddBranch={() => navigate(scoped("/settings/branches/new"))}
+        />
+        </>
       )}
 
       {tab === "pos" && <PosProfileSettings />}
@@ -365,5 +384,99 @@ export function SettingsPage() {
         </ContentSection>
       )}
     </PageLayout>
+  );
+}
+
+/** Makes the Shop → Branches relationship visible from the Company Profile tab, without
+ *  duplicating the full branch-management table (edit/delete/set-default stay on the
+ *  "Branches" tab). */
+export function CompanyBranchesSection({
+  companyName,
+  branches,
+  overview,
+  onAddBranch,
+}: {
+  companyName: string;
+  branches: BranchDetail[];
+  overview: BranchOverviewRow[];
+  onAddBranch: () => void;
+}) {
+  const { scoped } = useScopedPath();
+  const count = branches.length;
+  return (
+    <ContentSection
+      title="Branches"
+      description={
+        count === 0
+          ? `No branches yet under ${companyName}.`
+          : `${count} branch${count === 1 ? "" : "es"} operate under ${companyName}.`
+      }
+      action={
+        <Button size="sm" onClick={onAddBranch}>
+          <Plus className="h-4 w-4" /> Add Branch
+        </Button>
+      }
+    >
+      {count === 0 ? (
+        <EmptyState
+          compact
+          icon={<Store className="h-5 w-5" />}
+          title="No branches yet"
+          description={`Add the first location that will operate under ${companyName}.`}
+          action={
+            <Button size="sm" onClick={onAddBranch}>
+              <Plus className="h-4 w-4" /> Add Branch
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {branches.map((b) => {
+            const stats = overviewFor(overview, b.id);
+            return (
+              <Card key={b.id}>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{b.name}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{b.code}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      <Badge variant={b.is_active ? "success" : "secondary"}>{b.is_active ? "Active" : "Inactive"}</Badge>
+                      {b.is_default && <Badge variant="outline">Default</Badge>}
+                    </div>
+                  </div>
+                  {b.address && (
+                    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{b.address}</span>
+                    </p>
+                  )}
+                  {!!stats?.managers.length && (
+                    <p className="text-xs text-muted-foreground">Manager: {stats.managers.join(", ")}</p>
+                  )}
+                  <div className="flex gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5" title="Warehouses">
+                      <Warehouse className="h-3.5 w-3.5" /> {stats ? stats.warehouses : "—"}
+                    </span>
+                    <span className="flex items-center gap-1.5" title="POS terminals / cash registers">
+                      <Monitor className="h-3.5 w-3.5" /> {stats ? `${stats.pos_terminals}/${stats.cash_registers}` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button asChild size="sm" variant="secondary" className="flex-1">
+                      <Link to={`/branches/${b.id}`}><Eye className="h-4 w-4" /> View</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to={scoped(`/settings/branches/${b.id}/edit`)}><Pencil className="h-4 w-4" /></Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </ContentSection>
   );
 }

@@ -1,0 +1,806 @@
+{
+  "checks": [
+    "Lesson created",
+    "Conflicting lesson rejected with a visible message",
+    "Second lesson created",
+    "Publish timetable",
+    "Timetable grid shows published lessons",
+    "Teacher has no publish command",
+    "Draft attendance saved",
+    "Submitted attendance is locked",
+    "Request correction",
+    "Correction requested",
+    "Approve correction",
+    "Correction approved",
+    "No horizontal page overflow at 1366/768/390"
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/timetable-entries/new",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-entries/schema/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/periods/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/staff-profiles/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/subject-offerings/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/classrooms/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "POST",
+      "path": "/api/v1/school/sis/timetable-entries/",
+      "status": 201
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/timetable-entries/new",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-entries/schema/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/periods/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/subject-offerings/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/staff-profiles/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/classrooms/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "POST",
+      "path": "/api/v1/school/sis/timetable-entries/",
+      "status": 400
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/timetable-entries/new",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-entries/schema/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/periods/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/staff-profiles/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/subject-offerings/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/classrooms/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "POST",
+      "path": "/api/v1/school/sis/timetable-entries/",
+      "status": 201
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "POST",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/publish/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/periods/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-entries/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/2076ae49-3670-4237-bde5-e1312fcd3fdd/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-roster/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "POST",
+      "path": "/api/v1/school/sis/attendance-sessions/",
+      "status": 201
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-roster/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "POST",
+      "path": "/api/v1/school/sis/attendance-sessions/",
+      "status": 201
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-roster/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/sis/attendance-records",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-records/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-records/787ea21f-bfc1-4d0a-9bf9-f7436e9c3153/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "POST",
+      "path": "/api/v1/school/sis/attendance-records/787ea21f-bfc1-4d0a-9bf9-f7436e9c3153/correct/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-records/787ea21f-bfc1-4d0a-9bf9-f7436e9c3153/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/attendance-corrections",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-corrections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-corrections/c35ea085-8ca9-43d7-99b1-eeac15fa2189/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "POST",
+      "path": "/api/v1/school/sis/attendance-corrections/c35ea085-8ca9-43d7-99b1-eeac15fa2189/approve/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-corrections/c35ea085-8ca9-43d7-99b1-eeac15fa2189/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/sis/attendance-corrections",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/attendance-corrections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "owner",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/attendance",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/classes/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/campuses/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sections/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/school/timetable",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/capabilities/",
+      "status": 200
+    },
+    {
+      "who": "teacher1",
+      "method": "GET",
+      "path": "/api/v1/school/sis/timetable-versions/",
+      "status": 200
+    }
+  ]
+}

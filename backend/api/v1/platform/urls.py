@@ -1,5 +1,15 @@
 from django.urls import path
 
+from api.v1.platform.billing_views import (
+    PlatformBillingInvoicesView,
+    PlatformBillingOverviewView,
+    PlatformBillingPaymentsView,
+    PlatformBillingPlansView,
+    PlatformBillingReconciliationView,
+    PlatformBillingRecoverView,
+    PlatformBillingSubscriptionsView,
+    PlatformBillingTenantDetailView,
+)
 from api.v1.platform.views import (
     PlatformBusinessTypesView,
     PlatformDnsWildcardCheckView,
@@ -118,4 +128,17 @@ urlpatterns = [
     path("shop-groups/", PlatformShopGroupListCreateView.as_view(), name="platform-shop-groups"),
     path("shop-groups/<uuid:pk>/", PlatformShopGroupDetailView.as_view(), name="platform-shop-group-detail"),
     path("plans/", PlatformPlansView.as_view(), name="platform-plans"),
+    # Platform Admin → Billing (elevated users only)
+    path("billing/overview/", PlatformBillingOverviewView.as_view(), name="platform-billing-overview"),
+    path("billing/subscriptions/", PlatformBillingSubscriptionsView.as_view(), name="platform-billing-subscriptions"),
+    path(
+        "billing/subscriptions/<uuid:pk>/recover/",
+        PlatformBillingRecoverView.as_view(),
+        name="platform-billing-recover",
+    ),
+    path("billing/tenants/<uuid:pk>/", PlatformBillingTenantDetailView.as_view(), name="platform-billing-tenant"),
+    path("billing/payments/", PlatformBillingPaymentsView.as_view(), name="platform-billing-payments"),
+    path("billing/invoices/", PlatformBillingInvoicesView.as_view(), name="platform-billing-invoices"),
+    path("billing/reconciliation/", PlatformBillingReconciliationView.as_view(), name="platform-billing-reconciliation"),
+    path("billing/plans/", PlatformBillingPlansView.as_view(), name="platform-billing-plans"),
 ]

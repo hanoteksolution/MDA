@@ -1,140 +1,137 @@
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Shield, Zap, Globe, Award } from "lucide-react";
-import { DashboardPreviewMockup } from "./DashboardPreviewMockup";
+import { Building2, GitBranch, LayoutGrid, ShieldCheck, type LucideIcon } from "lucide-react";
+import { SafariLogo } from "@/components/brand/SafariLogo";
+import { SAFARI_BRAND } from "@/design-system/brand";
 
-const trustBadges = [
-  { icon: Shield, label: "256-bit Encryption" },
-  { icon: Zap, label: "Offline-First POS" },
-  { icon: Globe, label: "Multi-Branch Ready" },
-  { icon: Award, label: "Enterprise Grade" },
+const CAPABILITIES: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: LayoutGrid,
+    title: "One platform, every module",
+    body: "POS, inventory, purchases, finance and industry modules in a single workspace.",
+  },
+  {
+    icon: GitBranch,
+    title: "Built for multiple branches",
+    body: "Branch-level stock, transfers and reporting with a consolidated view.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Isolated, secure workspaces",
+    body: "Every company gets its own workspace address and tenant-scoped data.",
+  },
 ];
-
-const clients = ["RetailCo", "PharmaPlus", "TechMart", "FreshGrocer"];
 
 const container = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.12, delayChildren: 0.1 },
-  },
+  show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
 };
 
 const item = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
 };
 
+/**
+ * Safari-branded side panel shared by Login, Onboarding and Setup (desktop
+ * widths only — narrow screens show the logo above the form instead).
+ */
 export function LoginBrandingPanel({
   productName,
   productTagline,
   headline,
   description,
+  children,
 }: {
+  /** Tenant/workspace name when signing in on a tenant host. */
   productName?: string;
   productTagline?: string;
   headline?: string;
   description?: string;
+  /** Optional replacement for the capability list (e.g. onboarding summary). */
+  children?: ReactNode;
 } = {}) {
-  const name = productName || "MDA Retail";
-  const tagline = productTagline || "Enterprise ERP & POS";
-  const title =
-    headline ||
-    undefined;
+  const title = headline || "Run your whole business from one workspace.";
   const body =
     description ||
-    "POS, inventory, purchases, finance, and analytics — built for multi-branch retailers who demand speed, reliability, and control.";
+    "Safari ERP connects sales, stock, finance and your branches — so your team works from the same numbers, every day.";
 
   return (
-    <div className="relative flex flex-col justify-between overflow-hidden bg-secondary px-8 py-10 lg:px-14 lg:py-12 xl:px-16">
-      {/* Background layers */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950" />
-        <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-teal-500/15 blur-3xl" />
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
-            backgroundSize: "32px 32px",
-          }}
-        />
-      </div>
+    <aside className="relative hidden h-full min-h-dvh flex-col overflow-hidden border-r border-border/70 bg-brand-soft lg:flex">
+      <div className="safari-brand-rule h-1 w-full" aria-hidden />
+      {/* Quiet brand wash — kept well below text contrast. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(60% 45% at 0% 0%, hsl(var(--brand-primary) / 0.10), transparent 70%), radial-gradient(45% 35% at 100% 100%, hsl(var(--brand-secondary) / 0.08), transparent 70%)",
+        }}
+      />
 
       <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="relative z-10 flex flex-col flex-1"
+        className="relative z-10 flex flex-1 flex-col px-10 py-10 xl:px-14 xl:py-12"
       >
-        {/* Logo & headline */}
-        <motion.div variants={item} className="mb-8 lg:mb-10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/30">
-              <span className="text-lg font-black text-white">{name.slice(0, 1).toUpperCase()}</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-widest text-emerald-400 uppercase">
-                {name}
-              </p>
-              <p className="text-xs text-white/50">{tagline}</p>
-            </div>
-          </div>
+        <motion.div variants={item}>
+          <SafariLogo size="lg" />
         </motion.div>
 
-        <motion.div variants={item} className="mb-6 lg:mb-8">
-          <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl xl:text-[3.25rem] xl:leading-[1.1]">
-            {title ? (
-              title
-            ) : (
-              <>
-                Run your entire{" "}
-                <span className="text-gradient from-emerald-300 to-emerald-500 bg-gradient-to-r bg-clip-text text-transparent">
-                  retail operation
-                </span>{" "}
-                from one platform.
-              </>
-            )}
-          </h1>
-          <p className="mt-4 max-w-lg text-base leading-relaxed text-white/60 lg:text-lg">
-            {body}
-          </p>
-        </motion.div>
-
-        {/* Trust badges */}
-        <motion.div variants={item} className="mb-8 flex flex-wrap gap-3">
-          {trustBadges.map(({ icon: Icon, label }) => (
-            <div
-              key={label}
-              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm"
+        <div className="my-auto max-w-lg py-12">
+          {productName ? (
+            <motion.p
+              variants={item}
+              className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-surface/80 px-3 py-1 text-xs font-semibold text-brand-soft-foreground"
             >
-              <Icon className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-xs font-medium text-white/70">{label}</span>
-            </div>
-          ))}
-        </motion.div>
+              <Building2 className="h-3.5 w-3.5" aria-hidden />
+              {productName}
+              {productTagline ? (
+                <span className="font-normal text-muted-foreground">· {productTagline}</span>
+              ) : null}
+            </motion.p>
+          ) : (
+            <motion.p
+              variants={item}
+              className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-brand-primary"
+            >
+              {SAFARI_BRAND.product}
+            </motion.p>
+          )}
+          <motion.h1
+            variants={item}
+            className="text-3xl font-bold leading-tight tracking-tight text-brand-ink xl:text-4xl"
+          >
+            {title}
+          </motion.h1>
+          <motion.p variants={item} className="mt-4 text-base leading-relaxed text-muted-foreground">
+            {body}
+          </motion.p>
 
-        {/* Dashboard preview */}
-        <motion.div variants={item} className="flex-1 flex items-center">
-          <DashboardPreviewMockup />
-        </motion.div>
+          <motion.div variants={item} className="mt-10">
+            {children ?? (
+              <ul className="space-y-5">
+                {CAPABILITIES.map(({ icon: Icon, title: capTitle, body: capBody }) => (
+                  <li key={capTitle} className="flex gap-4">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-brand-primary/15 bg-brand-surface text-brand-primary shadow-sm">
+                      <Icon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-brand-ink">{capTitle}</span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">{capBody}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </motion.div>
+        </div>
 
-        {/* Social proof */}
-        <motion.div variants={item} className="mt-8 lg:mt-10 pt-6 border-t border-white/10">
-          <p className="mb-4 text-xs font-medium uppercase tracking-widest text-white/40">
-            Trusted by leading retailers
-          </p>
-          <div className="flex flex-wrap items-center gap-6">
-            {clients.map((name) => (
-              <span
-                key={name}
-                className="text-sm font-semibold text-white/25 hover:text-white/40 transition-colors"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-        </motion.div>
+        <motion.p variants={item} className="text-xs text-muted-foreground">
+          © {new Date().getFullYear()} {SAFARI_BRAND.company}
+        </motion.p>
       </motion.div>
-    </div>
+    </aside>
   );
 }

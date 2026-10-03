@@ -3,9 +3,11 @@ from django.urls import path
 from api.v1.inventory.views import (
     AdjustmentListCreateView,
     BranchStockDashboardView,
+    CrossBranchSearchView,
     BranchTransferApproveView,
     BranchTransferCancelView,
     BranchTransferCompleteView,
+    BranchTransferDestinationsView,
     BranchTransferDetailView,
     BranchTransferDispatchView,
     BranchTransferListCreateView,
@@ -31,6 +33,7 @@ urlpatterns = [
     path("summary/", InventorySummaryView.as_view(), name="inventory-summary"),
     path("low-stock/", LowStockView.as_view(), name="inventory-low-stock"),
     path("out-of-stock/", OutOfStockView.as_view(), name="inventory-out-of-stock"),
+    path("cross-branch-search/", CrossBranchSearchView.as_view(), name="inventory-cross-branch-search"),
     path("branch-dashboard/", BranchStockDashboardView.as_view(), name="inventory-branch-dashboard"),
     path(
         "products/<uuid:product_id>/availability/",
@@ -56,6 +59,7 @@ urlpatterns = [
         name="inventory-transfer-cancel",
     ),
     path("branch-transfers/", BranchTransferListCreateView.as_view(), name="branch-transfers"),
+    path("branch-transfers/destinations/", BranchTransferDestinationsView.as_view(), name="branch-transfer-destinations"),
     path("branch-transfers/<uuid:pk>/", BranchTransferDetailView.as_view(), name="branch-transfer-detail"),
     path("branch-transfers/<uuid:pk>/approve/", BranchTransferApproveView.as_view(), name="branch-transfer-approve"),
     path("branch-transfers/<uuid:pk>/reject/", BranchTransferRejectView.as_view(), name="branch-transfer-reject"),

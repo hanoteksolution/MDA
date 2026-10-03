@@ -21,6 +21,7 @@ from apps.platform.services.domain_utils import (
     get_tenant_base_domain,
     is_reserved_tenant_slug,
     is_subdomain_taken,
+    release_deleted_subdomain,
     suggest_subdomains,
     validate_tenant_slug,
 )
@@ -95,8 +96,9 @@ def _resolve_requested_slug(data: dict, *, name: str) -> str:
     raw = (data.get("slug") or data.get("subdomain") or "").strip()
     if raw:
         slug = validate_tenant_slug(raw)
-        if is_subdomain_taken(slug):
+        if is_subdomain_taken(slug, ignore_registration_id=data.get("_registration_id")):
             raise SubdomainTakenError(slug)
+        release_deleted_subdomain(slug)
         return slug
     return _unique_slug(name)
 
@@ -1222,6 +1224,7 @@ class PlatformService:
         tenant.soft_delete(user=user)
         for company in tenant.companies.filter(deleted_at__isnull=True):
             company.soft_delete(user=user)
+        release_deleted_subdomain(tenant.slug)
         return tenant
 
     @staticmethod

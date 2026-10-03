@@ -1,0 +1,3 @@
+Insecure SECRET_KEY detected in production. Set a unique SECRET_KEY env var.
+Database password looks like a default — rotate credentials for production.
+No changes detected in app 'school'

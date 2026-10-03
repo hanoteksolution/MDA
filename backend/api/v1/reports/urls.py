@@ -2,6 +2,7 @@ from django.urls import path
 
 from api.v1.reports.views import (
     BranchReportView,
+    BranchOverviewView,
     ReportCatalogView,
     ReportDataView,
     ReportExportView,
@@ -13,6 +14,7 @@ from api.v1.reports.views import (
 
 urlpatterns = [
     path("catalog/", ReportCatalogView.as_view(), name="report-catalog"),
+    path("branch-overview/", BranchOverviewView.as_view(), name="report-branch-overview"),
     path("branch/<str:report>/", BranchReportView.as_view(), name="report-branch"),
     path("data/", ReportDataView.as_view(), name="report-data"),
     path("export/", ReportExportView.as_view(), name="report-export"),

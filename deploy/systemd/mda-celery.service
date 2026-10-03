@@ -1,0 +1,22 @@
+# MDA ERP — Celery worker
+# Controls the EXISTING Compose container mda_celery (project "mda"); never creates a second copy.
+# Source: deploy/systemd/mda-celery.service — install with: make install-systemd
+[Unit]
+Description=MDA ERP Celery worker (Compose service "celery")
+Documentation=file:///home/ubuntu/projects/mda/docs/deployment/SYSTEMD_OPERATIONS.md
+Wants=docker.service
+After=docker.service network-online.target mda-backend.service
+PartOf=mda-workers.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=HOME=/root
+WorkingDirectory=/home/ubuntu/projects/mda
+ExecStart=/home/ubuntu/projects/mda/scripts/ops/mda-service.sh start celery
+ExecStop=/home/ubuntu/projects/mda/scripts/ops/mda-service.sh stop celery
+TimeoutStartSec=120
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

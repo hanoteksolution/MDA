@@ -9,6 +9,7 @@ import { Sidebar } from "@/layouts/Sidebar/Sidebar";
 import { Header } from "@/layouts/Header/Header";
 import { FooterStatusBar } from "@/layouts/Footer/FooterStatusBar";
 import { useUIStore } from "@/store/uiStore";
+import { useBranchStore } from "@/store/branchStore";
 import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
 import { IndustryScopeRedirect } from "@/navigation/IndustryScopeRedirect";
 import { cn } from "@/utils/cn";
@@ -32,6 +33,8 @@ function useLaptopSidebarCollapse() {
 export function AppShell() {
   const location = useLocation();
   const isPos = isPosPath(location.pathname);
+  // Remount the page when the active branch changes, so no screen keeps another branch's data.
+  const scopeVersion = useBranchStore((s) => s.scopeVersion);
   useLaptopSidebarCollapse();
   useWorkspaceTheme();
 
@@ -47,6 +50,7 @@ export function AppShell() {
           <Header compact={isPos} />
           <SubscriptionPaywallBanner />
           <main
+            key={scopeVersion}
             className={cn(
               "min-h-0 flex-1 overflow-y-auto scrollbar-thin",
               isPos ? "overflow-hidden p-0 sm:p-2 xl:p-3" : "p-4 xl:p-6"

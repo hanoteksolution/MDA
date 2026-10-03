@@ -1,21 +1,50 @@
 # ACTIVE TASK
 
+Task: 2026-09-26 kaafi user: school permissions missing from user-form Direct permissions. Root cause: UserService._permission_modules_for_tenant (auth_service.py) `gated` map had no "school" entry, so the 332 school perms were filtered out for every school tenant. Fix (code only, NOT deployed): added "school": {"school"}; PermissionMatrix.tsx MODULE_META school entry; test test_school_permissions_are_assignable_only_for_school_tenants passes; tsc clean.
+DEPLOYED 2026-09-26 15:04-15:05Z via `make rebuild` (no migrations): api/celery/beat 4e85d7905a57, web 2b6473e91486; health all OK. Rollback: mda-api:rollback-20260926T150408Z (649b5079db62), mda-web:rollback-20260926T150433Z (06a3fbe97bb5). Live check: kaafi-school matrix includes school; kaafi sees 332 school perms. Exact next step: none.
+Status: PASS
+
+--- Prior task (superseded) ---
+
+Task: 2026-09-26 follow-up — public /register final submit returned 409 "just taken" even though check said available. Root cause (API log): RegistrationService.provision() -> create_shop -> _resolve_requested_slug -> is_subdomain_taken counted the registration's OWN live hold. Fix (code only, NOT deployed): is_subdomain_taken(ignore_registration_id), provision passes payload["_registration_id"]; test test_public_registration_can_claim_its_own_slug_hold added.
+Also: LoginPage.tsx now shows 'Workspace not found' when resolve-host returns mode=unknown/reason=unknown_subdomain (maxbuub.erp... showed a normal login). tsc clean; needs `make rebuild-frontend` too. DEPLOYED 2026-09-26 14:51-14:53Z via `make rebuild` (no migrations): api/celery/beat 649b5079db62, web 06a3fbe97bb5; make health all OK. Rollback: mda-api:rollback-20260926T145133Z (42118c0404cf), mda-web:rollback-20260926T145159Z (b9ba95715821) via `make rollback-*`. Not yet user-verified: /register kaafi-school retry, 'Workspace not found' screen. Exact next step: none.
+Status: PASS
+Production changes made: rebuild api/celery/beat/web (above); no DB writes/migrations
+
+--- Prior ACTIVE TASK block (superseded) ---
+
 <!-- Session-resume anchor. Read this FIRST, before anything else in this file.
      Update it after every meaningful step. Keep it short — it is read by every
      new session. One task at a time; append finished work to the sections below. -->
 
-Task: Production deployment — Platform Admin separation + SMS Reseller + Subscription Auto-Payment + School frontend restructure
-Status: PASS
-Last completed step: Release snapshotted to git — commit `d38aeaa`, annotated tag `production-2026-09-23`; deployment observations recorded in PRODUCTION_RELEASE_PLAN.md §12
-Exact next step: None. Release is live, committed and tagged locally. Pushing to remote is NOT authorized — requires a separate instruction. Keep rollback assets (DB dump, env copy, rollback images) until the release is formally accepted.
-Last command/result: `migrate --check` exit 0, 0 unapplied; smoke — superadmin platform 200, ordinary tenant platform 403, School sis/summary 200, inventory/branches 200, sms-billing 200, waafi-callback 410, subscription checkout "not available yet", 0 tracebacks/5xx in 10m
-Production changes made: Applied `integrations.0003_sms_billing` + `platform.0019_subscription_checkout`; ran `bootstrap_system` (additive); appended `SMS_CREDITS_ENFORCED=True` to `backend/.env.cloud`; rebuilt and recreated api/celery/celery-beat/web from the working tree
-Services restarted: api, celery, celery-beat, web (recreated). PostgreSQL and Redis NOT touched. Nginx NOT touched. TLS/DNS NOT touched.
-Migrations applied: integrations.0003_sms_billing, platform.0019_subscription_checkout (exactly the 2 planned)
+Task: 2026-09-26 Landing page premium redesign (frontend only: src/pages/public/LandingPage.tsx + src/pages/public/landing/*, globals.css float keyframes). NOT deployed (user: do not deploy).
+Status: PASS — landing redesign implemented (LandingPage.tsx + landing/{ui.ts,LandingHeader,Hero,DashboardPreview,Sections}.tsx, globals.css .landing-float). tsc clean, vitest 221 passed, build OK, headless-chromium screenshots checked (desktop+mobile). NOT deployed; live web image predates it. No Privacy/Terms/Support routes exist, so footer omits them.
+DEPLOYED 2026-09-26 13:02Z via `make rebuild-frontend`: web 75addaca6668 (api/celery/beat unchanged 91cd44e05492), health all OK. Rollback: mda-web:rollback-20260926T130200Z (cee726f12822) via `make rollback-frontend`. Exact next step: none.
+Previous task: `make rebuild` 2026-09-26 PASS (api/celery/beat 91cd44e05492, web cee726f12822; rollback tags mda-api:rollback-20260926T122816Z, mda-web:rollback-20260926T122905Z). Live deployed web image predates this redesign.
+Old task: 2026-09-26 user-authorized `make rebuild` (frontend + backend, no migrations) after landing-page brand recolor + Shop↔Branch UX. Branch linking verified by tests (provisioning creates Company+default Branch+Warehouse, owner.branch set); live-DB audit was denied by classifier, not done.
+Status: PASS — `make rebuild` completed 2026-09-26 12:29-12:30Z. api/celery/beat on 91cd44e05492, web cee726f12822; make health all OK. Rollback: mda-api:rollback-20260926T122816Z (6a8c6d31af27), mda-web:rollback-20260926T122905Z (4e5256a5ac6c); `make rollback-*`. No migrations. Exact next step: none.
+Previous (superseded) task: Shop↔Branch UX completion (code only, no migration, no deploy) — DONE, code only.
+Old status: PASS
+Last completed step: Implemented + tested. Backend: `branch_report_service.py::branch_overview` now returns `company_id`/`company_name`/`address` per branch (no migration — Branch.company/address already existed). Frontend: (1) Settings → Company Profile tab gained a "Branches" section (`CompanyBranchesSection` in SettingsPage.tsx, new `modules/settings/lib.ts::branchesForCompany`/`overviewFor`) showing "N branches operate under {company}", cards with status/address/manager/warehouse+POS counts, View/Edit/Add (reuses existing branch-overview report + branch list API, no duplicate CRUD). (2) `BranchFormPage.tsx` shows a read-only "Shop / Company" card (branch's own company_name wins in edit mode); still submits the same `company_id` as before, edit payload still never includes `company_id`. (3) `BranchDetailPage.tsx` (already existed with Overview/Sales/Inventory/Purchases/Transfers/Finance/Users/Reports tabs) now shows parent company in the header description + an Overview row linking to Settings, plus branch address. (4) Branch operational nav — already existed, unchanged. (5) Inventory/POS cross-branch clarity (`CrossBranchPanel`, `PosProductCard`) — already fully built in a prior phase, verified, left unchanged (no duplication). Tests added: `frontend/src/modules/settings/settings.test.tsx` (5 tests, `branchesForCompany`/`overviewFor`/`CompanyBranchesSection` rendering); extended `backend/tests/integration/test_branch_operational.py::test_branch_overview_for_tenant_admin_and_branch_manager` with company_id/company_name assertions (uses the AM Electronics/Hodan/Bakaaro/KM4 fixture already in the repo).
+Exact next step: None — task complete. Optional follow-up (not requested): multi-company-per-tenant support was explicitly ruled out by the user.
+Last command/result: `cd backend && python3 -m pytest tests/integration/test_branch_operational.py tests/unit/test_branch_reports.py -q` → 38 passed. `cd frontend && npx tsc -b` clean; `npx vitest run` → 221 passed (24 files); `npm run build` → succeeded (pre-existing chunk-size warnings only, unrelated).
+Production changes made: NONE
+Services restarted: NONE
+Migrations applied: NONE
 Blocker: None
+Previous task: FINAL POST-DEPLOY FUNCTIONAL VERIFICATION — PASS. Release DEPLOYED 2026-09-24 06:37-06:39Z and VERIFIED. Rollback: make rollback-backend -> 8156dd21a027; make rollback-frontend -> e3c08480d09f (manifests /var/lib/mda/releases)
+Previous task: Celery readiness race — PASS (SYSTEMD_OPERATIONS.md §2.1)
+Previous task: Systemd + Makefile production ops — PASS (docs/deployment/SYSTEMD_OPERATIONS.md). Rollback tags: mda-api:rollback-pre-20260924 -> 8156dd21a027; mda-web:rollback-pre-20260924 -> e3c08480d09f
+Previous task: Rollback tags created (tag only) — PASS
+Previous task: RELEASE PRECHECK — CONDITIONAL GO (only precondition: rollback tags). PG 31/31.
+Previous task: Safari auth/onboarding branding — PASS, code only (docs/onboarding/SAFARI_AUTH_BRANDING.md)
+Previous task: Branch final gaps — PASS, code only (BRANCH_OPERATIONAL_COMPLETION.md §7)
+Previous task: Branch Operational Completion — PASS, code only (docs/branches/BRANCH_OPERATIONAL_COMPLETION.md)
+Previous task: Platform Billing — PASS, code only, not deployed (docs/branches/PLATFORM_BILLING.md)
 
+--- Previous task (production-2026-09-23 release) — PASS; details below ---
 Release commit: `d38aeaa` — tag `production-2026-09-23` (annotated, LOCAL ONLY, not pushed). Deployed images: mda-api:latest `8156dd21a027`, mda-web:latest `e3c08480d09f`, both built from the tree captured by that commit — the release IS now reproducible from git. Intentionally uncommitted: `frontend/tsconfig.tsbuildinfo` (generated build cache) and `docs/school/verification/` (1.5 MB test evidence); neither affects the images. `backend/.env.cloud` and `backups/` are gitignored and were never staged.
-ROLLBACK ASSETS — DO NOT DELETE: DB dump `backups/mda_erp_pre_release_20260923T163830Z.dump` (3.0M, 5889 TOC entries, pg_restore --list verified); env `backups/env.cloud.20260923T163830Z` (mode 600); images `mda-api:rollback-20260923T163830Z` (c31be14d7211), `mda-web:rollback-20260923T163830Z` (e654b3d08a79). Rollback procedure: PRODUCTION_RELEASE_PLAN.md §9.
+ROLLBACK ASSETS — DO NOT DELETE: [2026-09-24: images c31be14d7211/e654b3d08a79 found DELETED; current rollback = mda-api/mda-web:rollback-pre-20260924, see PRODUCTION_RELEASE_PLAN §12.3] DB dump `backups/mda_erp_pre_release_20260923T163830Z.dump` (3.0M, 5889 TOC entries, pg_restore --list verified); env `backups/env.cloud.20260923T163830Z` (mode 600); images `mda-api:rollback-20260923T163830Z` (c31be14d7211), `mda-web:rollback-20260923T163830Z` (e654b3d08a79). Rollback procedure: PRODUCTION_RELEASE_PLAN.md §9.
 Production billing state: 0 payment providers; PAYMENT_ALLOW_MOCK_PROVIDERS=False live; MOCK selection blocked and MOCK runtime resolution -> None; subscription checkout and SMS purchase fail safely. SMS_CREDITS_ENFORCED=True. 0 SMS packages configured.
 
 Previous task (TLS wildcard) — PASS 2026-09-22, untouched by this deploy. Rollback: old SAN cert `/etc/letsencrypt/live/erp.safaritechno.com/`; nginx `/root/nginx-erp-conf.bak.20260922-135754`; crontab `/root/crontab.bak.20260922-135822`.
@@ -23,6 +52,18 @@ Previous task (TLS wildcard) — PASS 2026-09-22, untouched by this deploy. Roll
 ---
 
 # Current Development State
+
+**2026-09-24 RELEASE DEPLOYED + VERIFIED** (branch completion, branch final gaps, platform billing, Safari branding) — api 6a8c6d31af27, web 4e5256a5ac6c — PRODUCTION_RELEASE_PLAN.md §13. Deployed tree not yet committed to git.
+
+**2026-09-24 Systemd + Makefile production ops — PASS — see `docs/deployment/SYSTEMD_OPERATIONS.md`.** RESTART/BUILD/REBUILD/DEPLOY semantics, flock, release manifests in /var/lib/mda/releases, recorded-image rollback.
+
+**2026-09-24 Safari auth/onboarding branding — PASS (code only) — see `docs/onboarding/SAFARI_AUTH_BRANDING.md`.** Frontend only; ERP workspace theme untouched.
+
+**2026-09-23 Branch final gaps — PASS (code only) — see BRANCH_OPERATIONAL_COMPLETION.md §7.** Either end can cancel pre-dispatch transfers; push "Send stock to branch" on the same state machine; finance first-posting seeding serialised via pg_advisory_xact_lock, plus steady-state fixes (control-flag UPDATE deadlock, JE number collisions).
+
+**2026-09-23 Branch Operational Completion — code only, NOT deployed — see `docs/branches/BRANCH_OPERATIONAL_COMPLETION.md`.** Fixed: POS checkout accepted foreign body branch_id (cross-branch stock deduction); product `total_stock` summed all tenant warehouses (now branch-scoped); transfer request only from source (now either end). Added cross-branch search, availability detail, reports purchases/inventory/expenses/transfers, /reports/branch-overview/, my-branches covers_all. FE: header BranchSwitcher (store was never loaded before), POS active-branch + check other branches, /branches (dashboard/list/transfers/stock/reports), /branches/:id, /branches/transfers. No migrations.
+
+**2026-09-23 Platform Admin → Billing — PASS (code only, not deployed) — see `docs/branches/PLATFORM_BILLING.md`.** New `apps/platform/services/platform_billing_service.py` + `api/v1/platform/billing_views.py` (`/platform/billing/{overview,subscriptions,tenants/<id>,payments,invoices,reconciliation,plans}`, elevated-only; `subscriptions/<id>/recover/` Super Admin only, reason ≥10 + confirm:true, audited, creates no payment/invoice/intent, last_paid_at untouched). FE `modules/platform/pages/billing/*`, `services/api/platformBilling.ts`, routes elevatedOnly, nav "Billing" elevated-only; `PlatformConfirmDialog` gained `children`/`confirmDisabled`. No migrations. Gaps: plan edit/retire API, PG run of recovery lock.
 
 **2026-09-23 ERP subscription checkout + verified activation — see `docs/branches/SUBSCRIPTION_AUTO_PAYMENT.md`.** Checkout → SubscriptionPayment + house-tenant sales Invoice + PaymentIntent; ONLY the verified webhook settlement (`PaymentService._settle` → `SubscriptionBillingService.on_intent_settled`) activates/renews, once. Unsigned Waafi callback retired (410); manual confirm = reason-required audited recovery, refused for checkout rows. Migration `platform/0019_subscription_checkout`; perms `billing.subscription.view|pay` (re-run bootstrap). Proration/yearly billing = documented gaps. PG 14 concurrency suite `tests/unit/test_billing_postgresql.py` 6/6 (also closes SMS credit-lock PG gap). No real provider adapter (MOCK only).
 

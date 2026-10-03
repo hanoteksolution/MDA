@@ -1,0 +1,3013 @@
+{
+  "version": "153.0.8010.12",
+  "checks": [
+    "campuses create/detail",
+    "campuses edit",
+    "academic-years create/detail",
+    "academic-years edit",
+    "academic-years Make current",
+    "terms create/detail",
+    "terms edit",
+    "terms Activate",
+    "levels create/detail",
+    "levels edit",
+    "classes create/detail",
+    "classes edit",
+    "shifts create/detail",
+    "shifts edit",
+    "sections create/detail",
+    "sections edit",
+    "subject-categories create/detail",
+    "subject-categories edit",
+    "subjects create/detail",
+    "subjects edit",
+    "subject-offerings create/detail",
+    "subject-offerings edit",
+    "profile update/principal",
+    "unsaved cancel retain/discard",
+    "dialog focus inside: true",
+    "subject-offerings Archive",
+    "sections Archive",
+    "classes Archive",
+    "shifts Archive",
+    "subjects Archive",
+    "subject-categories Archive",
+    "levels Archive",
+    "terms Close",
+    "terms Archive",
+    "academic-years Close",
+    "academic-years Archive",
+    "campuses Archive",
+    "campuses Restore",
+    "academic-years Restore",
+    "terms Restore",
+    "levels Restore",
+    "classes Restore",
+    "shifts Restore",
+    "sections Restore",
+    "subject-categories Restore",
+    "subjects Restore",
+    "subject-offerings Restore",
+    "teacher create hidden",
+    "teacher manual POST forbidden"
+  ],
+  "errors": [],
+  "network": [
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/companies/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/companies/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/activate/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/activate/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 201,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/profile/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/principals/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/profile/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/summary/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/campuses/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/close/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/close/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/archive/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/campuses/a3544be4-385f-4d2d-a92d-bab12b2934f1/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/academic-years/3273d0b4-165b-4ecd-86eb-832275a713f2/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/1103fa7a-4d60-4367-b2e0-2733210f288c/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/988fbaec-083b-425e-ac4e-d90dff879952/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/levels/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/classes/bb452c6e-5d82-401a-adaf-a8ad28da91d5/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/6a0e0b59-ad12-4f3e-8082-268ab1f18e8c/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/shifts/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/65e124de-476b-460f-9dd2-b336085d134a/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-categories/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/34c82776-eed6-457e-92e5-bf70fab79004/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/restore/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/auth/me/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/settings/company/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/sync/subscription-status/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/platform/entitlements/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/notifications/unread-count/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/capabilities/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/lookups/teachers/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/sections/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subjects/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/subject-offerings/1da7d739-097a-4939-985e-97ec0dc61414/"
+    },
+    {
+      "status": 200,
+      "path": "/api/v1/school/terms/"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 1920,
+      "path": "/school",
+      "overflow": false
+    },
+    {
+      "width": 1920,
+      "path": "/school/academics/subject-offerings",
+      "overflow": false
+    },
+    {
+      "width": 1920,
+      "path": "/school/academics/classes/new",
+      "overflow": false
+    },
+    {
+      "width": 1366,
+      "path": "/school",
+      "overflow": false
+    },
+    {
+      "width": 1366,
+      "path": "/school/academics/subject-offerings",
+      "overflow": false
+    },
+    {
+      "width": 1366,
+      "path": "/school/academics/classes/new",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "path": "/school",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "path": "/school/academics/subject-offerings",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "path": "/school/academics/classes/new",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "path": "/school",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "path": "/school/academics/subject-offerings",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "path": "/school/academics/classes/new",
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "path": "/school",
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "path": "/school/academics/subject-offerings",
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "path": "/school/academics/classes/new",
+      "overflow": false
+    }
+  ],
+  "rows": {
+    "campuses": {
+      "created_at": "2026-09-12T15:09:09.820574+00:00",
+      "updated_at": "2026-09-12T15:09:09.820594+00:00",
+      "deleted_at": null,
+      "id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "company_id": "39e24592-52e1-419b-b843-c674ecf3824c",
+      "company_name": "Browser School A",
+      "name": "Browser campus 5744960",
+      "code": "BC5744960",
+      "address": "",
+      "phone": "",
+      "email": "",
+      "is_active": true,
+      "is_default": false
+    },
+    "academic-years": {
+      "created_at": "2026-09-12T15:09:13.031545+00:00",
+      "updated_at": "2026-09-12T15:09:13.031568+00:00",
+      "deleted_at": null,
+      "id": "3273d0b4-165b-4ecd-86eb-832275a713f2",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "code": "BY5744960",
+      "name": "Browser year 5744960",
+      "start_date": "2026-01-01",
+      "end_date": "2026-12-31",
+      "status": "planning",
+      "is_current": false,
+      "description": "",
+      "admission_open": false,
+      "enrollment_open": false
+    },
+    "terms": {
+      "created_at": "2026-09-12T15:09:18.643841+00:00",
+      "updated_at": "2026-09-12T15:09:18.643864+00:00",
+      "deleted_at": null,
+      "id": "1103fa7a-4d60-4367-b2e0-2733210f288c",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "academic_year_id": "3273d0b4-165b-4ecd-86eb-832275a713f2",
+      "academic_year_name": "Browser year 5744960 edited",
+      "code": "BT5744960",
+      "name": "Browser term 5744960",
+      "start_date": "2026-01-01",
+      "end_date": "2026-04-01",
+      "result_publish_date": null,
+      "exam_start": null,
+      "exam_end": null,
+      "status": "planning",
+      "sort_order": 1
+    },
+    "levels": {
+      "created_at": "2026-09-12T15:09:24.030030+00:00",
+      "updated_at": "2026-09-12T15:09:24.030051+00:00",
+      "deleted_at": null,
+      "id": "988fbaec-083b-425e-ac4e-d90dff879952",
+      "name": "Browser level 5744960",
+      "code": "BL5744960",
+      "status": "active",
+      "description": "",
+      "sequence": 1
+    },
+    "classes": {
+      "created_at": "2026-09-12T15:09:27.112324+00:00",
+      "updated_at": "2026-09-12T15:09:27.112343+00:00",
+      "deleted_at": null,
+      "id": "bb452c6e-5d82-401a-adaf-a8ad28da91d5",
+      "name": "Browser class 5744960",
+      "code": "BK5744960",
+      "status": "active",
+      "description": "",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "education_level_id": "988fbaec-083b-425e-ac4e-d90dff879952",
+      "education_level_name": "Browser level 5744960 edited",
+      "sequence": 1,
+      "capacity": 30,
+      "room": "",
+      "teacher_id": null
+    },
+    "shifts": {
+      "created_at": "2026-09-12T15:09:30.190786+00:00",
+      "updated_at": "2026-09-12T15:09:30.190804+00:00",
+      "deleted_at": null,
+      "id": "6a0e0b59-ad12-4f3e-8082-268ab1f18e8c",
+      "name": "Browser shift 5744960",
+      "code": "BH5744960",
+      "status": "active",
+      "description": "",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "start_time": "08:00:00",
+      "end_time": "12:00:00"
+    },
+    "sections": {
+      "created_at": "2026-09-12T15:09:33.542866+00:00",
+      "updated_at": "2026-09-12T15:09:33.542890+00:00",
+      "deleted_at": null,
+      "id": "d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69",
+      "name": "Browser section 5744960",
+      "code": "BS5744960",
+      "status": "active",
+      "description": "",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "school_class_id": "bb452c6e-5d82-401a-adaf-a8ad28da91d5",
+      "school_class_name": "Browser class 5744960 edited",
+      "capacity": 30,
+      "room": "",
+      "teacher_id": null,
+      "shift_id": "6a0e0b59-ad12-4f3e-8082-268ab1f18e8c",
+      "shift_name": "Browser shift 5744960 edited"
+    },
+    "subject-categories": {
+      "created_at": "2026-09-12T15:09:36.888384+00:00",
+      "updated_at": "2026-09-12T15:09:36.888406+00:00",
+      "deleted_at": null,
+      "id": "65e124de-476b-460f-9dd2-b336085d134a",
+      "name": "Browser category 5744960",
+      "code": "BG5744960",
+      "status": "active",
+      "description": ""
+    },
+    "subjects": {
+      "created_at": "2026-09-12T15:09:39.911285+00:00",
+      "updated_at": "2026-09-12T15:09:39.911309+00:00",
+      "deleted_at": null,
+      "id": "34c82776-eed6-457e-92e5-bf70fab79004",
+      "name": "Browser subject 5744960",
+      "code": "BU5744960",
+      "status": "active",
+      "description": "",
+      "short_name": "",
+      "category_id": "65e124de-476b-460f-9dd2-b336085d134a",
+      "category_name": "Browser category 5744960 edited",
+      "maximum_marks": "100.00",
+      "pass_mark": "50.00",
+      "weight": "1.00",
+      "mandatory": true,
+      "teaching_mode": "theory"
+    },
+    "subject-offerings": {
+      "created_at": "2026-09-12T15:09:43.628727+00:00",
+      "updated_at": "2026-09-12T15:09:43.628751+00:00",
+      "deleted_at": null,
+      "id": "1da7d739-097a-4939-985e-97ec0dc61414",
+      "name": "Browser offering 5744960",
+      "code": "BO5744960",
+      "status": "active",
+      "description": "",
+      "branch_id": "a3544be4-385f-4d2d-a92d-bab12b2934f1",
+      "branch_name": "Browser campus 5744960 edited",
+      "academic_year_id": "3273d0b4-165b-4ecd-86eb-832275a713f2",
+      "academic_year_name": "Browser year 5744960 edited",
+      "term_id": "1103fa7a-4d60-4367-b2e0-2733210f288c",
+      "term_name": "Browser year 5744960 edited \u2014 Browser term 5744960 edited",
+      "school_class_id": "bb452c6e-5d82-401a-adaf-a8ad28da91d5",
+      "school_class_name": "Browser class 5744960 edited",
+      "section_id": "d07cd5d9-b27e-4d33-b7bc-0f7f7314bd69",
+      "section_name": "Browser section 5744960 edited",
+      "subject_id": "34c82776-eed6-457e-92e5-bf70fab79004",
+      "subject_name": "Browser subject 5744960 edited",
+      "teacher_id": null,
+      "maximum_marks": "100.00",
+      "pass_mark": "50.00",
+      "weight": "1.00",
+      "weekly_periods": 1,
+      "mandatory": true
+    }
+  }
+}
